@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -73,7 +73,7 @@ type QueryService interface {
 	// essentially resolving it.
 	ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error)
 
-	// ReadTransaction returns the metadata for the sepcified dtid.
+	// ReadTransaction returns the metadata for the specified dtid.
 	ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error)
 
 	// Query execution

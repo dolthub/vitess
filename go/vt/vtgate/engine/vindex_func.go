@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -82,6 +82,16 @@ func (code VindexOpcode) MarshalJSON() ([]byte, error) {
 // RouteType returns a description of the query routing type used by the primitive
 func (vf *VindexFunc) RouteType() string {
 	return vindexOpcodeName[vf.Opcode]
+}
+
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (vf *VindexFunc) GetKeyspaceName() string {
+	return ""
+}
+
+// GetTableName specifies the table that this primitive routes to.
+func (vf *VindexFunc) GetTableName() string {
+	return ""
 }
 
 // Execute performs a non-streaming exec.

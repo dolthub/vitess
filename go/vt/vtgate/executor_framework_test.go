@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -385,6 +385,15 @@ func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclo
 
 func executorExec(executor *Executor, sql string, bv map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return executor.Execute(
+		context.Background(),
+		"TestExecute",
+		NewSafeSession(masterSession),
+		sql,
+		bv)
+}
+
+func executorPrepare(executor *Executor, sql string, bv map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
+	return executor.Prepare(
 		context.Background(),
 		"TestExecute",
 		NewSafeSession(masterSession),

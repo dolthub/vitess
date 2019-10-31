@@ -1,3 +1,17 @@
+# Copyright 2019 The Vitess Authors.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 FROM vitess/base AS builder
 FROM debian:stretch-slim AS staging
 
@@ -15,13 +29,15 @@ COPY --from=builder /vt/bin/vtctlclient /vt/bin/
 COPY --from=builder /vt/bin/vtgate /vt/bin/
 COPY --from=builder /vt/bin/vttablet /vt/bin/
 COPY --from=builder /vt/bin/vtworker /vt/bin/
+COPY --from=builder /vt/bin/vtbackup /vt/bin/
 
 RUN chown -R vitess:vitess /vt
 
 FROM debian:stretch-slim
 
 # Install dependencies
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gnupg dirmngr ca-certificates \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    gnupg dirmngr ca-certificates wget libdbd-mysql-perl rsync libaio1 libatomic1 libcurl3 libev4 \
  && for i in $(seq 1 10); do apt-key adv --no-tty --recv-keys --keyserver keyserver.ubuntu.com 8C718D3B5072E1F5 && break; done \
  && echo 'deb http://repo.mysql.com/apt/debian/ stretch mysql-5.7' > /etc/apt/sources.list.d/mysql.list \
  && apt-get update \
@@ -31,8 +47,11 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
       libmysqlclient20 \
       mysql-client \
       mysql-server \
-  && rm -rf /var/lib/apt/lists/* \
-  && groupadd -r vitess && useradd -r -g vitess vitess
+ && wget https://www.percona.com/downloads/XtraBackup/Percona-XtraBackup-2.4.13/binary/debian/stretch/x86_64/percona-xtrabackup-24_2.4.13-1.stretch_amd64.deb \
+ && dpkg -i percona-xtrabackup-24_2.4.13-1.stretch_amd64.deb \
+ && rm -f percona-xtrabackup-24_2.4.13-1.stretch_amd64.deb \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd -r vitess && useradd -r -g vitess vitess
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
 ENV VTTOP /vt/src/vitess.io/vitess

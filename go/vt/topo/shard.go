@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -329,6 +329,11 @@ func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard string) 
 	// create the keyspace, maybe it already exists
 	if err = ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil && !IsErrType(err, NodeExists) {
 		return nil, vterrors.Wrapf(err, "CreateKeyspace(%v) failed", keyspace)
+	}
+
+	// make sure a valid vschema has been loaded
+	if err = ts.EnsureVSchema(ctx, keyspace); err != nil {
+		return nil, vterrors.Wrapf(err, "EnsureVSchema(%v) failed", keyspace)
 	}
 
 	// now try to create with the lock, may already exist

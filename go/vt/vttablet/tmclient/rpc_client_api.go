@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -167,7 +167,7 @@ type TabletManagerClient interface {
 	// reparent_journal table.
 	InitSlave(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error
 
-	// DemoteMaster tells the soon-to-be-former master it's gonna change,
+	// DemoteMaster tells the soon-to-be-former master it's going to change,
 	// and it should go read-only and return its current position.
 	DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (string, error)
 

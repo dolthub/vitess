@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -157,6 +157,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "unsupported_cases.txt", vschema)
 	testFile(t, "vindex_func_cases.txt", vschema)
 	testFile(t, "wireup_cases.txt", vschema)
+	testFile(t, "memory_sort_cases.txt", vschema)
 }
 
 func TestOne(t *testing.T) {

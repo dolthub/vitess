@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -190,10 +190,12 @@ type scatterHeap struct {
 	err     error
 }
 
+// Len satisfies sort.Interface and heap.Interface.
 func (sh *scatterHeap) Len() int {
 	return len(sh.rows)
 }
 
+// Less satisfies sort.Interface and heap.Interface.
 func (sh *scatterHeap) Less(i, j int) bool {
 	for _, order := range sh.orderBy {
 		if sh.err != nil {
@@ -215,14 +217,17 @@ func (sh *scatterHeap) Less(i, j int) bool {
 	return true
 }
 
+// Swap satisfies sort.Interface and heap.Interface.
 func (sh *scatterHeap) Swap(i, j int) {
 	sh.rows[i], sh.rows[j] = sh.rows[j], sh.rows[i]
 }
 
+// Push satisfies heap.Interface.
 func (sh *scatterHeap) Push(x interface{}) {
 	sh.rows = append(sh.rows, x.(streamRow))
 }
 
+// Pop satisfies heap.Interface.
 func (sh *scatterHeap) Pop() interface{} {
 	n := len(sh.rows)
 	x := sh.rows[n-1]

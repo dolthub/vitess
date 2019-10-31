@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -38,6 +38,9 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
+	// needed so that grpc client is registered
+	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
 func TestHealthRecordDeduplication(t *testing.T) {
@@ -173,7 +176,7 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	ctx := context.Background()
 	agent := createTestAgent(ctx, t, nil)
 
-	/// Consume the first health broadcast triggered by ActionAgent.Start():
+	// Consume the first health broadcast triggered by ActionAgent.Start():
 	//  (REPLICA, NOT_SERVING) goes to (REPLICA, SERVING). And we
 	//  should be serving.
 	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "healthcheck not run yet", 0); err != nil {
@@ -281,7 +284,7 @@ func TestErrSlaveNotRunningIsHealthy(t *testing.T) {
 	ctx := context.Background()
 	agent := createTestAgent(ctx, t, nil)
 
-	/// Consume the first health broadcast triggered by ActionAgent.Start():
+	// Consume the first health broadcast triggered by ActionAgent.Start():
 	//  (REPLICA, NOT_SERVING) goes to (REPLICA, SERVING). And we
 	//  should be serving.
 	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "healthcheck not run yet", 0); err != nil {
@@ -390,7 +393,7 @@ func TestQueryServiceStopped(t *testing.T) {
 	ctx := context.Background()
 	agent := createTestAgent(ctx, t, nil)
 
-	/// Consume the first health broadcast triggered by ActionAgent.Start():
+	// Consume the first health broadcast triggered by ActionAgent.Start():
 	//  (REPLICA, NOT_SERVING) goes to (REPLICA, SERVING). And we
 	//  should be serving.
 	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "healthcheck not run yet", 0); err != nil {
@@ -488,7 +491,7 @@ func TestTabletControl(t *testing.T) {
 	ctx := context.Background()
 	agent := createTestAgent(ctx, t, nil)
 
-	/// Consume the first health broadcast triggered by ActionAgent.Start():
+	// Consume the first health broadcast triggered by ActionAgent.Start():
 	//  (REPLICA, NOT_SERVING) goes to (REPLICA, SERVING). And we
 	//  should be serving.
 	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "healthcheck not run yet", 0); err != nil {
@@ -691,7 +694,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 	ctx := context.Background()
 	agent := createTestAgent(ctx, t, nil)
 
-	/// Consume the first health broadcast triggered by ActionAgent.Start():
+	// Consume the first health broadcast triggered by ActionAgent.Start():
 	//  (REPLICA, NOT_SERVING) goes to (REPLICA, SERVING). And we
 	//  should be serving.
 	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "healthcheck not run yet", 0); err != nil {
@@ -717,7 +720,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 	// Run TER to turn us into a proper master, wait for it to finish.
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 19 * time.Second
 	if err := agent.TabletExternallyReparented(ctx, "unused_id"); err != nil {
-		t.Fatal(err)
+		t.Fatalf("TabletExternallyReparented failed: %v", err)
 	}
 	<-agent.finalizeReparentCtx.Done()
 	ti, err := agent.TopoServer.GetTablet(ctx, tabletAlias)
@@ -885,6 +888,114 @@ func TestOldHealthCheck(t *testing.T) {
 	}
 }
 
+// TestBackupStateChange verifies that after backup we check
+// the replication delay before setting REPLICA tablet to SERVING
+func TestBackupStateChange(t *testing.T) {
+	ctx := context.Background()
+	agent := createTestAgent(ctx, t, nil)
+
+	*degradedThreshold = 7 * time.Second
+	*unhealthyThreshold = 15 * time.Second
+
+	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "healthcheck not run yet", 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := expectStateChange(agent.QueryServiceControl, true, topodatapb.TabletType_REPLICA); err != nil {
+		t.Fatal(err)
+	}
+
+	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 16 * time.Second
+
+	// change to BACKUP, query service will turn off
+	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_BACKUP); err != nil {
+		t.Fatal(err)
+	}
+	if err := agent.RefreshState(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if agent.QueryServiceControl.IsServing() {
+		t.Errorf("Query service should NOT be running")
+	}
+	if err := expectStateChange(agent.QueryServiceControl, false, topodatapb.TabletType_BACKUP); err != nil {
+		t.Fatal(err)
+	}
+	// change back to REPLICA, query service should not start
+	// because replication delay > unhealthyThreshold
+	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_REPLICA); err != nil {
+		t.Fatal(err)
+	}
+	if err := agent.RefreshState(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if agent.QueryServiceControl.IsServing() {
+		t.Errorf("Query service should NOT be running")
+	}
+	if err := expectStateChange(agent.QueryServiceControl, false, topodatapb.TabletType_REPLICA); err != nil {
+		t.Fatal(err)
+	}
+
+	// run healthcheck
+	// now query service should still be OFF
+	agent.runHealthCheck()
+	if agent.QueryServiceControl.IsServing() {
+		t.Errorf("Query service should NOT be running")
+	}
+}
+
+// TestRestoreStateChange verifies that after restore we check
+// the replication delay before setting REPLICA tablet to SERVING
+func TestRestoreStateChange(t *testing.T) {
+	ctx := context.Background()
+	agent := createTestAgent(ctx, t, nil)
+
+	*degradedThreshold = 7 * time.Second
+	*unhealthyThreshold = 15 * time.Second
+
+	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "healthcheck not run yet", 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := expectStateChange(agent.QueryServiceControl, true, topodatapb.TabletType_REPLICA); err != nil {
+		t.Fatal(err)
+	}
+
+	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 16 * time.Second
+
+	// change to RESTORE, query service will turn off
+	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_RESTORE); err != nil {
+		t.Fatal(err)
+	}
+	if err := agent.RefreshState(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if agent.QueryServiceControl.IsServing() {
+		t.Errorf("Query service should NOT be running")
+	}
+	if err := expectStateChange(agent.QueryServiceControl, false, topodatapb.TabletType_RESTORE); err != nil {
+		t.Fatal(err)
+	}
+	// change back to REPLICA, query service should not start
+	// because replication delay > unhealthyThreshold
+	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_REPLICA); err != nil {
+		t.Fatal(err)
+	}
+	if err := agent.RefreshState(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if agent.QueryServiceControl.IsServing() {
+		t.Errorf("Query service should NOT be running")
+	}
+	if err := expectStateChange(agent.QueryServiceControl, false, topodatapb.TabletType_REPLICA); err != nil {
+		t.Fatal(err)
+	}
+
+	// run healthcheck
+	// now query service should still be OFF
+	agent.runHealthCheck()
+	if agent.QueryServiceControl.IsServing() {
+		t.Errorf("Query service should NOT be running")
+	}
+}
+
 // expectBroadcastData checks that runHealthCheck() broadcasted the expected
 // stats (going the value for secondsBehindMaster).
 func expectBroadcastData(qsc tabletserver.Controller, serving bool, healthError string, secondsBehindMaster uint32) (*tabletservermock.BroadcastData, error) {
@@ -922,7 +1033,7 @@ func expectStateChange(qsc tabletserver.Controller, serving bool, tabletType top
 	}
 	got := <-qsc.(*tabletservermock.Controller).StateChanges
 	if !reflect.DeepEqual(got, want) {
-		return fmt.Errorf("unexpected state change. got: %v want: %v got", got, want)
+		return fmt.Errorf("unexpected state change. got: %v want: %v", got, want)
 	}
 	return nil
 }

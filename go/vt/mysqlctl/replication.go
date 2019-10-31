@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -285,12 +285,9 @@ func (mysqld *Mysqld) ResetReplication(ctx context.Context) error {
 //
 // Array indices for the results of SHOW PROCESSLIST.
 const (
-	//lint:ignore U1000 needed for correct indexing of result columns
 	colConnectionID = iota
-	//lint:ignore U1000 needed for correct indexing of result columns
 	colUsername
 	colClientAddr
-	//lint:ignore U1000 needed for correct indexing of result columns
 	colDbName
 	colCommand
 )
