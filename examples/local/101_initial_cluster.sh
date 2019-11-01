@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2018 The Vitess Authors.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,10 +23,10 @@ set -e
 script_root=$(dirname "${BASH_SOURCE}")
 
 # start topo server
-if [ "${TOPO}" = "etcd2" ]; then
-    CELL=zone1 "$script_root/etcd-up.sh"
-else
+if [ "${TOPO}" = "zk2" ]; then
     CELL=zone1 "$script_root/zk-up.sh"
+else
+    CELL=zone1 "$script_root/etcd-up.sh"
 fi
 
 # start vtctld
@@ -34,7 +34,6 @@ CELL=zone1 "$script_root/vtctld-up.sh"
 
 # start vttablets for keyspace commerce
 CELL=zone1 KEYSPACE=commerce UID_BASE=100 "$script_root/vttablet-up.sh"
-sleep 15
 
 # set one of the replicas to master
 ./lvtctl.sh InitShardMaster -force commerce/0 zone1-100

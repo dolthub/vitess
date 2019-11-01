@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -83,7 +83,7 @@ func IsRunningQueryService(tt topodatapb.TabletType) bool {
 // them as fast as possible.
 //
 // Replica and rdonly will use lameduck when going from healthy to
-// unhealhty (either because health check fails, or they're shutting down).
+// unhealthy (either because health check fails, or they're shutting down).
 //
 // Other types are probably not serving user visible traffic, so they
 // need to transition as fast as possible too.

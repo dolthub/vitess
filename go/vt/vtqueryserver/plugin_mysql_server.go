@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -119,7 +119,7 @@ func (mh *proxyHandler) ComQuery(c *mysql.Conn, query string, callback func(*sql
 			session.Options.ClientFoundRows = true
 		}
 	}
-	if c.SchemaName != "" {
+	if session.TargetString == "" && c.SchemaName != "" {
 		session.TargetString = c.SchemaName
 	}
 	session, result, err := mh.mp.Execute(ctx, session, query, make(map[string]*querypb.BindVariable))
@@ -134,6 +134,18 @@ func (mh *proxyHandler) ComQuery(c *mysql.Conn, query string, callback func(*sql
 
 func (mh *proxyHandler) WarningCount(c *mysql.Conn) uint16 {
 	return 0
+}
+
+func (mh *proxyHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Field, error) {
+	return nil, nil
+}
+
+func (mh *proxyHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
+	return nil
+}
+
+func (mh *proxyHandler) ComResetConnection(c *mysql.Conn) {
+
 }
 
 var mysqlListener *mysql.Listener

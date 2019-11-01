@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -192,6 +192,11 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		// Timestamp fields from binlogs are always sent as UTC.
 		// So, we should set the timezone to be UTC for those values to be correctly inserted.
 		if _, err := dbClient.ExecuteFetch("set @@session.time_zone = '+00:00'", 10000); err != nil {
+			return err
+		}
+		// Tables may have varying character sets. To ship the bits without interpreting them
+		// we set the character set to be binary.
+		if _, err := dbClient.ExecuteFetch("set names binary", 10000); err != nil {
 			return err
 		}
 		vreplicator := newVReplicator(ct.id, &ct.source, tablet, ct.blpStats, dbClient, ct.mysqld)

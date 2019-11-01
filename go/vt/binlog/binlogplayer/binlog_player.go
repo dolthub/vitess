@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -174,7 +174,7 @@ func NewBinlogPlayerTables(dbClient DBClient, tablet *topodatapb.Tablet, tables 
 // and processes the events. It returns nil if the provided context
 // was canceled, or if we reached the stopping point.
 // If an error is encountered, it updates the vreplication state to "Error".
-// If a stop position was specifed, and reached, the state is updated to "Stopped".
+// If a stop position was specified, and reached, the state is updated to "Stopped".
 func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 	if err := SetVReplicationState(blp.dbClient, blp.uid, BlpRunning, ""); err != nil {
 		log.Errorf("Error writing Running state: %v", err)

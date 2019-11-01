@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -34,12 +34,13 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
-var packetSize = flag.Int("vstream_packet_size", 30000, "Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount.")
+// PacketSize is the suggested packet size for VReplication streamer.
+var PacketSize = flag.Int("vstream_packet_size", 30000, "Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount.")
 
-// heartbeatTime is set to slightly below 1s, compared to idleTimeout
+// HeartbeatTime is set to slightly below 1s, compared to idleTimeout
 // set by VPlayer at slightly above 1s. This minimizes conflicts
 // between the two timeouts.
-var heartbeatTime = 900 * time.Millisecond
+var HeartbeatTime = 900 * time.Millisecond
 
 type vstreamer struct {
 	ctx    context.Context
@@ -134,7 +135,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		bufferedEvents []*binlogdatapb.VEvent
 		curSize        int
 	)
-	// Buffering only takes row lenghts into consideration.
+	// Buffering only takes row lengths into consideration.
 	// Length of other events is considered negligible.
 	// If a new row event causes the packet size to be exceeded,
 	// all existing rows are sent without the new row.
@@ -163,7 +164,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 					newSize += len(rowChange.After.Values)
 				}
 			}
-			if curSize+newSize > *packetSize {
+			if curSize+newSize > *PacketSize {
 				vevents := bufferedEvents
 				bufferedEvents = []*binlogdatapb.VEvent{vevent}
 				curSize = newSize
@@ -178,10 +179,10 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	}
 
 	// Main loop: calls bufferAndTransmit as events arrive.
-	timer := time.NewTimer(heartbeatTime)
+	timer := time.NewTimer(HeartbeatTime)
 	defer timer.Stop()
 	for {
-		timer.Reset(heartbeatTime)
+		timer.Reset(HeartbeatTime)
 		// Drain event if timer fired before reset.
 		select {
 		case <-timer.C:
@@ -324,7 +325,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		case sqlparser.StmtOther:
 			// These are DBA statements like REPAIR that can be ignored.
 		default:
-			return nil, fmt.Errorf("unexpected statement type %s in row-based replication: %q", sqlparser.StmtType(cat), q.SQL)
+			return nil, fmt.Errorf("unexpected statement type %s in row-based replication: %q", cat, q.SQL)
 		}
 	case ev.IsTableMap():
 		// This is very frequent. It precedes every row event.
@@ -341,17 +342,50 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			vs.plans[id] = nil
 			return nil, nil
 		}
+		tableName := tm.Name
+		var cols []schema.TableColumn
+		for i, typ := range tm.Types {
+			t, err := sqltypes.MySQLToType(int64(typ), 0)
+			if err != nil {
+				return nil, fmt.Errorf("unsupported type: %d, position: %d", typ, i)
+			}
+			cols = append(cols, schema.TableColumn{
+				Name: sqlparser.NewColIdent(fmt.Sprintf("@%d", i+1)),
+				Type: t,
+			})
+		}
 		st := vs.se.GetTable(sqlparser.NewTableIdent(tm.Name))
 		if st == nil {
-			return nil, fmt.Errorf("unknown table %v in schema", tm.Name)
+			if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
+				return nil, fmt.Errorf("unknown table %v in schema", tm.Name)
+			}
+		} else {
+			if len(st.Columns) < len(tm.Types) && vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
+				return nil, fmt.Errorf("cannot determine table columns for %s: event has %d columns, current schema has %d: %#v", tm.Name, len(tm.Types), len(st.Columns), ev)
+			}
+			tableName = st.Name.String()
+			// check if the schema returned by schema.Engine matches with row.
+			schemaMatch := true
+			if len(tm.Types) <= len(st.Columns) {
+				for i := range tm.Types {
+					t := cols[i].Type
+					if !sqltypes.AreTypesEquivalent(t, st.Columns[i].Type) {
+						schemaMatch = false
+						break
+					}
+				}
+			} else {
+				schemaMatch = false
+			}
+			if schemaMatch {
+				// Columns should be truncated to match those in tm.
+				cols = st.Columns[:len(tm.Types)]
+			}
 		}
-		if len(st.Columns) < len(tm.Types) {
-			return nil, fmt.Errorf("cannot determine table columns for %s: event has %d columns, current schema has %d: %#v", tm.Name, len(tm.Types), len(st.Columns), ev)
-		}
+
 		table := &Table{
-			Name: st.Name.String(),
-			// Columns should be truncated to match those in tm.
-			Columns: st.Columns[:len(tm.Types)],
+			Name:    tableName,
+			Columns: cols,
 		}
 		plan, err := buildPlan(table, vs.kschema, vs.filter)
 		if err != nil {

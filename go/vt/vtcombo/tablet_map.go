@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -110,6 +110,14 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 	tabletMap = make(map[uint32]*tablet)
 
 	ctx := context.Background()
+
+	// Register the tablet manager client factory for tablet manager
+	// Do this before any tablets are created so that they respect the protocol,
+	// otherwise it defaults to grpc
+	tmclient.RegisterTabletManagerClientFactory("internal", func() tmclient.TabletManagerClient {
+		return &internalTabletManagerClient{}
+	})
+	*tmclient.TabletManagerProtocol = "internal"
 
 	// iterate through the keyspaces
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil)
@@ -245,12 +253,6 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 	// Register the tablet dialer for tablet server
 	tabletconn.RegisterDialer("internal", dialer)
 	*tabletconn.TabletProtocol = "internal"
-
-	// Register the tablet manager client factory for tablet manager
-	tmclient.RegisterTabletManagerClientFactory("internal", func() tmclient.TabletManagerClient {
-		return &internalTabletManagerClient{}
-	})
-	*tmclient.TabletManagerProtocol = "internal"
 
 	// run healthcheck on all vttablets
 	tmc := tmclient.NewTabletManagerClient()

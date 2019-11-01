@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -330,14 +330,14 @@ func (wr *Wrangler) RemoveShardCell(ctx context.Context, keyspace, shard, cell s
 	}
 	defer unlock(&err)
 
-	if err = wr.ts.DeleteSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_RDONLY, shardServingCells); err != nil {
+	if err = wr.ts.DeleteSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_RDONLY, []string{cell}); err != nil {
 		return err
 	}
 
-	if err = wr.ts.DeleteSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_REPLICA, shardServingCells); err != nil {
+	if err = wr.ts.DeleteSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_REPLICA, []string{cell}); err != nil {
 		return err
 	}
-	return wr.ts.DeleteSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_MASTER, shardServingCells)
+	return wr.ts.DeleteSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_MASTER, []string{cell})
 }
 
 // SourceShardDelete will delete a SourceShard inside a shard, by index.

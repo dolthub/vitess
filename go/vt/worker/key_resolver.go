@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ import (
 
 // This file defines the interface and implementations of sharding key resolvers.
 
-// keyspaceIDResolver defines the interface that needs to be satisifed to get a
+// keyspaceIDResolver defines the interface that needs to be satisfied to get a
 // keyspace ID from a database row.
 type keyspaceIDResolver interface {
 	// keyspaceID takes a table row, and returns the keyspace id as bytes.

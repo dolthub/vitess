@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -82,7 +82,7 @@ func (ki *KeyspaceInfo) CheckServedFromMigration(tabletType topodatapb.TabletTyp
 	// check the keyspace is consistent in any case
 	for _, ksf := range ki.ServedFroms {
 		if ksf.Keyspace != keyspace {
-			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "inconsistent keypace specified in migration: %v != %v for type %v", keyspace, ksf.Keyspace, ksf.TabletType)
+			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "inconsistent keyspace specified in migration: %v != %v for type %v", keyspace, ksf.Keyspace, ksf.TabletType)
 		}
 	}
 

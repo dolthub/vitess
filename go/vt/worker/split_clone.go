@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -592,7 +592,7 @@ func (scw *SplitCloneWorker) initShardsForHorizontalResharding(ctx context.Conte
 	scw.wr.Logger().Infof("Found overlapping shards: %+v\n", os)
 
 	// one side should have served types, the other one none,
-	// figure out wich is which, then double check them all
+	// figure out which is which, then double check them all
 	leftServingTypes, err := scw.wr.TopoServer().GetShardServingTypes(ctx, os.Left[0])
 	if err != nil {
 		return fmt.Errorf("cannot get shard serving cells for: %v", os.Left[0])
