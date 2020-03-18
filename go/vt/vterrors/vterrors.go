@@ -324,8 +324,12 @@ type SyntaxError struct {
 	Statement string
 }
 
+func (se SyntaxError) WithStatement(statement string) SyntaxError {
+	return SyntaxError{Message:se.Message, Position:se.Position, Statement:se.Statement}
+}
+
 func (se SyntaxError) Error() string {
-	return fmt.Sprintf("%s at position %d", se.Message, se.Position)
+	return se.Message
 }
 
 func AsSyntaxError(err error) (SyntaxError, bool) {
