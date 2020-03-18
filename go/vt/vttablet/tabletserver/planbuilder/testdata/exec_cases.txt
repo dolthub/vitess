@@ -2315,10 +2315,10 @@ options:PassthroughDMLs
 }
 
 # explain
-"explain a"
+"explain select * from foo"
 {
-  "PlanID": "OTHER_READ",
-  "TableName": ""
+  "PlanID": "EXPLAIN",
+  "TableName": "foo"
 }
 
 # repair
