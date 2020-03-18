@@ -2314,12 +2314,9 @@ options:PassthroughDMLs
   "TableName": ""
 }
 
-# explain
+# explain -- parses fine, but returns an unrecognized plan node
 "explain select * from foo"
-{
-  "PlanID": "EXPLAIN",
-  "TableName": "foo"
-}
+"invalid SQL"
 
 # repair
 "repair a"
