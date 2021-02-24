@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"strings"
 	"sync"
@@ -730,36 +731,43 @@ func (c *Conn) writeLoadInfilePacket(fileName string) error {
 	return c.writeEphemeralPacket()
 }
 
-func (c *Conn) handleLoadDataLocalQuery() ([]byte, error) {
+func (c *Conn) handleLoadDataLocalQuery() error {
 	// First send the load infile packet and flush the connector
 	loadUsed = true
 	err := c.writeLoadInfilePacket("/Users/vinairachakonda/Desktop/x.txt")
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	err = c.flush()
 	if err != nil {
-		return nil, nil
+		return err
 	}
 
 	// Wait for the response packet that contains the data
 	fileData, err := c.readEphemeralPacket()
 	if err != nil {
-		return nil, err
+		return err
+	}
+
+	// Write the file to a temporary directory.
+	// TODO: Get the tmpdir config params from here
+	err = ioutil.WriteFile("/tmp/x", fileData, 0644)
+	if err != nil {
+		return err
 	}
 
 	c.recycleReadPacket()
 
 	emptyPacket, err := c.readEphemeralPacket()
 	if len(emptyPacket) != 0 {
-		return nil, errors.New("Empty packet not sent.")
+		return errors.New("Empty packet not sent.")
 	}
 
 	c.recycleReadPacket()
 
-	return fileData, nil
+	return nil
 }
 
 // writeEOFPacket writes an EOF packet, through the buffer, and
@@ -830,7 +838,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		c.recycleReadPacket()
 		query := c.parseComQuery(data)
 		if strings.Contains(strings.ToLower(query), "local") && !loadUsed {
-			_, err = c.handleLoadDataLocalQuery() // TODO: Do something with the file data here
+			err := c.handleLoadDataLocalQuery() // TODO: Do something with the file data here
 			if err != nil {
 				return err
 			}
