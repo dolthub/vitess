@@ -58,6 +58,8 @@ const (
 	ephemeralRead
 )
 
+var loadUsed = false
+
 // A Getter has a Get()
 type Getter interface {
 	Get() *querypb.VTGateCallerID
@@ -273,10 +275,10 @@ func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
 		return 0, vterrors.Wrapf(err, "io.ReadFull(header size) failed")
 	}
 
-	sequence := uint8(header[3])
-	if sequence != c.sequence {
-		return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
-	}
+	//sequence := uint8(header[3])
+	//if sequence != c.sequence {
+	//	return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
+	//}
 
 	c.sequence++
 
@@ -718,6 +720,48 @@ func (c *Conn) writeErrorPacketFromError(err error) error {
 	return c.writeErrorPacket(ERUnknownError, SSUnknownSQLState, "unknown error: %v", err)
 }
 
+func (c *Conn) writeLoadInfilePacket(fileName string) error {
+	length :=  1 + len(fileName)
+	data := c.startEphemeralPacket(length)
+	pos := 0
+	pos = writeByte(data, pos, LocalInfilePacket)
+	pos = writeEOFString(data, pos, fileName)
+
+	return c.writeEphemeralPacket()
+}
+
+func (c *Conn) handleLoadDataLocalQuery() ([]byte, error) {
+	// First send the load infile packet and flush the connector
+	loadUsed = true
+	err := c.writeLoadInfilePacket("/Users/vinairachakonda/Desktop/x.txt")
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = c.flush()
+	if err != nil {
+		return nil, nil
+	}
+
+	// Wait for the response packet that contains the data
+	fileData, err := c.readEphemeralPacket()
+	if err != nil {
+		return nil, err
+	}
+
+	c.recycleReadPacket()
+
+	emptyPacket, err := c.readEphemeralPacket()
+	if len(emptyPacket) != 0 {
+		return nil, errors.New("Empty packet not sent.")
+	}
+
+	c.recycleReadPacket()
+
+	return fileData, nil
+}
+
 // writeEOFPacket writes an EOF packet, through the buffer, and
 // doesn't flush (as it is used as part of a query result).
 func (c *Conn) writeEOFPacket(flags uint16, warnings uint16) error {
@@ -781,8 +825,16 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		c.startWriterBuffering()
 
 		queryStart := time.Now()
-		query := c.parseComQuery(data)
+
+
 		c.recycleReadPacket()
+		query := c.parseComQuery(data)
+		if strings.Contains(strings.ToLower(query), "local") && !loadUsed {
+			_, err = c.handleLoadDataLocalQuery() // TODO: Do something with the file data here
+			if err != nil {
+				return err
+			}
+		}
 
 		var queries []string
 		if c.Capabilities&CapabilityClientMultiStatements != 0 {
