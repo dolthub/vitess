@@ -275,10 +275,10 @@ func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
 		return 0, vterrors.Wrapf(err, "io.ReadFull(header size) failed")
 	}
 
-	//sequence := uint8(header[3])
-	//if sequence != c.sequence {
-	//	return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
-	//}
+	sequence := uint8(header[3])
+	if sequence != c.sequence {
+		return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
+	}
 
 	c.sequence++
 
@@ -730,7 +730,7 @@ func (c *Conn) writeLoadInfilePacket(fileName string) error {
 	return c.writeEphemeralPacket()
 }
 
-func (c *Conn) HandleLoadDataLocalQuery(tmpdir string, file string) error {
+func (c *Conn) HandleLoadDataLocalQuery(tmpdir string, tmpfileName string, file string) error {
 	// First send the load infile packet and flush the connector
 	err := c.writeLoadInfilePacket(file)
 	if err != nil {
@@ -742,17 +742,15 @@ func (c *Conn) HandleLoadDataLocalQuery(tmpdir string, file string) error {
 		return err
 	}
 
-	// Wait for the response packet that contains the data
+	fileName := filepath.Join(tmpdir, tmpfileName)
+
+	// Wait for the response packet that contains the data. readEphemeralPacket handles for us
+	// the case where multiple packets containing the data occur.
 	fileData, err := c.readEphemeralPacket()
 	if err != nil {
 		return err
 	}
 
-	// TODO: Change this to something that makes sense
-	fileName := filepath.Join(tmpdir, "random")
-
-	// Write the file to a temporary directory.
-	// TODO: Get the tmpdir config params from here
 	err = ioutil.WriteFile(fileName, fileData, 0644)
 	if err != nil {
 		return err
@@ -762,7 +760,7 @@ func (c *Conn) HandleLoadDataLocalQuery(tmpdir string, file string) error {
 
 	emptyPacket, err := c.readEphemeralPacket()
 	if len(emptyPacket) != 0 {
-		return errors.New("Empty packet not sent.")
+		return errors.New("error: empty packet not sent in local infile query")
 	}
 
 	c.recycleReadPacket()
@@ -837,12 +835,6 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 		c.recycleReadPacket()
 		query := c.parseComQuery(data)
-		//if strings.Contains(strings.ToLower(query), "local"){
-		//	err := c.HandleLoadDataLocalQuery() // TODO: Do something with the file data here
-		//	if err != nil {
-		//		return err
-		//	}
-		//}
 
 		var queries []string
 		if c.Capabilities&CapabilityClientMultiStatements != 0 {
