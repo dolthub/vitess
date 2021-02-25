@@ -25,6 +25,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -58,8 +59,6 @@ const (
 	// ephemeralRead means we currently in process of reading into currentEphemeralBuffer
 	ephemeralRead
 )
-
-var loadUsed = false
 
 // A Getter has a Get()
 type Getter interface {
@@ -731,11 +730,9 @@ func (c *Conn) writeLoadInfilePacket(fileName string) error {
 	return c.writeEphemeralPacket()
 }
 
-func (c *Conn) handleLoadDataLocalQuery() error {
+func (c *Conn) HandleLoadDataLocalQuery(tmpdir string, file string) error {
 	// First send the load infile packet and flush the connector
-	loadUsed = true
-	err := c.writeLoadInfilePacket("/Users/vinairachakonda/Desktop/x.txt")
-
+	err := c.writeLoadInfilePacket(file)
 	if err != nil {
 		return err
 	}
@@ -751,9 +748,12 @@ func (c *Conn) handleLoadDataLocalQuery() error {
 		return err
 	}
 
+	// TODO: Change this to something that makes sense
+	fileName := filepath.Join(tmpdir, "random")
+
 	// Write the file to a temporary directory.
 	// TODO: Get the tmpdir config params from here
-	err = ioutil.WriteFile("/tmp/x", fileData, 0644)
+	err = ioutil.WriteFile(fileName, fileData, 0644)
 	if err != nil {
 		return err
 	}
@@ -837,12 +837,12 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 		c.recycleReadPacket()
 		query := c.parseComQuery(data)
-		if strings.Contains(strings.ToLower(query), "local") && !loadUsed {
-			err := c.handleLoadDataLocalQuery() // TODO: Do something with the file data here
-			if err != nil {
-				return err
-			}
-		}
+		//if strings.Contains(strings.ToLower(query), "local"){
+		//	err := c.HandleLoadDataLocalQuery() // TODO: Do something with the file data here
+		//	if err != nil {
+		//		return err
+		//	}
+		//}
 
 		var queries []string
 		if c.Capabilities&CapabilityClientMultiStatements != 0 {
