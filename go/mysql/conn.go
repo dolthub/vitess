@@ -23,7 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"os"
 	"net"
 	"path/filepath"
 	"strings"
@@ -744,22 +744,30 @@ func (c *Conn) HandleLoadDataLocalQuery(tmpdir string, tmpfileName string, file 
 
 	fileName := filepath.Join(tmpdir, tmpfileName)
 
-	// Wait for the response packet that contains the data. readEphemeralPacket handles for us
-	// the case where multiple packets containing the data occur.
-	fileData, err := c.readEphemeralPacket()
+	f, err := os.Create(fileName)
 	if err != nil {
 		return err
 	}
 
-	err = ioutil.WriteFile(fileName, fileData, 0644)
+	defer f.Close()
+
+	fileData, err := c.readEphemeralPacket();
 	if err != nil {
 		return err
 	}
 
-	c.recycleReadPacket()
+	for len(fileData) != 0 {
+		_, err := f.Write(fileData)
+		if err != nil {
+			return err
+		}
 
-	emptyPacket, err := c.readEphemeralPacket()
-	if len(emptyPacket) != 0 {
+		c.recycleReadPacket()
+
+		fileData, err = c.readEphemeralPacket();
+	}
+
+	if len(fileData) != 0 {
 		return errors.New("error: empty packet not sent in local infile query")
 	}
 
