@@ -835,10 +835,9 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		c.startWriterBuffering()
 
 		queryStart := time.Now()
-
+		query := c.parseComQuery(data)
 
 		c.recycleReadPacket()
-		query := c.parseComQuery(data)
 
 		var queries []string
 		if c.Capabilities&CapabilityClientMultiStatements != 0 {
