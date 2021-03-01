@@ -767,10 +767,6 @@ func (c *Conn) HandleLoadDataLocalQuery(tmpdir string, tmpfileName string, file 
 		fileData, err = c.readEphemeralPacket();
 	}
 
-	if len(fileData) != 0 {
-		return errors.New("error: empty packet not sent in local infile query")
-	}
-
 	c.recycleReadPacket()
 
 	return nil

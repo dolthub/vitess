@@ -368,7 +368,7 @@ func skipToEnd(yylex interface{}) {
 %type <colIdent> vindex_type vindex_type_opt
 %type <bytes> ignored_alter_object_type
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
-%type <str> constraint_symbol_opt infile_opt starting_by_opt terminated_by_opt escaped_by_opt
+%type <str> constraint_symbol_opt infile_opt
 %type <exprs> call_param_list_opt
 %type <procedureParams> proc_param_list_opt proc_param_list
 %type <procedureParam> proc_param
@@ -377,6 +377,7 @@ func skipToEnd(yylex interface{}) {
 %type <Fields> fields_opt
 %type <Lines> lines_opt
 %type <EnclosedBy> enclosed_by_opt
+%type <sqlVal> terminated_by_opt starting_by_opt escaped_by_opt
 
 %start any_command
 
@@ -4288,7 +4289,7 @@ enclosed_by_opt:
   }
 | optionally_opt ENCLOSED BY STRING
   {
-    $$ = &EnclosedBy{Optionally: $1, Delim: "'" + string($4) + "'"}
+    $$ = &EnclosedBy{Optionally: $1, Delim: NewStrVal($4)}
   }
 
 optionally_opt:
@@ -4302,20 +4303,20 @@ optionally_opt:
 
 terminated_by_opt:
   {
-    $$ = ""
+    $$ = nil
   }
 | TERMINATED BY STRING
   {
-    $$ =  "'" + string($3) +  "'"
+    $$ = NewStrVal($3)
   }
 
 escaped_by_opt:
   {
-    $$ = ""
+    $$ = nil
   }
 | ESCAPED BY STRING
   {
-    $$ =  "'" + string($3) + "'"
+    $$ = NewStrVal($3)
   }
 
 fields_opt:
@@ -4338,11 +4339,11 @@ lines_opt:
 
 starting_by_opt:
   {
-    $$ = ""
+    $$ = nil
   }
 | STARTING BY STRING
   {
-    $$ = "'" + string($3) + "'"
+    $$ = NewStrVal($3)
   }
 
 /*
