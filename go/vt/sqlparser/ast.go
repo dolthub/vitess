@@ -2288,6 +2288,12 @@ func (node *Show) Format(buf *TrackedBuffer) {
 	if node.Type == "collation" && node.ShowCollationFilterOpt != nil {
 		buf.Myprintf(" where %v", *node.ShowCollationFilterOpt)
 	}
+	if node.Type == "charset" {
+		if node.ProcFuncFilter != nil {
+			buf.Myprintf("%v", node.ProcFuncFilter)
+		}
+		return
+	}
 	if node.HasTable() {
 		buf.Myprintf(" %v", node.Table)
 	}
