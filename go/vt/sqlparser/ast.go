@@ -2220,7 +2220,7 @@ type Show struct {
 	Scope                  string
 	ShowCollationFilterOpt *Expr
 	ShowIndexFilterOpt     Expr
-	ProcFuncFilter         *ShowFilter
+	Filter                 *ShowFilter
 }
 
 // Format formats the node.
@@ -2256,15 +2256,15 @@ func (node *Show) Format(buf *TrackedBuffer) {
 	}
 	if node.Type == "procedure status" {
 		buf.Myprintf("show procedure status")
-		if node.ProcFuncFilter != nil {
-			buf.Myprintf("%v", node.ProcFuncFilter)
+		if node.Filter != nil {
+			buf.Myprintf("%v", node.Filter)
 		}
 		return
 	}
 	if node.Type == "function status" {
 		buf.Myprintf("show function status")
-		if node.ProcFuncFilter != nil {
-			buf.Myprintf("%v", node.ProcFuncFilter)
+		if node.Filter != nil {
+			buf.Myprintf("%v", node.Filter)
 		}
 		return
 	}
@@ -2289,8 +2289,8 @@ func (node *Show) Format(buf *TrackedBuffer) {
 		buf.Myprintf(" where %v", *node.ShowCollationFilterOpt)
 	}
 	if node.Type == "charset" {
-		if node.ProcFuncFilter != nil {
-			buf.Myprintf("%v", node.ProcFuncFilter)
+		if node.Filter != nil {
+			buf.Myprintf("%v", node.Filter)
 		}
 		return
 	}
@@ -2319,7 +2319,7 @@ func (node *Show) walkSubtree(visit Visit) error {
 		node.OnTable,
 		node.Table,
 		node.ShowIndexFilterOpt,
-		node.ProcFuncFilter,
+		node.Filter,
 	)
 }
 

@@ -6949,13 +6949,13 @@ yydefault:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:2148
 		{
-			yyVAL.statement = &Show{Type: CharsetStr, ProcFuncFilter: yyDollar[4].showFilter}
+			yyVAL.statement = &Show{Type: CharsetStr, Filter: yyDollar[4].showFilter}
 		}
 	case 404:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:2152
 		{
-			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes), ProcFuncFilter: yyDollar[3].showFilter}
+			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes), Filter: yyDollar[3].showFilter}
 		}
 	case 405:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -7039,13 +7039,13 @@ yydefault:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:2209
 		{
-			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes) + " " + string(yyDollar[3].bytes), ProcFuncFilter: yyDollar[4].showFilter}
+			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes) + " " + string(yyDollar[3].bytes), Filter: yyDollar[4].showFilter}
 		}
 	case 419:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:2213
 		{
-			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes) + " " + string(yyDollar[3].bytes), ProcFuncFilter: yyDollar[4].showFilter}
+			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes) + " " + string(yyDollar[3].bytes), Filter: yyDollar[4].showFilter}
 		}
 	case 420:
 		yyDollar = yyS[yypt-4 : yypt+1]
