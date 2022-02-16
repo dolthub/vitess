@@ -1821,6 +1821,10 @@ var (
 		}, {
 			input: "select name, row_number() over (partition by x order by y asc ROWS 2 PRECEDING) from t",
 		}, {
+			input: "select name, row_number() over (partition by x order by y asc ROWS 127 PRECEDING) from t",
+		}, {
+			input: "select name, row_number() over (partition by x order by y asc ROWS 128 PRECEDING) from t",
+		}, {
 			input: "select name, row_number() over (partition by x ROWS UNBOUNDED PRECEDING) from t",
 		}, {
 			input: "select name, row_number() over (partition by x ROWS interval 5 DAY PRECEDING) from t",
