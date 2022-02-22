@@ -2330,6 +2330,9 @@ var (
 		}, {
 			input:  "kill connection 423",
 			output: "kill connection 423",
+		},{
+			input:  "SELECT col1 AS Comment FROM tab0",
+			output: "select col1 as `Comment` from tab0",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
