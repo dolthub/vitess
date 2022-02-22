@@ -3875,7 +3875,10 @@ as_ci_opt:
   {
     $$ = $2
   }
-
+| AS COMMENT_KEYWORD
+  {
+    $$ = NewColIdent(string($2))
+  }
 col_alias:
   ID
   {
