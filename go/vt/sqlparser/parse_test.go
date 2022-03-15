@@ -2351,6 +2351,9 @@ var (
 		}, {
 			input:  "SELECT * FROM information_schema.processlist",
 			output: "select * from information_schema.`processlist`",
+		},{
+			input: "CREATE DATABASE `dolt_testing` DEFAULT CHARACTER SET latin1",
+			output: "create database dolt_testing default character set latin1",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.

@@ -1356,14 +1356,24 @@ func (node *Set) walkSubtree(visit Visit) error {
 	)
 }
 
+type Charset struct {
+	CharsetDefault bool
+	CharsetStr string
+}
+
+type Collate struct {
+	CollateDefault bool
+	CollateStr string
+}
+
 // DBDDL represents a CREATE, DROP database statement.
 type DBDDL struct {
 	Action      string
 	DBName      string
 	IfNotExists bool
 	IfExists    bool
-	Collate     string
-	Charset     string
+	CharsetObj  *Charset
+	CollateObj  *Collate
 }
 
 // Format formats the node.
@@ -1374,7 +1384,23 @@ func (node *DBDDL) Format(buf *TrackedBuffer) {
 		if node.IfNotExists {
 			exists = " if not exists"
 		}
-		buf.WriteString(fmt.Sprintf("%s database%s %s", node.Action, exists, node.DBName))
+		charsetStr := ""
+		if node.CharsetObj.CharsetStr != "" {
+			charsetDef := ""
+			if node.CharsetObj.CharsetDefault {
+				charsetDef = " default"
+			}
+			charsetStr = fmt.Sprintf("%s character set %s", charsetDef, node.CharsetObj.CharsetStr)
+		}
+		collateStr := ""
+		if node.CollateObj.CollateStr != "" {
+			collateDef := ""
+			if node.CollateObj.CollateDefault {
+				collateDef = " default"
+			}
+			collateStr = fmt.Sprintf("%s collate %s", collateDef, node.CollateObj.CollateStr)
+		}
+		buf.WriteString(fmt.Sprintf("%s database%s %s%s%s", node.Action, exists, node.DBName, charsetStr, collateStr))
 	case DropStr:
 		exists := ""
 		if node.IfExists {

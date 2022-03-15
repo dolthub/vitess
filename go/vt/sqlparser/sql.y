@@ -145,6 +145,8 @@ func yyOldPosition(yylex interface{}) int {
   procedureParams []ProcedureParam
   characteristic Characteristic
   characteristics []Characteristic
+  charsetDefOpt *Charset
+  collateDefOpt *Collate
   Fields *Fields
   Lines	*Lines
   EnclosedBy *EnclosedBy
@@ -413,6 +415,8 @@ func yyOldPosition(yylex interface{}) int {
 %type <sqlVal> length_opt column_comment ignore_number_opt
 %type <optVal> column_default on_update
 %type <str> charset_opt collate_opt
+%type <charsetDefOpt> charset_default_opt
+%type <collateDefOpt> collate_default_opt
 %type <boolVal> unsigned_opt zero_fill_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
 %type <boolVal> auto_increment local_opt optionally_opt
@@ -839,21 +843,21 @@ create_statement:
   {
     $$ = &DDL{Action: CreateStr, View: $5.ToViewName(), ViewExpr: $8, SubStatementPositionStart: $7, SubStatementPositionEnd: $9 - 1, OrReplace: true}
   }
-| CREATE DATABASE not_exists_opt ID
+| CREATE DATABASE not_exists_opt ID charset_default_opt collate_default_opt
   {
     var ne bool
     if $3 != 0 {
       ne = true
     }
-   $$ = &DBDDL{Action: CreateStr, DBName: string($4), IfNotExists: ne}
+   $$ = &DBDDL{Action: CreateStr, DBName: string($4), IfNotExists: ne, CharsetObj: $5, CollateObj: $6}
   }
-| CREATE SCHEMA not_exists_opt ID
+| CREATE SCHEMA not_exists_opt ID charset_default_opt collate_default_opt
   {
     var ne bool
     if $3 != 0 {
       ne = true
     }
-    $$ = &DBDDL{Action: CreateStr, DBName: string($4), IfNotExists: ne}
+    $$ = &DBDDL{Action: CreateStr, DBName: string($4), IfNotExists: ne, CharsetObj: $5, CollateObj: $6}
   }
 | CREATE definer_opt TRIGGER ID trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt lexer_position trigger_body lexer_position
   {
@@ -2543,6 +2547,27 @@ charset_opt:
     $$ = string($3)
   }
 
+charset_default_opt:
+  {
+    $$ = &Charset{CharsetDefault: false, CharsetStr: ""}
+  }
+| CHARACTER SET ID
+  {
+    $$ = &Charset{CharsetDefault: false, CharsetStr: string($3)}
+  }
+| CHARACTER SET BINARY
+  {
+    $$ = &Charset{CharsetDefault: false, CharsetStr: string($3)}
+  }
+| DEFAULT CHARACTER SET ID
+  {
+    $$ = &Charset{CharsetDefault: true, CharsetStr: string($4)}
+  }
+| DEFAULT CHARACTER SET BINARY
+  {
+    $$ = &Charset{CharsetDefault: true, CharsetStr: string($4)}
+  }
+
 collate_opt:
   {
     $$ = ""
@@ -2554,6 +2579,27 @@ collate_opt:
 | COLLATE STRING
   {
     $$ = string($2)
+  }
+
+collate_default_opt:
+  {
+    $$ = &Collate{CollateDefault: false, CollateStr: ""}
+  }
+| COLLATE ID
+  {
+    $$ = &Collate{CollateDefault: false, CollateStr: string($2)}
+  }
+| COLLATE STRING
+  {
+    $$ = &Collate{CollateDefault: false, CollateStr: string($2)}
+  }
+| DEFAULT COLLATE ID
+  {
+    $$ = &Collate{CollateDefault: true, CollateStr: string($3)}
+  }
+| DEFAULT COLLATE STRING
+  {
+    $$ = &Collate{CollateDefault: true, CollateStr: string($3)}
   }
 
 column_key:
