@@ -850,7 +850,7 @@ create_statement:
     if $3 != 0 {
       ne = true
     }
-   $$ = &DBDDL{Action: CreateStr, DBName: string($4), IfNotExists: ne, CharsetObj: $5, CollateObj: $6}
+    $$ = &DBDDL{Action: CreateStr, DBName: string($4), IfNotExists: ne, CharsetObj: $5, CollateObj: $6}
   }
 | CREATE SCHEMA not_exists_opt ID charset_default_opt collate_default_opt
   {
