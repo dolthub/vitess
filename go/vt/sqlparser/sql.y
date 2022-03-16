@@ -145,8 +145,8 @@ func yyOldPosition(yylex interface{}) int {
   procedureParams []ProcedureParam
   characteristic Characteristic
   characteristics []Characteristic
-  charsetDefOpt *Charset
-  collateDefOpt *Collate
+  charsetCollate *CharsetAndCollate
+  charsetCollates []*CharsetAndCollate
   Fields *Fields
   Lines	*Lines
   EnclosedBy *EnclosedBy
@@ -415,9 +415,9 @@ func yyOldPosition(yylex interface{}) int {
 %type <sqlVal> length_opt column_comment ignore_number_opt
 %type <optVal> column_default on_update
 %type <str> charset_opt collate_opt
-%type <boolVal> default_keyword_opt
-%type <charsetDefOpt> charset_default_opt
-%type <collateDefOpt> collate_default_opt
+%type <boolean> default_keyword_opt
+%type <charsetCollate> charset_default_opt collate_default_opt
+%type <charsetCollates> charset_collate_opt charset_collate
 %type <boolVal> unsigned_opt zero_fill_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
 %type <boolVal> auto_increment local_opt optionally_opt
@@ -844,21 +844,21 @@ create_statement:
   {
     $$ = &DDL{Action: CreateStr, View: $5.ToViewName(), ViewExpr: $8, SubStatementPositionStart: $7, SubStatementPositionEnd: $9 - 1, OrReplace: true}
   }
-| CREATE DATABASE not_exists_opt ID charset_default_opt collate_default_opt
+| CREATE DATABASE not_exists_opt ID charset_collate_opt
   {
     var ne bool
     if $3 != 0 {
       ne = true
     }
-    $$ = &DBDDL{Action: CreateStr, DBName: string($4), IfNotExists: ne, CharsetObj: $5, CollateObj: $6}
+    $$ = &DBDDL{Action: CreateStr, DBName: string($4), IfNotExists: ne, CharsetCollate: $5}
   }
-| CREATE SCHEMA not_exists_opt ID charset_default_opt collate_default_opt
+| CREATE SCHEMA not_exists_opt ID charset_collate_opt
   {
     var ne bool
     if $3 != 0 {
       ne = true
     }
-    $$ = &DBDDL{Action: CreateStr, DBName: string($4), IfNotExists: ne, CharsetObj: $5, CollateObj: $6}
+    $$ = &DBDDL{Action: CreateStr, DBName: string($4), IfNotExists: ne, CharsetCollate: $5}
   }
 | CREATE definer_opt TRIGGER ID trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt lexer_position trigger_body lexer_position
   {
@@ -2570,30 +2570,59 @@ default_keyword_opt:
     $$ = true
   }
 
-charset_default_opt:
+charset_collate_opt:
   {
     $$ = nil
   }
-| default_keyword_opt CHARACTER SET ID
+| charset_collate
   {
-    $$ = &Charset{CharsetDefault: $1, CharsetStr: string($4)}
+    $$ = $1
+  }
+
+charset_collate:
+  charset_default_opt
+  {
+    $$ = []*CharsetAndCollate{$1}
+  }
+| collate_default_opt
+  {
+    $$ = []*CharsetAndCollate{$1}
+  }
+| charset_collate collate_default_opt
+  {
+    $$ = append($1,$2)
+  }
+| charset_collate charset_default_opt
+  {
+    $$ = append($1,$2)
+  }
+
+charset_default_opt:
+  default_keyword_opt CHARACTER SET ID
+  {
+    $$ = &CharsetAndCollate{Type: string($2) + " " + string($3), Value: string($4), IsDefault: $1}
   }
 | default_keyword_opt CHARACTER SET BINARY
   {
-    $$ = &Charset{CharsetDefault: $1, CharsetStr: string($4)}
+    $$ = &CharsetAndCollate{Type: string($2) + " " + string($3), Value: string($4), IsDefault: $1}
+  }
+| default_keyword_opt CHARSET ID
+  {
+    $$ = &CharsetAndCollate{Type: string($2), Value: string($3), IsDefault: $1}
+  }
+| default_keyword_opt CHARSET BINARY
+  {
+    $$ = &CharsetAndCollate{Type: string($2), Value: string($3), IsDefault: $1}
   }
 
 collate_default_opt:
+  default_keyword_opt COLLATE ID
   {
-    $$ = nil
-  }
-| default_keyword_opt COLLATE ID
-  {
-    $$ = &Collate{CollateDefault: $1, CollateStr: string($3)}
+    $$ = &CharsetAndCollate{Type: string($2), Value: string($3), IsDefault: $1}
   }
 | default_keyword_opt COLLATE STRING
   {
-    $$ = &Collate{CollateDefault: $1, CollateStr: string($3)}
+    $$ = &CharsetAndCollate{Type: string($2), Value: string($3), IsDefault: $1}
   }
 
 column_key:

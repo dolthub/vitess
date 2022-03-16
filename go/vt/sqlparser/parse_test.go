@@ -2366,6 +2366,18 @@ var (
 		},{
 			input: "CREATE DATABASE `dolt_testing` DEFAULT CHARACTER SET latin1",
 			output: "create database dolt_testing default character set latin1",
+		},{
+			input: "CREATE DATABASE `dolt_testing` DEFAULT CHARSET latin1",
+			output: "create database dolt_testing default charset latin1",
+		},{
+			input: "CREATE DATABASE `dolt_testing` DEFAULT COLLATE latin1_general_ci",
+			output: "create database dolt_testing default collate latin1_general_ci",
+		},{
+			input: "CREATE DATABASE `dolt_testing` COLLATE latin1_general_ci CHARACTER SET latin1",
+			output: "create database dolt_testing collate latin1_general_ci character set latin1",
+		},{
+			input: "CREATE DATABASE `dolt_testing` DEFAULT CHARACTER SET latin1 DEFAULT COLLATE latin1_general_ci",
+			output: "create database dolt_testing default character set latin1 default collate latin1_general_ci",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
