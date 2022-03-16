@@ -415,6 +415,7 @@ func yyOldPosition(yylex interface{}) int {
 %type <sqlVal> length_opt column_comment ignore_number_opt
 %type <optVal> column_default on_update
 %type <str> charset_opt collate_opt
+%type <boolVal> default_keyword_opt
 %type <charsetDefOpt> charset_default_opt
 %type <collateDefOpt> collate_default_opt
 %type <boolVal> unsigned_opt zero_fill_opt
@@ -2547,27 +2548,6 @@ charset_opt:
     $$ = string($3)
   }
 
-charset_default_opt:
-  {
-    $$ = &Charset{CharsetDefault: false, CharsetStr: ""}
-  }
-| CHARACTER SET ID
-  {
-    $$ = &Charset{CharsetDefault: false, CharsetStr: string($3)}
-  }
-| CHARACTER SET BINARY
-  {
-    $$ = &Charset{CharsetDefault: false, CharsetStr: string($3)}
-  }
-| DEFAULT CHARACTER SET ID
-  {
-    $$ = &Charset{CharsetDefault: true, CharsetStr: string($4)}
-  }
-| DEFAULT CHARACTER SET BINARY
-  {
-    $$ = &Charset{CharsetDefault: true, CharsetStr: string($4)}
-  }
-
 collate_opt:
   {
     $$ = ""
@@ -2581,25 +2561,39 @@ collate_opt:
     $$ = string($2)
   }
 
+default_keyword_opt:
+  {
+    $$ = false
+  }
+| DEFAULT
+  {
+    $$ = true
+  }
+
+charset_default_opt:
+  {
+    $$ = nil
+  }
+| default_keyword_opt CHARACTER SET ID
+  {
+    $$ = &Charset{CharsetDefault: $1, CharsetStr: string($4)}
+  }
+| default_keyword_opt CHARACTER SET BINARY
+  {
+    $$ = &Charset{CharsetDefault: $1, CharsetStr: string($4)}
+  }
+
 collate_default_opt:
   {
-    $$ = &Collate{CollateDefault: false, CollateStr: ""}
+    $$ = nil
   }
-| COLLATE ID
+| default_keyword_opt COLLATE ID
   {
-    $$ = &Collate{CollateDefault: false, CollateStr: string($2)}
+    $$ = &Collate{CollateDefault: $1, CollateStr: string($3)}
   }
-| COLLATE STRING
+| default_keyword_opt COLLATE STRING
   {
-    $$ = &Collate{CollateDefault: false, CollateStr: string($2)}
-  }
-| DEFAULT COLLATE ID
-  {
-    $$ = &Collate{CollateDefault: true, CollateStr: string($3)}
-  }
-| DEFAULT COLLATE STRING
-  {
-    $$ = &Collate{CollateDefault: true, CollateStr: string($3)}
+    $$ = &Collate{CollateDefault: $1, CollateStr: string($3)}
   }
 
 column_key:
