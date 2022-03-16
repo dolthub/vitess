@@ -270,6 +270,7 @@ func yyOldPosition(yylex interface{}) int {
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
+%token <bytes> ENCRYPTION
 
 // Functions
 %token <bytes> CURRENT_TIMESTAMP DATABASE CURRENT_DATE CURRENT_USER
@@ -416,7 +417,7 @@ func yyOldPosition(yylex interface{}) int {
 %type <optVal> column_default on_update
 %type <str> charset_opt collate_opt
 %type <boolean> default_keyword_opt
-%type <charsetCollate> charset_default_opt collate_default_opt
+%type <charsetCollate> charset_default_opt collate_default_opt encryption_default_opt
 %type <charsetCollates> charset_collate_opt charset_collate
 %type <boolVal> unsigned_opt zero_fill_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
@@ -2588,6 +2589,10 @@ charset_collate:
   {
     $$ = []*CharsetAndCollate{$1}
   }
+| encryption_default_opt
+  {
+    $$ = []*CharsetAndCollate{$1}
+  }
 | charset_collate collate_default_opt
   {
     $$ = append($1,$2)
@@ -2596,33 +2601,43 @@ charset_collate:
   {
     $$ = append($1,$2)
   }
+| charset_collate encryption_default_opt
+  {
+    $$ = append($1,$2)
+  }
 
 charset_default_opt:
-  default_keyword_opt CHARACTER SET ID
+  default_keyword_opt CHARACTER SET equal_opt ID
   {
-    $$ = &CharsetAndCollate{Type: string($2) + " " + string($3), Value: string($4), IsDefault: $1}
+    $$ = &CharsetAndCollate{Type: string($2) + " " + string($3), Value: string($5), IsDefault: $1}
   }
-| default_keyword_opt CHARACTER SET BINARY
+| default_keyword_opt CHARACTER SET equal_opt BINARY
   {
-    $$ = &CharsetAndCollate{Type: string($2) + " " + string($3), Value: string($4), IsDefault: $1}
+    $$ = &CharsetAndCollate{Type: string($2) + " " + string($3), Value: string($5), IsDefault: $1}
   }
-| default_keyword_opt CHARSET ID
+| default_keyword_opt CHARSET equal_opt ID
   {
-    $$ = &CharsetAndCollate{Type: string($2), Value: string($3), IsDefault: $1}
+    $$ = &CharsetAndCollate{Type: string($2), Value: string($4), IsDefault: $1}
   }
-| default_keyword_opt CHARSET BINARY
+| default_keyword_opt CHARSET equal_opt BINARY
   {
-    $$ = &CharsetAndCollate{Type: string($2), Value: string($3), IsDefault: $1}
+    $$ = &CharsetAndCollate{Type: string($2), Value: string($4), IsDefault: $1}
   }
 
 collate_default_opt:
-  default_keyword_opt COLLATE ID
+  default_keyword_opt COLLATE equal_opt ID
   {
-    $$ = &CharsetAndCollate{Type: string($2), Value: string($3), IsDefault: $1}
+    $$ = &CharsetAndCollate{Type: string($2), Value: string($4), IsDefault: $1}
   }
-| default_keyword_opt COLLATE STRING
+| default_keyword_opt COLLATE equal_opt STRING
   {
-    $$ = &CharsetAndCollate{Type: string($2), Value: string($3), IsDefault: $1}
+    $$ = &CharsetAndCollate{Type: string($2), Value: string($4), IsDefault: $1}
+  }
+
+encryption_default_opt:
+  default_keyword_opt ENCRYPTION equal_opt STRING
+  {
+    $$ = &CharsetAndCollate{Type: string($2), Value: string($4), IsDefault: $1}
   }
 
 column_key:
@@ -6109,6 +6124,7 @@ non_reserved_keyword:
 | DOUBLE
 | DUPLICATE
 | EACH
+| ENCRYPTION
 | ENFORCED
 | ENGINE
 | ENGINES
