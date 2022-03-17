@@ -206,6 +206,7 @@ var keywords = map[string]int{
 	"elseif":                   ELSEIF,
 	"enable":                   ENABLE,
 	"enclosed":                 ENCLOSED,
+	"encryption":               ENCRYPTION,
 	"end":                      END,
 	"enforced":                 ENFORCED,
 	"engine":                   ENGINE,
