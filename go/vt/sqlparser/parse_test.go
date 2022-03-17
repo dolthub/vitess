@@ -1244,6 +1244,9 @@ var (
 			input:  "create index a on b (id)",
 			output: "alter table b add index a (id)",
 		}, {
+			input:  "CREATE INDEX a ON b (id)",
+			output: "alter table b add index a (id)",
+		}, {
 			input:  "create index a on b (foo(6) desc, foo asc)",
 			output: "alter table b add index a (foo(6) desc, foo)",
 		}, {
