@@ -226,7 +226,7 @@ func yyOldPosition(yylex interface{}) int {
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE FORMAT
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER TRIGGERS FUNCTION
 %token <bytes> STATUS VARIABLES WARNINGS ERRORS KILL CONNECTION
-%token <bytes> SEQUENCE
+%token <bytes> SEQUENCE ENABLE DISABLE
 %token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES DEFINER INVOKER
 %token <bytes> INOUT OUT DETERMINISTIC CONTAINS READS MODIFIES SQL SECURITY TEMPORARY
 
@@ -3148,6 +3148,14 @@ alter_table_statement_part:
     ddl.IndexSpec = &IndexSpec{Action: CreateStr, Using: NewColIdent(""), ToName: NewColIdent($2), Type: PrimaryStr, Columns: $6, Options: $8}
     $$ = ddl
   }
+| DISABLE KEYS
+  {
+    $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: string($1)}}
+  }
+| ENABLE KEYS
+  {
+    $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: string($1)}}
+  }
 
 column_order_opt:
   {
@@ -6037,9 +6045,11 @@ non_reserved_keyword:
 | DEFINER
 | DEFINITION
 | DESCRIPTION
+| DISABLE
 | DOUBLE
 | DUPLICATE
 | EACH
+| ENABLE
 | ENFORCED
 | ENGINE
 | ENGINES
