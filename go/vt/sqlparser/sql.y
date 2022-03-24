@@ -4361,11 +4361,11 @@ table_name:
   }
 
 procedure_name:
-  table_id
+  sql_id
   {
     $$ = ProcedureName{Name: $1}
   }
-| table_id '.' table_id
+| table_id '.' sql_id
   {
     $$ = ProcedureName{Qualifier: $1, Name: $3}
   }

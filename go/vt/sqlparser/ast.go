@@ -3303,7 +3303,8 @@ func (node TableNames) walkSubtree(visit Visit) error {
 // ProcedureName is a value struct whose fields are case-sensitive,
 // so TableIdent struct is used for fields
 type ProcedureName struct {
-	Name, Qualifier TableIdent
+	Name      ColIdent
+	Qualifier TableIdent
 }
 
 // Format formats the node.
