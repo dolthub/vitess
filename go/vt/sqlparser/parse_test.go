@@ -1307,11 +1307,14 @@ var (
 		}, {
 			input: "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
 		}, {
+			input:  "create DEFINER=`root`@`localhost` trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+			output: "create definer = `root`@`localhost` trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+		}, {
 			input:  "create definer = me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
-			output: "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+			output: "create definer = `me`@`%` trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
 		}, {
 			input:  "create definer=me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
-			output: "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+			output: "create definer = `me`@`%` trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
 		}, {
 			input:  "rename table a to b",
 			output: "rename table a to b",
@@ -2103,6 +2106,9 @@ var (
 			input: "drop procedure if exists p1",
 		}, {
 			input: "drop procedure dbName.p1",
+		}, {
+			input:  "CREATE DEFINER=`root`@`localhost` PROCEDURE p2() SELECT RAND()",
+			output: "create definer = `root`@`localhost` procedure p2 () select RAND() from dual",
 		}, {
 			input:  "create procedure mydb.p1() select rand()",
 			output: "create procedure mydb.p1 () select rand() from dual",

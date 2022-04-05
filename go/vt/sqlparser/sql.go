@@ -7017,7 +7017,7 @@ yydefault:
 		yyDollar = yyS[yypt-16 : yypt+1]
 //line sql.y:887
 		{
-			yyVAL.statement = &DDL{Action: CreateStr, Table: yyDollar[8].tableName, TriggerSpec: &TriggerSpec{TrigName: yyDollar[4].triggerName, Time: yyDollar[5].str, Event: yyDollar[6].str, Order: yyDollar[12].triggerOrder, Body: yyDollar[15].statement}, SpecialCommentMode: yyDollar[14].boolean, SubStatementPositionStart: yyDollar[13].int, SubStatementPositionEnd: yyDollar[16].int - 1}
+			yyVAL.statement = &DDL{Action: CreateStr, Table: yyDollar[8].tableName, TriggerSpec: &TriggerSpec{TrigName: yyDollar[4].triggerName, Definer: yyDollar[2].str, Time: yyDollar[5].str, Event: yyDollar[6].str, Order: yyDollar[12].triggerOrder, Body: yyDollar[15].statement}, SpecialCommentMode: yyDollar[14].boolean, SubStatementPositionStart: yyDollar[13].int, SubStatementPositionEnd: yyDollar[16].int - 1}
 		}
 	case 97:
 		yyDollar = yyS[yypt-12 : yypt+1]

@@ -1445,6 +1445,7 @@ type ViewSpec struct {
 
 type TriggerSpec struct {
 	TrigName TriggerName
+	Definer  string
 	Time     string // BeforeStr, AfterStr
 	Event    string // UpdateStr, InsertStr, DeleteStr
 	Order    *TriggerOrder
@@ -1668,13 +1669,17 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			buf.Myprintf("%s %sview %v as %v", node.Action, afterCreate, view.ViewName, view.ViewExpr)
 		} else if node.TriggerSpec != nil {
 			trigger := node.TriggerSpec
+			triggerDef := ""
+			if trigger.Definer != "" {
+				triggerDef = fmt.Sprintf("%sdefiner = %s ", triggerDef, trigger.Definer)
+			}
 			triggerOrder := ""
 			if trigger.Order != nil {
 				triggerOrder = fmt.Sprintf("%s %s ", trigger.Order.PrecedesOrFollows, trigger.Order.OtherTriggerName)
 			}
 			triggerName := fmt.Sprintf("%s", trigger.TrigName)
-			buf.Myprintf("%s trigger %s %s %s on %v for each row %s%v",
-				node.Action, triggerName, trigger.Time, trigger.Event, node.Table, triggerOrder, trigger.Body)
+			buf.Myprintf("%s %strigger %s %s %s on %v for each row %s%v",
+				node.Action, triggerDef, triggerName, trigger.Time, trigger.Event, node.Table, triggerOrder, trigger.Body)
 		} else if node.ProcedureSpec != nil {
 			proc := node.ProcedureSpec
 			sb := strings.Builder{}
