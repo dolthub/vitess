@@ -135,6 +135,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
   partDefs      []*PartitionDefinition
   partDef       *PartitionDefinition
   partSpec      *PartitionSpec
+  viewSpec      *ViewSpec
   showFilter    *ShowFilter
   frame         *Frame
   frameExtent   *FrameExtent
@@ -238,7 +239,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> STATUS VARIABLES WARNINGS ERRORS KILL CONNECTION
 %token <bytes> SEQUENCE ENABLE DISABLE
 %token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES DEFINER INVOKER
-%token <bytes> INOUT OUT DETERMINISTIC CONTAINS READS MODIFIES SQL SECURITY TEMPORARY
+%token <bytes> INOUT OUT DETERMINISTIC CONTAINS READS MODIFIES SQL SECURITY TEMPORARY ALGORITHM MERGE TEMPTABLE UNDEFINED
 
 // SIGNAL Tokens
 %token <bytes> CLASS_ORIGIN SUBCLASS_ORIGIN MESSAGE_TEXT MYSQL_ERRNO CONSTRAINT_CATALOG CONSTRAINT_SCHEMA
@@ -413,7 +414,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> key_type key_type_opt
 %type <str> flush_type flush_type_opt
 %type <empty> to_opt to_or_as as_opt column_opt describe
-%type <str> definer_opt
+%type <str> algorithm_opt definer_opt security_opt
+%type <viewSpec> create_algorithm_view
 %type <bytes> reserved_keyword non_reserved_keyword column_name_safe_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt existing_window_name_opt
 %type <colIdents> reserved_sql_id_list
@@ -853,13 +855,17 @@ create_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $7, IndexSpec: &IndexSpec{Action: CreateStr, ToName: $4, Using: $5, Type: $2, Columns: $9, Options: $11}}
   }
-| CREATE VIEW table_name AS lexer_position special_comment_mode select_statement lexer_position
+| CREATE create_algorithm_view VIEW table_name AS lexer_position special_comment_mode select_statement lexer_position
   {
-    $$ = &DDL{Action: CreateStr, View: $3.ToViewName(), ViewExpr: $7, SpecialCommentMode: $6, SubStatementPositionStart: $5, SubStatementPositionEnd: $8 - 1}
+    $2.ViewName = $4.ToViewName()
+    $2.ViewExpr = $8
+    $$ = &DDL{Action: CreateStr, ViewSpec: $2, SpecialCommentMode: $7, SubStatementPositionStart: $6, SubStatementPositionEnd: $9 - 1}
   }
-| CREATE OR REPLACE VIEW table_name AS lexer_position special_comment_mode select_statement lexer_position
+| CREATE OR REPLACE create_algorithm_view VIEW table_name AS lexer_position special_comment_mode select_statement lexer_position
   {
-    $$ = &DDL{Action: CreateStr, View: $5.ToViewName(), ViewExpr: $9,  SpecialCommentMode: $8, SubStatementPositionStart: $7, SubStatementPositionEnd: $10 - 1, OrReplace: true}
+    $4.ViewName = $6.ToViewName()
+    $4.ViewExpr = $10
+    $$ = &DDL{Action: CreateStr, ViewSpec: $4,  SpecialCommentMode: $9, SubStatementPositionStart: $8, SubStatementPositionEnd: $11 - 1, OrReplace: true}
   }
 | CREATE DATABASE not_exists_opt ID creation_option_opt
   {
@@ -1496,11 +1502,48 @@ begin_end_block:
     $$ = &BeginEndBlock{Statements: $2}
   }
 
+create_algorithm_view:
+  definer_opt security_opt
+  {
+    $$ = &ViewSpec{Algorithm: "", Definer: $1, Security: $2}
+  }
+| algorithm_opt definer_opt security_opt
+  {
+    $$ = &ViewSpec{Algorithm: $1, Definer: $2, Security: $3}
+  }
+
+algorithm_opt:
+  ALGORITHM '=' UNDEFINED
+  {
+    $$ = string($3)
+  }
+| ALGORITHM '=' MERGE
+  {
+    $$ = string($3)
+  }
+| ALGORITHM '=' TEMPTABLE
+  {
+    $$ = string($3)
+  }
+
 definer_opt:
   {
     $$ = ""
   }
-| DEFINER '=' ID
+| DEFINER '=' account_name
+  {
+    $$ = $3.String()
+  }
+
+security_opt:
+  {
+    $$ = ""
+  }
+| SQL SECURITY DEFINER
+  {
+    $$ = string($3)
+  }
+| SQL SECURITY INVOKER
   {
     $$ = string($3)
   }
@@ -6111,6 +6154,7 @@ reserved_keyword:
 | VARIANCE
 | VAR_POP
 | VAR_SAMP
+| VIEW
 | WHEN
 | WHERE
 | WINDOW
@@ -6128,6 +6172,7 @@ non_reserved_keyword:
 | ACTIVE
 | ADMIN
 | AGAINST
+| ALGORITHM
 | AUTHENTICATION
 | BEFORE // TODO: this (and some others) should be reserved
 | BEGIN
@@ -6238,6 +6283,7 @@ non_reserved_keyword:
 | MEDIUMBLOB
 | MEDIUMINT
 | MEDIUMTEXT
+| MERGE
 | MESSAGE_TEXT
 | MODE
 | MODIFY
@@ -6336,6 +6382,7 @@ non_reserved_keyword:
 | TABLESPACE
 | TABLE_NAME
 | TEMPORARY
+| TEMPTABLE
 | TEXT
 | THAN
 | THREAD_PRIORITY
@@ -6359,8 +6406,8 @@ non_reserved_keyword:
 | VARIABLES
 | VARYING
 | VCPU
-| VIEW
 | VISIBLE
+| UNDEFINED
 | WARNINGS
 | WORK
 | WRITE
