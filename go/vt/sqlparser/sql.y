@@ -418,7 +418,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> flush_type flush_type_opt
 %type <empty> to_opt to_or_as as_opt column_opt describe
 %type <str> algorithm_opt definer_opt security_opt
-%type <viewSpec> create_algorithm_view
+%type <viewSpec> view_opts
 %type <bytes> reserved_keyword non_reserved_keyword column_name_safe_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt existing_window_name_opt
 %type <colIdents> reserved_sql_id_list
@@ -859,13 +859,13 @@ create_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $7, IndexSpec: &IndexSpec{Action: CreateStr, ToName: $4, Using: $5, Type: $2, Columns: $9, Options: $11}}
   }
-| CREATE create_algorithm_view VIEW table_name AS lexer_position special_comment_mode select_statement lexer_position
+| CREATE view_opts VIEW table_name AS lexer_position special_comment_mode select_statement lexer_position
   {
     $2.ViewName = $4.ToViewName()
     $2.ViewExpr = $8
     $$ = &DDL{Action: CreateStr, ViewSpec: $2, SpecialCommentMode: $7, SubStatementPositionStart: $6, SubStatementPositionEnd: $9 - 1}
   }
-| CREATE OR REPLACE create_algorithm_view VIEW table_name AS lexer_position special_comment_mode select_statement lexer_position
+| CREATE OR REPLACE view_opts VIEW table_name AS lexer_position special_comment_mode select_statement lexer_position
   {
     $4.ViewName = $6.ToViewName()
     $4.ViewExpr = $10
@@ -1506,7 +1506,7 @@ begin_end_block:
     $$ = &BeginEndBlock{Statements: $2}
   }
 
-create_algorithm_view:
+view_opts:
   definer_opt security_opt
   {
     $$ = &ViewSpec{Algorithm: "", Definer: $1, Security: $2}
