@@ -6525,6 +6525,7 @@ column_name_safe_reserved_keyword:
 | VARIANCE
 | VAR_POP
 | VAR_SAMP
+| VIEW
 | COMMENT_KEYWORD
 
 openb:
