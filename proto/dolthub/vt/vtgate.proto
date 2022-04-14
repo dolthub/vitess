@@ -19,7 +19,7 @@ limitations under the License.
 syntax = "proto3";
 option go_package = "github.com/dolthub/vitess/go/vt/proto/vtgate";
 
-package vtgate;
+package dolthub.vt.vtgate;
 
 option java_package="io.vitess.proto";
 

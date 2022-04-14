@@ -19,7 +19,7 @@ limitations under the License.
 syntax = "proto3";
 option go_package = "github.com/dolthub/vitess/go/vt/proto/throttlerdata";
 
-package throttlerdata;
+package dolthub.vt.throttlerdata;
 
 // MaxRatesRequest is the payload for the MaxRates RPC.
 message MaxRatesRequest {

@@ -24,7 +24,7 @@ option go_package = "github.com/dolthub/vitess/go/vt/proto/topodata";
 
 option java_package="io.vitess.proto";
 
-package topodata;
+package dolthub.vt.topodata;
 
 import "time.proto";
 

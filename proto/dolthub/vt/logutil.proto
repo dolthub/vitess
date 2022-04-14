@@ -19,7 +19,7 @@ limitations under the License.
 syntax = "proto3";
 option go_package = "github.com/dolthub/vitess/go/vt/proto/logutil";
 
-package logutil;
+package dolthub.vt.logutil;
 
 import "time.proto";
 

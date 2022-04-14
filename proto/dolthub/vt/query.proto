@@ -20,7 +20,7 @@ limitations under the License.
 syntax = "proto3";
 option go_package = "github.com/dolthub/vitess/go/vt/proto/query";
 
-package query;
+package dolthub.vt.query;
 
 option java_package="io.vitess.proto";
 
