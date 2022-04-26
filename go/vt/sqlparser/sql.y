@@ -79,6 +79,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
   columns       Columns
   statements    Statements
   partitions    Partitions
+  variables	Variables
   colName       *ColName
   tableExprs    TableExprs
   tableExpr     TableExpr
@@ -405,8 +406,9 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> asc_desc_opt
 %type <limit> limit_opt
 %type <str> lock_opt
-%type <columns> ins_column_list ins_column_list_opt column_list column_list_opt into_option
+%type <columns> ins_column_list ins_column_list_opt column_list column_list_opt
 %type <partitions> opt_partition_clause partition_list
+%type <variables> variable_list into_opt
 %type <assignExprs> on_dup_opt assignment_list
 %type <setVarExprs> set_list transaction_chars
 %type <bytes> charset_or_character_set
@@ -619,16 +621,16 @@ after_select:
   {
     $$ = &Select{From: TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}, Where: nil, GroupBy: nil, Having: nil, Window: nil, Into: nil}
   }
-| INTO column_list
+| INTO variable_list
   {
     $$ = &Select{From: TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}, Where: nil, GroupBy: nil, Having: nil, Window: nil, Into: $2}
   }
-| INTO column_list from_where_groupby_having_window
+| INTO variable_list from_where_groupby_having_window
   {
     $3.(*Select).Into = $2
     $$ = $3
   }
-| from_where_groupby_having_window into_option
+| from_where_groupby_having_window into_opt
   {
     $1.(*Select).Into = $2
     $$ = $1
@@ -656,13 +658,23 @@ from_where_groupby_having_window:
     $$ = &Select{From: TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}, Window: $2}
   }
 
-into_option:
+into_opt:
   {
     $$ = nil
   }
-| INTO column_list
+| INTO variable_list
   {
     $$ = $2
+  }
+
+variable_list:
+  sql_id
+  {
+    $$ = Variables{$1}
+  }
+| variable_list ',' sql_id
+  {
+    $$ = append($$, $3)
   }
 
 with_clause:

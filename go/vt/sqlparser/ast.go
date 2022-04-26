@@ -445,7 +445,7 @@ type Select struct {
 	OrderBy       OrderBy
 	Limit         *Limit
 	Lock          string
-	Into          Columns
+	Into          Variables
 }
 
 // Select.Distinct
@@ -498,11 +498,7 @@ func (node *Select) Format(buf *TrackedBuffer) {
 		node.Limit, node.Lock)
 
 	if node.Into != nil {
-		var l []string
-		for _, v := range node.Into {
-			l = append(l, v.String())
-		}
-		buf.Myprintf(" into %s", strings.Join(l, ", "))
+		buf.Myprintf(" into %v", node.Into)
 	}
 }
 
@@ -3183,6 +3179,30 @@ func (node Partitions) Format(buf *TrackedBuffer) {
 }
 
 func (node Partitions) walkSubtree(visit Visit) error {
+	for _, n := range node {
+		if err := Walk(visit, n); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Variables represents an into variable list.
+type Variables []ColIdent
+
+// Format formats the node.
+func (node Variables) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	prefix := ""
+	for _, n := range node {
+		buf.Myprintf("%s%v", prefix, n)
+		prefix = ", "
+	}
+}
+
+func (node Variables) walkSubtree(visit Visit) error {
 	for _, n := range node {
 		if err := Walk(visit, n); err != nil {
 			return err

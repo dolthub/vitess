@@ -2496,16 +2496,22 @@ var (
 			output: "select now() from dual where now() > '2019-04-04 13:25:44' into @late",
 		}, {
 			input:  "CREATE PROCEDURE proc (IN p_store_id INT, OUT current INT) SELECT COUNT(*) INTO current FROM inventory WHERE store_id = p_store_id",
-			output: "create procedure proc (in p_store_id INT, out current INT) select COUNT(*) from inventory where store_id = p_store_id into current",
+			output: "create procedure proc (in p_store_id INT, out current INT) select COUNT(*) from inventory where store_id = p_store_id into `current`",
 		}, {
 			input:  "CREATE PROCEDURE proc (IN p_store_id INT, OUT current INT) SELECT COUNT(*) FROM inventory WHERE store_id = p_store_id INTO current",
-			output: "create procedure proc (in p_store_id INT, out current INT) select COUNT(*) from inventory where store_id = p_store_id into current",
+			output: "create procedure proc (in p_store_id INT, out current INT) select COUNT(*) from inventory where store_id = p_store_id into `current`",
 		}, {
 			input:  "CREATE PROCEDURE proc (IN p_store_id INT, OUT code INT, OUT amount INT) SELECT id, quantity INTO code, amount FROM inventory WHERE store_id = p_store_id",
 			output: "create procedure proc (in p_store_id INT, out code INT, out amount INT) select id, quantity from inventory where store_id = p_store_id into code, amount",
 		}, {
 			input:  "CREATE PROCEDURE proc (IN p_store_id INT, INOUT amount INT) SELECT COUNT(*) FROM inventory WHERE store_id = p_store_id AND quantity = amount INTO amount",
 			output: "create procedure proc (in p_store_id INT, inout amount INT) select COUNT(*) from inventory where store_id = p_store_id and quantity = amount into amount",
+		}, {
+			input:  "SELECT * FROM (VALUES ROW(2,4,8)) AS t INTO @x,@y,@z",
+			output: "select * from (values row(2, 4, 8)) as t into @x, @y, @z",
+		}, {
+			input:  "SELECT * FROM (VALUES ROW(2,4,8)) AS t(a,b,c) INTO @x,@y,@z",
+			output: "select * from (values row(2, 4, 8)) as t (a, b, c) into @x, @y, @z",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
