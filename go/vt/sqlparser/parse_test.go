@@ -2486,8 +2486,14 @@ var (
 			input:  "CREATE VIEW myview AS SELECT concat(a.first_name, _utf8mb4 ' ', a.last_name) AS name, if(a.active, _utf8mb4 'active', _utf8mb4 '') AS notes FROM a",
 			output: "create view myview as select concat(a.first_name, _utf8mb4 ' ', a.last_name) as name, if(a.active, _utf8mb4 'active', _utf8mb4 '') as notes from a",
 		}, {
-			input:  "CREATE PROCEDURE `film_in_stock3`(IN p_store_id INT, OUT p_film_count INT) READS SQL DATA BEGIN SELECT COUNT(*) FROM inventory WHERE store_id = p_store_id; SET p_film_count = 44; END ;",
-			output: "create procedure film_in_stock3 (in p_store_id INT, out p_film_count INT) reads sql data begin\nselect COUNT(*) from inventory where store_id = p_store_id;\nset p_film_count = 44;\nend",
+			input:  "select 1 into @aaa",
+			output: "select 1 from dual into @aaa",
+		}, {
+			input:  "select now() into @late where now() > '2019-04-04 13:25:44'",
+			output: "select now() from dual where now() > '2019-04-04 13:25:44' into @late",
+		}, {
+			input:  "select now() where now() > '2019-04-04 13:25:44' into @late",
+			output: "select now() from dual where now() > '2019-04-04 13:25:44' into @late",
 		}, {
 			input:  "CREATE PROCEDURE proc (IN p_store_id INT, OUT current INT) SELECT COUNT(*) INTO current FROM inventory WHERE store_id = p_store_id",
 			output: "create procedure proc (in p_store_id INT, out current INT) select COUNT(*) from inventory where store_id = p_store_id into current",
@@ -2500,15 +2506,6 @@ var (
 		}, {
 			input:  "CREATE PROCEDURE proc (IN p_store_id INT, INOUT amount INT) SELECT COUNT(*) FROM inventory WHERE store_id = p_store_id AND quantity = amount INTO amount",
 			output: "create procedure proc (in p_store_id INT, inout amount INT) select COUNT(*) from inventory where store_id = p_store_id and quantity = amount into amount",
-		}, {
-			input:  "select 1 into @aaa",
-			output: "select 1 from dual into @aaa",
-		}, {
-			input:  "select now() into @late where now() > '2019-04-04 13:25:44'",
-			output: "select now() from dual where now() > '2019-04-04 13:25:44' into @late",
-		}, {
-			input:  "select now() where now() > '2019-04-04 13:25:44' into @late",
-			output: "select now() from dual where now() > '2019-04-04 13:25:44' into @late",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
@@ -2586,6 +2583,12 @@ end`,
 			input: `create procedure p1 () begin
 declare x, y, z varchar(200) character set uft8mb4 default 'hi';
 end`,
+		}, {
+			input: `create procedure proc1 (IN p_store_id INT, OUT p_film_count INT) READS SQL DATA BEGIN
+SELECT COUNT(*) FROM inventory WHERE store_id = p_store_id;
+SET p_film_count = 44;
+END`,
+			output: "create procedure proc1 (in p_store_id INT, out p_film_count INT) reads sql data begin\nselect COUNT(*) from inventory where store_id = p_store_id;\nset p_film_count = 44;\nend",
 		},
 	}
 )
