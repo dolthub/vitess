@@ -405,7 +405,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> asc_desc_opt
 %type <limit> limit_opt
 %type <str> lock_opt
-%type <columns> ins_column_list ins_column_list_opt column_list column_list_opt
+%type <columns> ins_column_list ins_column_list_opt column_list column_list_opt into_option
 %type <partitions> opt_partition_clause partition_list
 %type <assignExprs> on_dup_opt assignment_list
 %type <setVarExprs> set_list transaction_chars
@@ -609,12 +609,35 @@ base_select_no_cte:
       $$.(*Select).CalcFoundRows = true
     }
   }
-| SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list FROM table_references where_expression_opt group_by_opt having_opt window_opt
+| SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list INTO column_list where_expression_opt group_by_opt having_opt window_opt
   {
-    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $6, SelectExprs: $7, From: $9, Where: NewWhere(WhereStr, $10), GroupBy: GroupBy($11), Having: NewWhere(HavingStr, $12), Window: $13}
+    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $6, SelectExprs: $7, From: TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}, Where: NewWhere(WhereStr, $10), GroupBy: GroupBy($11), Having: NewWhere(HavingStr, $12), Window: $13, Into: $9}
     if $5 == 1 {
       $$.(*Select).CalcFoundRows = true
     }
+  }
+| SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list FROM table_references where_expression_opt group_by_opt having_opt window_opt into_option
+  {
+    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $6, SelectExprs: $7, From: $9, Where: NewWhere(WhereStr, $10), GroupBy: GroupBy($11), Having: NewWhere(HavingStr, $12), Window: $13, Into: $14}
+    if $5 == 1 {
+      $$.(*Select).CalcFoundRows = true
+    }
+  }
+| SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list INTO column_list FROM table_references where_expression_opt group_by_opt having_opt window_opt
+  {
+    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $6, SelectExprs: $7, From: $11, Where: NewWhere(WhereStr, $12), GroupBy: GroupBy($13), Having: NewWhere(HavingStr, $14), Window: $15, Into: $9}
+    if $5 == 1 {
+      $$.(*Select).CalcFoundRows = true
+    }
+  }
+
+into_option:
+  {
+    $$ = nil
+  }
+| INTO column_list
+  {
+    $$ = $2
   }
 
 with_clause:
@@ -1428,21 +1451,21 @@ proc_param_list:
   }
 
 proc_param:
-  ID column_type
+  sql_id column_type
   {
-    $$ = ProcedureParam{Direction: ProcedureParamDirection_In, Name: string($1), Type: $2}
+    $$ = ProcedureParam{Direction: ProcedureParamDirection_In, Name: $1.String(), Type: $2}
   }
-| IN ID column_type
+| IN sql_id column_type
   {
-    $$ = ProcedureParam{Direction: ProcedureParamDirection_In, Name: string($2), Type: $3}
+    $$ = ProcedureParam{Direction: ProcedureParamDirection_In, Name: $2.String(), Type: $3}
   }
-| INOUT ID column_type
+| INOUT sql_id column_type
   {
-    $$ = ProcedureParam{Direction: ProcedureParamDirection_Inout, Name: string($2), Type: $3}
+    $$ = ProcedureParam{Direction: ProcedureParamDirection_Inout, Name: $2.String(), Type: $3}
   }
-| OUT ID column_type
+| OUT sql_id column_type
   {
-    $$ = ProcedureParam{Direction: ProcedureParamDirection_Out, Name: string($2), Type: $3}
+    $$ = ProcedureParam{Direction: ProcedureParamDirection_Out, Name: $2.String(), Type: $3}
   }
 
 characteristic_list_opt:

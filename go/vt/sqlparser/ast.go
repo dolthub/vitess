@@ -445,6 +445,7 @@ type Select struct {
 	OrderBy       OrderBy
 	Limit         *Limit
 	Lock          string
+	Into          Columns
 }
 
 // Select.Distinct
@@ -495,6 +496,14 @@ func (node *Select) Format(buf *TrackedBuffer) {
 		node.From, node.Where,
 		node.GroupBy, node.Having, node.Window, node.OrderBy,
 		node.Limit, node.Lock)
+
+	if node.Into != nil {
+		var l []string
+		for _, v := range node.Into {
+			l = append(l, v.String())
+		}
+		buf.Myprintf(" into %s", strings.Join(l, ", "))
+	}
 }
 
 func (node *Select) walkSubtree(visit Visit) error {
@@ -511,6 +520,7 @@ func (node *Select) walkSubtree(visit Visit) error {
 		node.Having,
 		node.OrderBy,
 		node.Limit,
+		node.Into,
 	)
 }
 
