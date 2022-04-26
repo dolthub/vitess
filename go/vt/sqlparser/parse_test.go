@@ -2500,6 +2500,15 @@ var (
 		}, {
 			input:  "CREATE PROCEDURE proc (IN p_store_id INT, INOUT amount INT) SELECT COUNT(*) FROM inventory WHERE store_id = p_store_id AND quantity = amount INTO amount",
 			output: "create procedure proc (in p_store_id INT, inout amount INT) select COUNT(*) from inventory where store_id = p_store_id and quantity = amount into amount",
+		}, {
+			input:  "select 1 into @aaa",
+			output: "select 1 from dual into @aaa",
+		}, {
+			input:  "select now() into @late where now() > '2019-04-04 13:25:44'",
+			output: "select now() from dual where now() > '2019-04-04 13:25:44' into @late",
+		}, {
+			input:  "select now() where now() > '2019-04-04 13:25:44' into @late",
+			output: "select now() from dual where now() > '2019-04-04 13:25:44' into @late",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.

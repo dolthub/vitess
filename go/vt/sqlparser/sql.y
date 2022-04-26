@@ -323,7 +323,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> NVAR PASSWORD_LOCK
 
 %type <statement> command
-%type <selStmt>  create_query_expression select_statement base_select base_select_no_cte union_lhs union_rhs
+%type <selStmt>  create_query_expression select_statement base_select base_select_no_cte union_lhs union_rhs after_select from_where_groupby_having_window
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <statement> create_statement rename_statement drop_statement truncate_statement call_statement
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
@@ -602,33 +602,58 @@ base_select:
   }
 
 base_select_no_cte:
-  SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list where_expression_opt group_by_opt having_opt window_opt
+  SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list after_select
   {
-    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $6, SelectExprs: $7, From: TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}, Where: NewWhere(WhereStr, $8), GroupBy: GroupBy($9), Having: NewWhere(HavingStr, $10), Window: $11}
+    $8.(*Select).Comments = Comments($2)
+    $8.(*Select).Cache = $3
+    $8.(*Select).Distinct = $4
+    $8.(*Select).Hints = $6
+    $8.(*Select).SelectExprs = $7
+    $$ = $8
     if $5 == 1 {
       $$.(*Select).CalcFoundRows = true
     }
   }
-| SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list INTO column_list where_expression_opt group_by_opt having_opt window_opt
+
+after_select:
   {
-    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $6, SelectExprs: $7, From: TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}, Where: NewWhere(WhereStr, $10), GroupBy: GroupBy($11), Having: NewWhere(HavingStr, $12), Window: $13, Into: $9}
-    if $5 == 1 {
-      $$.(*Select).CalcFoundRows = true
-    }
+    $$ = &Select{From: TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}, Where: nil, GroupBy: nil, Having: nil, Window: nil, Into: nil}
   }
-| SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list FROM table_references where_expression_opt group_by_opt having_opt window_opt into_option
+| INTO column_list
   {
-    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $6, SelectExprs: $7, From: $9, Where: NewWhere(WhereStr, $10), GroupBy: GroupBy($11), Having: NewWhere(HavingStr, $12), Window: $13, Into: $14}
-    if $5 == 1 {
-      $$.(*Select).CalcFoundRows = true
-    }
+    $$ = &Select{From: TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}, Where: nil, GroupBy: nil, Having: nil, Window: nil, Into: $2}
   }
-| SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list INTO column_list FROM table_references where_expression_opt group_by_opt having_opt window_opt
+| INTO column_list from_where_groupby_having_window
   {
-    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $6, SelectExprs: $7, From: $11, Where: NewWhere(WhereStr, $12), GroupBy: GroupBy($13), Having: NewWhere(HavingStr, $14), Window: $15, Into: $9}
-    if $5 == 1 {
-      $$.(*Select).CalcFoundRows = true
-    }
+    $3.(*Select).Into = $2
+    $$ = $3
+  }
+| from_where_groupby_having_window into_option
+  {
+    $1.(*Select).Into = $2
+    $$ = $1
+  }
+
+from_where_groupby_having_window:
+  FROM table_references where_expression_opt group_by_opt having_opt window_opt
+  {
+    $$ = &Select{From: $2, Where: NewWhere(WhereStr, $3), GroupBy: GroupBy($4), Having: NewWhere(HavingStr, $5), Window: $6}
+  }
+| WHERE expression group_by_opt having_opt window_opt
+  {
+    $$ = &Select{From: TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}, Where: NewWhere(WhereStr, $2), GroupBy: GroupBy($3), Having: NewWhere(HavingStr, $4), Window: $5}
+  }
+| GROUP BY group_by_list having_opt window_opt
+  {
+    $$ = &Select{From: TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}, GroupBy: GroupBy($3), Having: NewWhere(HavingStr, $4), Window: $5}
+  }
+| HAVING having window_opt
+  {
+    $$ = &Select{From: TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}, Having: NewWhere(HavingStr, $2), Window: $3}
+  }
+| WINDOW window
+  {
+    $$ = &Select{From: TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}, Window: $2}
   }
 
 into_option:
