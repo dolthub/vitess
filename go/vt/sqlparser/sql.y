@@ -189,7 +189,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token LEX_ERROR
 %left <bytes> UNION
 %token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL
-%token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE DEFAULT SET LOCK UNLOCK KEYS OF
+%token <bytes> ALL DISTINCT AS EXISTS ASC DESC DUPLICATE DEFAULT SET LOCK UNLOCK KEYS OF
 %token <bytes> OUTFILE DATA LOAD LINES TERMINATED ESCAPED ENCLOSED OPTIONALLY STARTING
 %right <bytes> UNIQUE KEY
 %token <bytes> SYSTEM_TIME
@@ -201,6 +201,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <empty> '(' ',' ')' '@'
 %token <bytes> ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
 %token <bytes> NULL TRUE FALSE OFF
+%right <bytes> INTO
 
 // Precedence dictated by mysql. But the vitess grammar is simplified.
 // Some of these operators don't conflict in our situation. Nevertheless,
@@ -324,7 +325,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> NVAR PASSWORD_LOCK
 
 %type <statement> command
-%type <selStmt>  create_query_expression select_statement base_select base_select_no_cte union_lhs union_rhs after_select from_where_groupby_having_window
+%type <selStmt>  create_query_expression select_statement base_select base_select_no_cte union_lhs union_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <statement> create_statement rename_statement drop_statement truncate_statement call_statement
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
@@ -357,7 +358,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <selectExprs> select_expression_list argument_expression_list argument_expression_list_opt
 %type <selectExpr> select_expression argument_expression
 %type <expr> expression naked_like group_by
-%type <tableExprs> table_references cte_list
+%type <tableExprs> table_references cte_list from_opt
 %type <with> with_clause
 %type <tableExpr> table_reference table_function table_factor join_table common_table_expression
 %type <simpleTableExpr> values_statement subquery_or_values
@@ -604,61 +605,32 @@ base_select:
   }
 
 base_select_no_cte:
-  SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list after_select
+  SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list into_opt from_opt where_expression_opt group_by_opt having_opt window_opt into_opt
   {
-    $8.(*Select).Comments = Comments($2)
-    $8.(*Select).Cache = $3
-    $8.(*Select).Distinct = $4
-    $8.(*Select).Hints = $6
-    $8.(*Select).SelectExprs = $7
-    $$ = $8
+    if $8 == nil {
+      $8 = $14
+    } else if $14 != nil {
+      yylex.Error(fmt.Errorf("Multiple INTO clauses in one query block.").Error())
+      return 1
+    }
+
+    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $6, SelectExprs: $7, From: $9, Where: NewWhere(WhereStr, $10), GroupBy: GroupBy($11), Having: NewWhere(HavingStr, $12), Window: $13, Into: $8}
     if $5 == 1 {
       $$.(*Select).CalcFoundRows = true
     }
   }
 
-after_select:
+from_opt:
   {
-    $$ = &Select{From: TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}, Where: nil, GroupBy: nil, Having: nil, Window: nil, Into: nil}
+    $$ = TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}
   }
-| INTO variable_list
+| FROM table_references
   {
-    $$ = &Select{From: TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}, Where: nil, GroupBy: nil, Having: nil, Window: nil, Into: $2}
-  }
-| INTO variable_list from_where_groupby_having_window
-  {
-    $3.(*Select).Into = $2
-    $$ = $3
-  }
-| from_where_groupby_having_window into_opt
-  {
-    $1.(*Select).Into = $2
-    $$ = $1
-  }
-
-from_where_groupby_having_window:
-  FROM table_references where_expression_opt group_by_opt having_opt window_opt
-  {
-    $$ = &Select{From: $2, Where: NewWhere(WhereStr, $3), GroupBy: GroupBy($4), Having: NewWhere(HavingStr, $5), Window: $6}
-  }
-| WHERE expression group_by_opt having_opt window_opt
-  {
-    $$ = &Select{From: TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}, Where: NewWhere(WhereStr, $2), GroupBy: GroupBy($3), Having: NewWhere(HavingStr, $4), Window: $5}
-  }
-| GROUP BY group_by_list having_opt window_opt
-  {
-    $$ = &Select{From: TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}, GroupBy: GroupBy($3), Having: NewWhere(HavingStr, $4), Window: $5}
-  }
-| HAVING having window_opt
-  {
-    $$ = &Select{From: TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}, Having: NewWhere(HavingStr, $2), Window: $3}
-  }
-| WINDOW window
-  {
-    $$ = &Select{From: TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}, Window: $2}
+    $$ = $2
   }
 
 into_opt:
+%prec INTO
   {
     $$ = nil
   }
