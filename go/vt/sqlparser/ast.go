@@ -3349,9 +3349,9 @@ func (w *With) walkSubtree(visit Visit) error {
 }
 
 type Into struct {
-	IntoVariables Variables
-	Outfile       string
-	Dumpfile      string
+	Variables Variables
+	Outfile   string
+	Dumpfile  string
 }
 
 func (i *Into) Format(buf *TrackedBuffer) {
@@ -3360,8 +3360,8 @@ func (i *Into) Format(buf *TrackedBuffer) {
 	}
 
 	buf.Myprintf(" into ")
-	if i.IntoVariables != nil {
-		buf.Myprintf("%v", i.IntoVariables)
+	if i.Variables != nil {
+		buf.Myprintf("%v", i.Variables)
 	}
 	if i.Outfile != "" {
 		buf.Myprintf("outfile '%s'", i.Outfile)
@@ -3377,7 +3377,7 @@ func (i *Into) walkSubtree(visit Visit) error {
 	}
 	return Walk(
 		visit,
-		i.IntoVariables,
+		i.Variables,
 	)
 }
 

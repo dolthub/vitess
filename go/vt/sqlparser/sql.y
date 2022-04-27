@@ -570,8 +570,16 @@ load_statement:
   }
 
 select_statement:
-  base_select order_by_opt limit_opt lock_opt
+  base_select order_by_opt limit_opt lock_opt into_opt
   {
+    if s, ok := $1.(*Select); ok {
+      if s.Into == nil {
+        $1.(*Select).Into = $5
+      } else if $5 != nil {
+        yylex.Error(fmt.Errorf("Multiple INTO clauses in one query block").Error())
+        return 1
+      }
+    }
     $1.SetOrderBy($2)
     $1.SetLimit($3)
     $1.SetLock($4)
@@ -612,7 +620,7 @@ base_select_no_cte:
     if $8 == nil {
       $8 = $14
     } else if $14 != nil {
-      yylex.Error(fmt.Errorf("Multiple INTO clauses in one query block.").Error())
+      yylex.Error(fmt.Errorf("Multiple INTO clauses in one query block").Error())
       return 1
     }
 
@@ -638,7 +646,7 @@ into_opt:
   }
 | INTO variable_list
   {
-    $$ = &Into{IntoVariables: $2}
+    $$ = &Into{Variables: $2}
   }
 | INTO OUTFILE STRING
   {
@@ -1442,14 +1450,8 @@ with_admin_opt:
 
 // TODO: Implement IGNORE, REPLACE, VALUES, and TABLE
 create_query_expression:
-  base_select_no_cte order_by_opt limit_opt lock_opt into_opt
+  base_select_no_cte order_by_opt limit_opt lock_opt
   {
-    if $1.(*Select).Into == nil {
-      $1.(*Select).Into = $5
-    } else {
-      yylex.Error(fmt.Errorf("Multiple INTO clauses in one query block.").Error())
-      return 1
-    }
     $1.SetOrderBy($2)
     $1.SetLimit($3)
     $1.SetLock($4)
