@@ -2495,6 +2495,9 @@ var (
 			input:  "select now() where now() > '2019-04-04 13:25:44' into @late",
 			output: "select now() from dual where now() > '2019-04-04 13:25:44' into @late",
 		}, {
+			input:  "SELECT 1 INTO OUTFILE 'x.txt'",
+			output: "select 1 from dual into outfile 'x.txt'",
+		}, {
 			input:  "CREATE PROCEDURE proc (IN p_store_id INT, OUT current INT) SELECT COUNT(*) INTO current FROM inventory WHERE store_id = p_store_id",
 			output: "create procedure proc (in p_store_id INT, out current INT) select COUNT(*) from inventory where store_id = p_store_id into `current`",
 		}, {

@@ -445,7 +445,7 @@ type Select struct {
 	OrderBy       OrderBy
 	Limit         *Limit
 	Lock          string
-	Into          Variables
+	Into          *Into
 }
 
 // Select.Distinct
@@ -490,16 +490,12 @@ func (node *Select) Format(buf *TrackedBuffer) {
 	if node.CalcFoundRows {
 		calcFoundRows = "sql_calc_found_rows "
 	}
-	buf.Myprintf("%vselect %v%s%s%s%s%v from %v%v%v%v%v%v%v%s",
+	buf.Myprintf("%vselect %v%s%s%s%s%v from %v%v%v%v%v%v%v%s%v",
 		node.With,
 		node.Comments, node.Cache, calcFoundRows, node.Distinct, node.Hints, node.SelectExprs,
 		node.From, node.Where,
 		node.GroupBy, node.Having, node.Window, node.OrderBy,
-		node.Limit, node.Lock)
-
-	if node.Into != nil {
-		buf.Myprintf(" into %v", node.Into)
-	}
+		node.Limit, node.Lock, node.Into)
 }
 
 func (node *Select) walkSubtree(visit Visit) error {
@@ -3350,6 +3346,39 @@ func (w *With) walkSubtree(visit Visit) error {
 		}
 	}
 	return nil
+}
+
+type Into struct {
+	IntoVariables Variables
+	Outfile       string
+	Dumpfile      string
+}
+
+func (i *Into) Format(buf *TrackedBuffer) {
+	if i == nil {
+		return
+	}
+
+	buf.Myprintf(" into ")
+	if i.IntoVariables != nil {
+		buf.Myprintf("%v", i.IntoVariables)
+	}
+	if i.Outfile != "" {
+		buf.Myprintf("outfile '%s'", i.Outfile)
+	}
+	if i.Dumpfile != "" {
+		buf.Myprintf("dumpfile '%s'", i.Dumpfile)
+	}
+}
+
+func (i *Into) walkSubtree(visit Visit) error {
+	if i == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		i.IntoVariables,
+	)
 }
 
 type CommonTableExpr struct {

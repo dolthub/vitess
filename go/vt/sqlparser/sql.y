@@ -80,6 +80,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
   statements    Statements
   partitions    Partitions
   variables	Variables
+  into		*Into
   colName       *ColName
   tableExprs    TableExprs
   tableExpr     TableExpr
@@ -190,7 +191,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %left <bytes> UNION
 %token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC DUPLICATE DEFAULT SET LOCK UNLOCK KEYS OF
-%token <bytes> OUTFILE DATA LOAD LINES TERMINATED ESCAPED ENCLOSED OPTIONALLY STARTING
+%token <bytes> OUTFILE DUMPFILE DATA LOAD LINES TERMINATED ESCAPED ENCLOSED OPTIONALLY STARTING
 %right <bytes> UNIQUE KEY
 %token <bytes> SYSTEM_TIME
 %token <bytes> VALUES LAST_INSERT_ID SQL_CALC_FOUND_ROWS
@@ -409,7 +410,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> lock_opt
 %type <columns> ins_column_list ins_column_list_opt column_list column_list_opt
 %type <partitions> opt_partition_clause partition_list
-%type <variables> variable_list into_opt
+%type <variables> variable_list
+%type <into> into_opt
 %type <assignExprs> on_dup_opt assignment_list
 %type <setVarExprs> set_list transaction_chars
 %type <bytes> charset_or_character_set
@@ -636,7 +638,15 @@ into_opt:
   }
 | INTO variable_list
   {
-    $$ = $2
+    $$ = &Into{IntoVariables: $2}
+  }
+| INTO OUTFILE STRING
+  {
+    $$ = &Into{Outfile: string($3)}
+  }
+| INTO DUMPFILE STRING
+  {
+    $$ = &Into{Dumpfile: string($3)}
   }
 
 variable_list:
@@ -6465,6 +6475,7 @@ non_reserved_keyword:
 | DESCRIPTION
 | DISABLE
 | DOUBLE
+| DUMPFILE
 | DUPLICATE
 | EACH
 | ENABLE
