@@ -2495,9 +2495,6 @@ var (
 			input:  "select now() where now() > '2019-04-04 13:25:44' into @late",
 			output: "select now() from dual where now() > '2019-04-04 13:25:44' into @late",
 		}, {
-			input:  "SELECT 1 INTO OUTFILE 'x.txt'",
-			output: "select 1 from dual into outfile 'x.txt'",
-		}, {
 			input:  "CREATE PROCEDURE proc (IN p_store_id INT, OUT current INT) SELECT COUNT(*) INTO current FROM inventory WHERE store_id = p_store_id",
 			output: "create procedure proc (in p_store_id INT, out current INT) select COUNT(*) from inventory where store_id = p_store_id into `current`",
 		}, {
@@ -2515,6 +2512,19 @@ var (
 		}, {
 			input:  "SELECT * FROM (VALUES ROW(2,4,8)) AS t(a,b,c) INTO @x,@y,@z",
 			output: "select * from (values row(2, 4, 8)) as t (a, b, c) into @x, @y, @z",
+		}, {
+			input:  "SELECT 1 INTO OUTFILE 'x.txt'",
+			output: "select 1 from dual into outfile 'x.txt'",
+		}, {
+			input:  "SELECT * FROM (VALUES ROW(2,4,8)) AS t INTO DUMPFILE 'even.dump'",
+			output: "select * from (values row(2, 4, 8)) as t into dumpfile 'even.dump'",
+		}, {
+			input:  "CREATE PROCEDURE proc (IN p_store_id INT) SELECT * FROM inventory WHERE store_id = p_store_id INTO DUMPFILE 'dumpfile.txt'",
+			output: "create procedure proc (in p_store_id INT) select * from inventory where store_id = p_store_id into dumpfile 'dumpfile.txt'",
+		}, {
+			input: "create table tab1 as select * from t limit 1 for update into @test",
+		}, {
+			input: "create table tab2 as select 1 from t lock in share mode into @test",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.

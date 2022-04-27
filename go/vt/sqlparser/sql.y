@@ -1442,8 +1442,14 @@ with_admin_opt:
 
 // TODO: Implement IGNORE, REPLACE, VALUES, and TABLE
 create_query_expression:
-  base_select_no_cte order_by_opt limit_opt lock_opt
+  base_select_no_cte order_by_opt limit_opt lock_opt into_opt
   {
+    if $1.(*Select).Into == nil {
+      $1.(*Select).Into = $5
+    } else {
+      yylex.Error(fmt.Errorf("Multiple INTO clauses in one query block.").Error())
+      return 1
+    }
     $1.SetOrderBy($2)
     $1.SetLimit($3)
     $1.SetLock($4)
