@@ -54,6 +54,9 @@ func TestLogicOperatorPrecedence(t *testing.T) {
 	}, {
 		input:  "select * from a where f=g xor a=b or c=d and e=f",
 		output: "((f = g xor a = b) or (c = d and e = f))",
+	}, {
+		input:  "select * from t where a = 5 or b xor d = 3 and c is not null",
+		output: "(a = 5 or (b xor (d = 3 and (c is not null))))",
 	}}
 	for _, tcase := range validSQL {
 		tree, err := Parse(tcase.input)

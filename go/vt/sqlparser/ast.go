@@ -3837,7 +3837,7 @@ type XorExpr struct {
 
 // Format formats the node.
 func (node *XorExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v or %v", node.Left, node.Right)
+	buf.Myprintf("%v xor %v", node.Left, node.Right)
 }
 
 func (node *XorExpr) walkSubtree(visit Visit) error {
