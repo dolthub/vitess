@@ -572,17 +572,13 @@ load_statement:
 select_statement:
   base_select order_by_opt limit_opt lock_opt into_opt
   {
-    if s, ok := $1.(*Select); ok {
-      if s.Into == nil {
-        $1.(*Select).Into = $5
-      } else if $5 != nil {
-        yylex.Error(fmt.Errorf("Multiple INTO clauses in one query block").Error())
-        return 1
-      }
-    }
     $1.SetOrderBy($2)
     $1.SetLimit($3)
     $1.SetLock($4)
+    if err := $1.SetInto($5); err != nil {
+    	yylex.Error(err.Error())
+    	return 1
+    }
     $$ = $1
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name

@@ -420,6 +420,7 @@ type SelectStatement interface {
 	SetLimit(*Limit)
 	SetLock(string)
 	SetOrderBy(OrderBy)
+	SetInto(*Into) error
 	WalkableSQLNode
 }
 
@@ -477,6 +478,17 @@ func (node *Select) SetOrderBy(orderBy OrderBy) {
 
 func (node *Select) SetLock(lock string) {
 	node.Lock = lock
+}
+
+func (node *Select) SetInto(into *Into) error {
+	if into == nil {
+		return nil
+	}
+	if node.Into != nil {
+		return fmt.Errorf("Multiple INTO clauses in one query block")
+	}
+	node.Into = into
+	return nil
 }
 
 // SetLimit sets the limit clause
@@ -583,6 +595,10 @@ func (node *ParenSelect) SetLimit(limit *Limit) {
 	panic("unreachable")
 }
 
+func (node *ParenSelect) SetInto(into *Into) error {
+	panic("unreachable")
+}
+
 // Format formats the node.
 func (node *ParenSelect) Format(buf *TrackedBuffer) {
 	buf.Myprintf("(%v)", node.Select)
@@ -626,6 +642,7 @@ type Union struct {
 	OrderBy     OrderBy
 	Limit       *Limit
 	Lock        string
+	Into        *Into
 }
 
 // Union.Type
@@ -653,10 +670,21 @@ func (node *Union) SetLock(lock string) {
 	node.Lock = lock
 }
 
+func (node *Union) SetInto(into *Into) error {
+	if into == nil {
+		return nil
+	}
+	if node.Into != nil {
+		return fmt.Errorf("Multiple INTO clauses in one query block")
+	}
+	node.Into = into
+	return nil
+}
+
 // Format formats the node.
 func (node *Union) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v %s %v%v%v%s", node.Left, node.Type, node.Right,
-		node.OrderBy, node.Limit, node.Lock)
+	buf.Myprintf("%v %s %v%v%v%s%v", node.Left, node.Type, node.Right,
+		node.OrderBy, node.Limit, node.Lock, node.Into)
 }
 
 func (node *Union) walkSubtree(visit Visit) error {
