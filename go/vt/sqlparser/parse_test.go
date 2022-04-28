@@ -4893,6 +4893,9 @@ var (
 	}, {
 		input:  "insert into t values (1234.1a)",
 		output: "syntax error at position 29 near '1234.1'",
+	}, {
+		input:  "SELECT id, name INTO @idVar FROM mytable INTO @nameVar",
+		output: "Multiple INTO clauses in one query block at position 55 near '@nameVar'",
 	},
 	}
 )
