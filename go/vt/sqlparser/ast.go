@@ -672,6 +672,10 @@ func (node *Union) SetLock(lock string) {
 
 func (node *Union) SetInto(into *Into) error {
 	if into == nil {
+		if r, ok := node.Right.(*Select); ok {
+			node.Into = r.Into
+			r.Into = nil
+		}
 		return nil
 	}
 	if node.Into != nil {

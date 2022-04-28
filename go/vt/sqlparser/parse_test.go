@@ -2513,6 +2513,9 @@ var (
 			input:  "SELECT id FROM mytable UNION select id FROM testtable LIMIT 1 INTO @myId",
 			output: "select id from mytable union select id from testtable limit 1 into @myId",
 		}, {
+			input:  "SELECT id FROM mytable UNION select id INTO @myId FROM testtable LIMIT 1",
+			output: "select id from mytable union select id from testtable limit 1 into @myId",
+		}, {
 			input:  "SELECT 1 INTO OUTFILE 'x.txt'",
 			output: "select 1 from dual into outfile 'x.txt'",
 		}, {
