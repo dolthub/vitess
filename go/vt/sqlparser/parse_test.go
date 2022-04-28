@@ -419,6 +419,8 @@ var (
 			input:  "select /* || */ 1 from t where a = b || a = c",
 			output: "select /* || */ 1 from t where a = b or a = c",
 		}, {
+			input: "select /* xor */ 1 from t where a = b xor a = c",
+		}, {
 			input: "select /* not */ 1 from t where not a = b",
 		}, {
 			input: "select /* ! */ 1 from t where a = !1",
