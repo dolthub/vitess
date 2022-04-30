@@ -209,6 +209,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 // it's better to have these listed in the correct order. Also, we don't
 // support all operators yet.
 %left <bytes> OR
+%left <bytes> XOR
 %left <bytes> AND
 %right <bytes> NOT '!'
 %left <bytes> BETWEEN CASE WHEN THEN ELSE ELSEIF END
@@ -4586,6 +4587,10 @@ expression:
   {
     $$ = &OrExpr{Left: $1, Right: $3}
   }
+| expression XOR expression
+  {
+    $$ = &XorExpr{Left: $1, Right: $3}
+  }
 | NOT expression
   {
     $$ = &NotExpr{Expr: $2}
@@ -6429,6 +6434,7 @@ reserved_keyword:
 | WHERE
 | WINDOW
 | WITH
+| XOR
 
 /*
   These are non-reserved Vitess, because they don't cause conflicts in the grammar.
