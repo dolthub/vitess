@@ -639,6 +639,9 @@ from_opt:
     $$ = $2
   }
 
+// They may appear either before from-clause or at the end of a query. This causes shift/reduce conflict when INTO
+// token is used and has two cases it can be interpreted as depending on whether the query is table-less or other
+// clauses (WHERE, GROUP BY, HAVING, WINDOW) are present.
 into_opt:
 %prec INTO
   {

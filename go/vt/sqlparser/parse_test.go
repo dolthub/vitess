@@ -4916,6 +4916,15 @@ var (
 	}, {
 		input:  "select id from mytable union select id from testtable union select id into @myvar from othertable",
 		output: "INTO clause is not allowed at position 98 near 'othertable'",
+	}, {
+		input:  "create view invalidView as select id from mytable into @myview",
+		output: "INTO clause is not allowed at position 63 near '@myview'",
+	}, {
+		input:  "select * from t1 where exists (select a from t2 union select b from t3 into @myvar)",
+		output: "INTO clause is not allowed at position 84 near '@myvar'",
+	}, {
+		input:  "insert into a select * into @a from b",
+		output: "INTO clause is not allowed at position 38 near 'b'",
 	},
 	}
 )
