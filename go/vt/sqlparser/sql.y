@@ -327,7 +327,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> NVAR PASSWORD_LOCK
 
 %type <statement> command
-%type <selStmt>  create_query_expression select_statement base_select base_select_no_cte union_lhs union_rhs select_statement_with_no_into
+%type <selStmt>  create_query_expression select_statement base_select base_select_no_cte union_lhs union_rhs select_statement_with_no_trailing_into
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <statement> create_statement rename_statement drop_statement truncate_statement call_statement
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
@@ -587,7 +587,7 @@ select_statement:
     $$ = &Select{Comments: Comments($2), Cache: $3, SelectExprs: SelectExprs{Nextval{Expr: $5}}, From: TableExprs{&AliasedTableExpr{Expr: $7}}}
   }
 
-select_statement_with_no_into:
+select_statement_with_no_trailing_into:
   select_statement
   {
     if $1.HasIntoDefined() {
@@ -702,7 +702,7 @@ union_lhs:
     }
     $$ = $1
   }
-| openb select_statement_with_no_into closeb
+| openb select_statement_with_no_trailing_into closeb
   {
     $$ = &ParenSelect{Select: $2}
   }
@@ -716,7 +716,7 @@ union_rhs:
     }
     $$ = $1
   }
-| openb select_statement_with_no_into closeb
+| openb select_statement_with_no_trailing_into closeb
   {
     $$ = &ParenSelect{Select: $2}
   }
@@ -923,13 +923,13 @@ create_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $7, IndexSpec: &IndexSpec{Action: CreateStr, ToName: $4, Using: $5, Type: $2, Columns: $9, Options: $11}}
   }
-| CREATE view_opts VIEW table_name AS lexer_position special_comment_mode select_statement_with_no_into lexer_position
+| CREATE view_opts VIEW table_name AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position
   {
     $2.ViewName = $4.ToViewName()
     $2.ViewExpr = $8
     $$ = &DDL{Action: CreateStr, ViewSpec: $2, SpecialCommentMode: $7, SubStatementPositionStart: $6, SubStatementPositionEnd: $9 - 1}
   }
-| CREATE OR REPLACE view_opts VIEW table_name AS lexer_position special_comment_mode select_statement_with_no_into lexer_position
+| CREATE OR REPLACE view_opts VIEW table_name AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position
   {
     $4.ViewName = $6.ToViewName()
     $4.ViewExpr = $10
@@ -1460,6 +1460,10 @@ with_admin_opt:
 create_query_expression:
   base_select_no_cte order_by_opt limit_opt lock_opt
   {
+    if $1.HasIntoDefined() {
+      yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
+      return 1
+    }
     $1.SetOrderBy($2)
     $1.SetLimit($3)
     $1.SetLock($4)
@@ -1894,7 +1898,7 @@ declare_statement:
   {
     $$ = &Declare{Condition: &DeclareCondition{Name: string($2), MysqlErrorCode: NewIntVal($5)}}
   }
-| DECLARE ID CURSOR FOR select_statement_with_no_into
+| DECLARE ID CURSOR FOR select_statement_with_no_trailing_into
   {
     $$ = &Declare{Cursor: &DeclareCursor{Name: string($2), SelectStmt: $5}}
   }
@@ -3884,7 +3888,7 @@ explain_statement:
   {
     $$ = &Explain{ExplainFormat: $2, Statement: $3}
   }
-| explain_verb ANALYZE select_statement_with_no_into
+| explain_verb ANALYZE select_statement_with_no_trailing_into
   {
     $$ = &Explain{Analyze: true, ExplainFormat: TreeStr, Statement: $3}
   }
@@ -4750,7 +4754,7 @@ col_tuple:
   }
 
 subquery:
-  openb select_statement_with_no_into closeb
+  openb select_statement_with_no_trailing_into closeb
   {
     $$ = &Subquery{Select: $2}
   }
@@ -5780,11 +5784,11 @@ insert_data:
   {
     $$ = &Insert{Columns: []ColIdent{}, Rows: $4}
   }
-| select_statement_with_no_into
+| select_statement_with_no_trailing_into
   {
     $$ = &Insert{Rows: $1}
   }
-| openb select_statement_with_no_into closeb
+| openb select_statement_with_no_trailing_into closeb
   {
     // Drop the redundant parenthesis.
     $$ = &Insert{Rows: $2}
@@ -5793,11 +5797,11 @@ insert_data:
   {
     $$ = &Insert{Columns: $2, Rows: $5}
   }
-| openb ins_column_list closeb select_statement_with_no_into
+| openb ins_column_list closeb select_statement_with_no_trailing_into
   {
     $$ = &Insert{Columns: $2, Rows: $4}
   }
-| openb ins_column_list closeb openb select_statement_with_no_into closeb
+| openb ins_column_list closeb openb select_statement_with_no_trailing_into closeb
   {
     // Drop the redundant parenthesis.
     $$ = &Insert{Columns: $2, Rows: $5}
