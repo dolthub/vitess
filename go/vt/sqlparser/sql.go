@@ -7178,7 +7178,7 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:592
 		{
-			if _, ok := yyDollar[1].selStmt.HasIntoDefined(); ok {
+			if yyDollar[1].selStmt.GetInto() != nil {
 				yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
 				return 1
 			}
@@ -7302,7 +7302,7 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:701
 		{
-			if _, ok := yyDollar[1].selStmt.HasIntoDefined(); ok {
+			if yyDollar[1].selStmt.GetInto() == nil {
 				yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
 				return 1
 			}
@@ -7318,7 +7318,7 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:715
 		{
-			if _, ok := yyDollar[1].selStmt.HasIntoDefined(); ok {
+			if yyDollar[1].selStmt.GetInto() == nil {
 				yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
 				return 1
 			}
@@ -8316,7 +8316,7 @@ yydefault:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:1465
 		{
-			if _, ok := yyDollar[1].selStmt.HasIntoDefined(); ok {
+			if yyDollar[1].selStmt.GetInto() == nil {
 				yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
 				return 1
 			}
