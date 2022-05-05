@@ -922,6 +922,11 @@ create_statement:
     $1.OptLike = &OptLike{LikeTable: $3}
     $$ = $1
   }
+| create_table_prefix '(' LIKE table_name ')'
+  {
+    $1.OptLike = &OptLike{LikeTable: $4}
+    $$ = $1
+  }
 | CREATE key_type_opt INDEX sql_id using_opt ON table_name '(' index_column_list ')' index_option_list_opt
   {
     $$ = &DDL{Action: AlterStr, Table: $7, IndexSpec: &IndexSpec{Action: CreateStr, ToName: $4, Using: $5, Type: $2, Columns: $9, Options: $11}}

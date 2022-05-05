@@ -4485,18 +4485,21 @@ func TestTrim(t *testing.T) {
 }
 
 func TestCreateTableLike(t *testing.T) {
-	normal := "create table a like b"
 	testCases := []struct {
 		input  string
 		output string
 	}{
 		{
 			"create table a like b",
-			normal,
+			"create table a like b",
 		},
 		{
 			"create table ks.a like unsharded_ks.b",
 			"create table ks.a like unsharded_ks.b",
+		},
+		{
+			input:  "create table a (like z)",
+			output: "create table a like z",
 		},
 	}
 	for _, tcase := range testCases {
