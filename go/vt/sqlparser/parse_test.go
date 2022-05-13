@@ -2561,6 +2561,15 @@ var (
 		}, {
 			input:  "CREATE PROCEDURE proc (IN p_store_id INT) SELECT * FROM inventory WHERE store_id = p_store_id INTO DUMPFILE 'dumpfile.txt'",
 			output: "create procedure proc (in p_store_id INT) select * from inventory where store_id = p_store_id into dumpfile 'dumpfile.txt'",
+		}, {
+			input:  "CREATE TABLE t (id INT PRIMARY KEY, col1 GEOMETRY SRID 0)",
+			output: "create table t (\n\tid INT primary key,\n\tcol1 GEOMETRY srid 0\n)",
+		}, {
+			input:  "CREATE TABLE t (id INT PRIMARY KEY, col1 GEOMETRY NOT NULL SRID 0)",
+			output: "create table t (\n\tid INT primary key,\n\tcol1 GEOMETRY not null srid 0\n)",
+		}, {
+			input:  "ALTER TABLE t ADD COLUMN col1 POINT NOT NULL DEFAULT (POINT(1, 2)) SRID 0",
+			output: "alter table t add column (\n\tcol1 POINT not null default (POINT(1, 2)) srid 0\n)",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
@@ -4932,6 +4941,9 @@ var (
 	}, {
 		input:  "insert into a select * into @a from b",
 		output: "INTO clause is not allowed at position 38 near 'b'",
+	}, {
+		input:  "create table t (id int primary key, col1 int SRID 0)",
+		output: "cannot define SRID for non spatial types at position 53 near '0'",
 	},
 	}
 )

@@ -2116,6 +2116,9 @@ type ColumnType struct {
 	// Generated columns
 	GeneratedExpr Expr    // The expression used to generate this column
 	Stored        BoolVal // Default is Virtual (not stored)
+
+	// For spatial types
+	SRID Expr
 }
 
 func (ct *ColumnType) merge(other ColumnType) error {
@@ -2171,6 +2174,16 @@ func (ct *ColumnType) merge(other ColumnType) error {
 
 	if other.Stored {
 		ct.Stored = true
+	}
+
+	if other.SRID != nil {
+		if ct.SRID != nil {
+			return errors.New("cannot include SRID more than once")
+		}
+		if ct.Type != "" && ct.SQLType() != sqltypes.Geometry {
+			return errors.New("cannot define SRID for non spatial types")
+		}
+		ct.SRID = other.SRID
 	}
 
 	return nil
@@ -2245,6 +2258,9 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 			opts = append(opts, keywordStrings[VIRTUAL])
 		}
 	}
+	if ct.SRID != nil {
+		opts = append(opts, keywordStrings[SRID], String(ct.SRID))
+	}
 
 	if len(opts) != 0 {
 		buf.Myprintf(" %s", strings.Join(opts, " "))
@@ -2284,7 +2300,7 @@ func (ct *ColumnType) DescribeType() string {
 
 // SQLType returns the sqltypes type code for the given column
 func (ct *ColumnType) SQLType() querypb.Type {
-	switch ct.Type {
+	switch strings.ToLower(ct.Type) {
 	case keywordStrings[TINYINT]:
 		if ct.Unsigned {
 			return sqltypes.Uint8
