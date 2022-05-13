@@ -2341,9 +2341,9 @@ column_type_options:
     }
     $$ = $1
   }
-| column_type_options SRID value_expression
-  {
-    opt := ColumnType{SRID: $3}
+| column_type_options SRID INTEGRAL
+{
+    opt := ColumnType{SRID: NewIntVal($3)}
     if err := $1.merge(opt); err != nil {
     	yylex.Error(err.Error())
     	return 1

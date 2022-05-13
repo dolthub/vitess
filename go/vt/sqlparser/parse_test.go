@@ -2570,6 +2570,9 @@ var (
 		}, {
 			input:  "ALTER TABLE t ADD COLUMN col1 POINT NOT NULL DEFAULT (POINT(1, 2)) SRID 0",
 			output: "alter table t add column (\n\tcol1 POINT not null default (POINT(1, 2)) srid 0\n)",
+		}, {
+			input:  "ALTER TABLE t MODIFY COLUMN col1 POINT NOT NULL DEFAULT (POINT(1, 2)) SRID 1234",
+			output: "alter table t modify column col1 (\n\tcol1 POINT not null default (POINT(1, 2)) srid 1234\n)",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
@@ -4944,6 +4947,9 @@ var (
 	}, {
 		input:  "create table t (id int primary key, col1 int SRID 0)",
 		output: "cannot define SRID for non spatial types at position 53 near '0'",
+	}, {
+		input:  "create table t (id int primary key, col1 int SRID -1)",
+		output: "syntax error at position 52 near 'SRID'",
 	},
 	}
 )

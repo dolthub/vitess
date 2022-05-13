@@ -2118,7 +2118,7 @@ type ColumnType struct {
 	Stored        BoolVal // Default is Virtual (not stored)
 
 	// For spatial types
-	SRID Expr
+	SRID *SQLVal
 }
 
 func (ct *ColumnType) merge(other ColumnType) error {
