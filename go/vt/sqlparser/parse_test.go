@@ -2569,10 +2569,10 @@ var (
 			output: "create table t (\n\tid INT primary key,\n\tcol1 GEOMETRY not null srid 0\n)",
 		}, {
 			input:  "ALTER TABLE t ADD COLUMN col1 POINT NOT NULL DEFAULT (POINT(1, 2)) SRID 0",
-			output: "alter table t add column (\n\tcol1 POINT not null default (POINT(1, 2)) srid 0\n)",
+			output: "alter table t add column (\n\tcol1 POINT not null srid 0 default (POINT(1, 2))\n)",
 		}, {
 			input:  "ALTER TABLE t MODIFY COLUMN col1 POINT NOT NULL DEFAULT (POINT(1, 2)) SRID 1234",
-			output: "alter table t modify column col1 (\n\tcol1 POINT not null default (POINT(1, 2)) srid 1234\n)",
+			output: "alter table t modify column col1 (\n\tcol1 POINT not null srid 1234 default (POINT(1, 2))\n)",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
