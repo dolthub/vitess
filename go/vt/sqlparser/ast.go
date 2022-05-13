@@ -2220,6 +2220,9 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	if ct.NotNull {
 		opts = append(opts, keywordStrings[NOT], keywordStrings[NULL])
 	}
+	if ct.SRID != nil {
+		opts = append(opts, keywordStrings[SRID], String(ct.SRID))
+	}
 	if ct.Default != nil {
 		opts = append(opts, keywordStrings[DEFAULT], String(ct.Default))
 	}
@@ -2257,9 +2260,6 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 		} else {
 			opts = append(opts, keywordStrings[VIRTUAL])
 		}
-	}
-	if ct.SRID != nil {
-		opts = append(opts, keywordStrings[SRID], String(ct.SRID))
 	}
 
 	if len(opts) != 0 {
