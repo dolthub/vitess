@@ -2016,6 +2016,9 @@ var (
 			input:  "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
 			output: "create table t (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
 		}, {
+			input:  "create table t (c int null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
+			output: "create table t (\n\tc int null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+		}, {
 			input:  "create table t (c INT NOT NULL DEFAULT 0 ON UPDATE current_timestamp() AUTO_INCREMENT COMMENT 'a comment here' UNIQUE)",
 			output: "create table t (\n\tc INT not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
 		}, {
@@ -2565,14 +2568,20 @@ var (
 			input:  "CREATE TABLE t (id INT PRIMARY KEY, col1 GEOMETRY SRID 0)",
 			output: "create table t (\n\tid INT primary key,\n\tcol1 GEOMETRY srid 0\n)",
 		}, {
-			input:  "CREATE TABLE t (id INT PRIMARY KEY, col1 GEOMETRY NOT NULL SRID 0)",
-			output: "create table t (\n\tid INT primary key,\n\tcol1 GEOMETRY not null srid 0\n)",
+			input:  "CREATE TABLE t (id INT PRIMARY KEY, col1 POLYGON NULL SRID 0)",
+			output: "create table t (\n\tid INT primary key,\n\tcol1 POLYGON null srid 0\n)",
 		}, {
-			input:  "ALTER TABLE t ADD COLUMN col1 POINT NOT NULL DEFAULT (POINT(1, 2)) SRID 0",
+			input:  "CREATE TABLE t (id INT PRIMARY KEY, col1 LINESTRING NULL SRID 0 COMMENT 'my comment')",
+			output: "create table t (\n\tid INT primary key,\n\tcol1 LINESTRING null srid 0 comment 'my comment'\n)",
+		}, {
+			input:  "CREATE TABLE t (id INT PRIMARY KEY, col1 GEOMETRYCOLLECTION NOT NULL SRID 0)",
+			output: "create table t (\n\tid INT primary key,\n\tcol1 GEOMETRYCOLLECTION not null srid 0\n)",
+		}, {
+			input:  "ALTER TABLE t ADD COLUMN col1 POINT NOT NULL SRID 0 DEFAULT (POINT(1, 2))",
 			output: "alter table t add column (\n\tcol1 POINT not null srid 0 default (POINT(1, 2))\n)",
 		}, {
-			input:  "ALTER TABLE t MODIFY COLUMN col1 POINT NOT NULL DEFAULT (POINT(1, 2)) SRID 1234",
-			output: "alter table t modify column col1 (\n\tcol1 POINT not null srid 1234 default (POINT(1, 2))\n)",
+			input:  "ALTER TABLE t MODIFY COLUMN col1 POINT NULL DEFAULT (POINT(1, 2)) SRID 1234",
+			output: "alter table t modify column col1 (\n\tcol1 POINT null srid 1234 default (POINT(1, 2))\n)",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
@@ -4945,11 +4954,14 @@ var (
 		input:  "insert into a select * into @a from b",
 		output: "INTO clause is not allowed at position 38 near 'b'",
 	}, {
-		input:  "create table t (id int primary key, col1 int SRID 0)",
-		output: "cannot define SRID for non spatial types at position 53 near '0'",
+		input:  "create table t (id int primary key, col1 FLOAT SRID 0)",
+		output: "cannot define SRID for non spatial types at position 55 near '0'",
 	}, {
-		input:  "create table t (id int primary key, col1 int SRID -1)",
-		output: "syntax error at position 52 near 'SRID'",
+		input:  "create table t (id int primary key, col1 geometry SRID -1)",
+		output: "syntax error at position 57 near 'SRID'",
+	}, {
+		input:  "create table t (id int primary key, col1 geometry null SRID 0 default null SRID 4236)",
+		output: "cannot include SRID more than once at position 85 near '4236'",
 	},
 	}
 )
