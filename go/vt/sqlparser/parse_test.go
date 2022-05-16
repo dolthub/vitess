@@ -2017,7 +2017,7 @@ var (
 			output: "create table t (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
 		}, {
 			input:  "create table t (c int null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
-			output: "create table t (\n\tc int null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+			output: "create table t (\n\tc int default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
 		}, {
 			input:  "create table t (c INT NOT NULL DEFAULT 0 ON UPDATE current_timestamp() AUTO_INCREMENT COMMENT 'a comment here' UNIQUE)",
 			output: "create table t (\n\tc INT not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
@@ -2569,10 +2569,10 @@ var (
 			output: "create table t (\n\tid INT primary key,\n\tcol1 GEOMETRY srid 0\n)",
 		}, {
 			input:  "CREATE TABLE t (id INT PRIMARY KEY, col1 POLYGON NULL SRID 0)",
-			output: "create table t (\n\tid INT primary key,\n\tcol1 POLYGON null srid 0\n)",
+			output: "create table t (\n\tid INT primary key,\n\tcol1 POLYGON srid 0\n)",
 		}, {
 			input:  "CREATE TABLE t (id INT PRIMARY KEY, col1 LINESTRING NULL SRID 0 COMMENT 'my comment')",
-			output: "create table t (\n\tid INT primary key,\n\tcol1 LINESTRING null srid 0 comment 'my comment'\n)",
+			output: "create table t (\n\tid INT primary key,\n\tcol1 LINESTRING srid 0 comment 'my comment'\n)",
 		}, {
 			input:  "CREATE TABLE t (id INT PRIMARY KEY, col1 GEOMETRYCOLLECTION NOT NULL SRID 0)",
 			output: "create table t (\n\tid INT primary key,\n\tcol1 GEOMETRYCOLLECTION not null srid 0\n)",
@@ -2580,8 +2580,8 @@ var (
 			input:  "ALTER TABLE t ADD COLUMN col1 POINT NOT NULL SRID 0 DEFAULT (POINT(1, 2))",
 			output: "alter table t add column (\n\tcol1 POINT not null srid 0 default (POINT(1, 2))\n)",
 		}, {
-			input:  "ALTER TABLE t MODIFY COLUMN col1 POINT NULL DEFAULT (POINT(1, 2)) SRID 1234",
-			output: "alter table t modify column col1 (\n\tcol1 POINT null srid 1234 default (POINT(1, 2))\n)",
+			input:  "ALTER TABLE t MODIFY COLUMN col1 POINT NOT NULL DEFAULT (POINT(1, 2)) SRID 1234",
+			output: "alter table t modify column col1 (\n\tcol1 POINT not null srid 1234 default (POINT(1, 2))\n)",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
