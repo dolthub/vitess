@@ -1045,7 +1045,7 @@ func TestTLSRequired(t *testing.T) {
 		path.Join(root, "ca-cert.pem"),
 		path.Join(root, "ca-crl.pem"),
 		"",
-		tls.VersionTLS12)
+		tls.VersionTLS13)
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
