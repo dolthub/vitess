@@ -5740,7 +5740,6 @@ var correctlyDontParse = []string{
 	"regexp",
 	"release",
 	"rename",
-	"repeat",
 	"replace",
 	"require",
 	"resignal",
@@ -5829,6 +5828,7 @@ var incorrectlyDontParse = []string{
 var incorrectlyParse = []string{
 	"dual",
 	"minute_second",
+	"repeat",
 }
 
 // not reserved in mysql

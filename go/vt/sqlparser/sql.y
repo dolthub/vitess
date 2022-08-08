@@ -6594,7 +6594,6 @@ reserved_keyword:
 | RELEASE
 | RELOAD
 | RENAME
-| REPEAT
 | REPLACE
 | REQUIRE
 | RESIGNAL
