@@ -5869,6 +5869,7 @@ func TestKeywordsCorrectlyDoParse(t *testing.T) {
 	}
 }
 
+// TestReservedKeywordsParseWhenQualified ensures that all reserved keywords can be used without escaping when qualified.
 func TestReservedKeywordsParseWhenQualified(t *testing.T) {
 	tcTest := "SELECT * FROM tbl ORDER BY tbl.%s"
 
@@ -5956,6 +5957,34 @@ func TestKeywordsIncorrectlyDontParse(t *testing.T) {
 				assert.NoError(t, err)
 			})
 		}
+	}
+}
+
+func TestReservedKeywordFunctionCall(t *testing.T) {
+	tests := []string{
+		"SELECT LEFT(*)",
+		"SELECT RIGHT(*)",
+		"SELECT FORMAT(*)",
+		"SELECT SCHEMA()",
+		"SELECT CONVERT(123, JSON)",
+		"SELECT CAST(123 AS JSON)",
+		"SELECT SUBSTR(col_name from 123 for 456)",
+		"SELECT SUBSTRING(col_name from 123 for 456)",
+		"SELECT SUBSTR('string' from 123 for 456)",
+		"SELECT SUBSTRING('string' from 123 for 456)",
+		"SELECT TRIM('asdf')",
+		"SELECT MATCH(*) AGAINST (1)",
+		"SELECT FIRST('aaaaaaaaa')",
+		"SELECT GROUP_CONCAT(1,2,3)",
+		"SELECT VALUES(col_name)",
+		"SELECT REPEAT(1)",
+	}
+
+	for _, test := range tests {
+		t.Run(test, func(t *testing.T) {
+			_, err := Parse(test)
+			assert.NoError(t, err)
+		})
 	}
 }
 
