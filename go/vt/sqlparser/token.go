@@ -473,6 +473,7 @@ var keywords = map[string]int{
 	"rename":                        RENAME,
 	"reorganize":                    REORGANIZE,
 	"repair":                        REPAIR,
+	"repeat":                        REPEAT,
 	"repeatable":                    REPEATABLE,
 	"replace":                       REPLACE,
 	"replication":                   REPLICATION,
