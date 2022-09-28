@@ -254,6 +254,7 @@ var keywords = map[string]int{
 	"div":                           DIV,
 	"double":                        DOUBLE,
 	"drop":                          DROP,
+	"dual":                          DUAL,
 	"dumpfile":                      DUMPFILE,
 	"duplicate":                     DUPLICATE,
 	"dynamic":                       DYNAMIC,
