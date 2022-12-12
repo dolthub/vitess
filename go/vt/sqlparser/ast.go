@@ -1192,7 +1192,7 @@ func (oc *CloseCursor) walkSubtree(visit Visit) error {
 
 // FetchCursor represents the FETCH statement
 type FetchCursor struct {
-	Name string
+	Name      string
 	Variables []string
 }
 
@@ -1208,7 +1208,7 @@ func (oc *FetchCursor) walkSubtree(visit Visit) error {
 
 // Loop represents the LOOP statement
 type Loop struct {
-	Label string
+	Label      string
 	Statements Statements
 }
 
@@ -6358,7 +6358,7 @@ func (node *Prepare) Format(buf *TrackedBuffer) {
 
 type Execute struct {
 	Name    string
-	VarList []string
+	VarList []*AliasedExpr
 }
 
 func (*Execute) iStatement() {}
@@ -6371,8 +6371,11 @@ func (node *Execute) Format(buf *TrackedBuffer) {
 	if len(node.VarList) == 0 {
 		buf.Myprintf("execute %s", node.Name)
 	} else {
-		varList := strings.Join(node.VarList, ", ")
-		buf.Myprintf("execute %s using %s", node.Name, varList)
+		for _, expr := range node.VarList {
+			expr.Format(buf)
+		}
+		//varList := strings.Join(node.VarList, ", ")
+		//buf.Myprintf("execute %s using %s", node.Name, varList)
 	}
 }
 

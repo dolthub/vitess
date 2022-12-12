@@ -185,6 +185,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
   window Window
   over *Over
   windowDef *WindowDef
+  aliasedExprs []*AliasedExpr
 }
 
 %token LEX_ERROR
@@ -448,8 +449,6 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <columns> ins_column_list ins_column_list_opt column_list column_list_opt
 %type <partitions> opt_partition_clause partition_list
 %type <variables> variable_list
-%type <strs> system_variable_list
-%type <str> system_variable
 %type <into> into_opt
 %type <assignExprs> on_dup_opt assignment_list
 %type <setVarExprs> set_list transaction_chars
@@ -547,6 +546,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <grantAssumption> grant_assumption
 %type <boolean> with_grant_opt with_admin_opt
 %type <bytes> any_identifier
+%type <aliasedExprs> aliased_expression_list
 
 %start any_command
 
@@ -4229,25 +4229,14 @@ prepare_statement:
     $$ = &Prepare{Name: string($2), Expr: string($4)}
   }
 
-system_variable_list:
-  system_variable
+aliased_expression_list:
+  expression
   {
-    $$ = []string{$1}
+    $$ = []*AliasedExpr{{Expr: $1}}
   }
-| system_variable_list ',' system_variable
+| aliased_expression_list ',' expression
   {
-    $$ = append($1, $3)
-  }
-
-// TODO: ensure these start with '@'
-system_variable:
-  ID
-  {
-    $$ = string($1)
-  }
-| non_reserved_keyword
-  {
-    $$ = string($1)
+    $$ = append($1, &AliasedExpr{Expr: $3})
   }
 
 execute_statement:
@@ -4259,11 +4248,11 @@ execute_statement:
   {
     $$ = &Execute{Name: string($2)}
   }
-| EXECUTE ID USING system_variable_list
+| EXECUTE ID USING aliased_expression_list
   {
     $$ = &Execute{Name: string($2), VarList: $4}
   }
-| EXECUTE non_reserved_keyword USING system_variable_list
+| EXECUTE non_reserved_keyword USING aliased_expression_list
   {
     $$ = &Execute{Name: string($2), VarList: $4}
   }
