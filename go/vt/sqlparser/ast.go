@@ -6371,11 +6371,14 @@ func (node *Execute) Format(buf *TrackedBuffer) {
 	if len(node.VarList) == 0 {
 		buf.Myprintf("execute %s", node.Name)
 	} else {
-		for _, expr := range node.VarList {
-			expr.Format(buf)
+		varList := make([]string, len(node.VarList))
+		for i, expr := range node.VarList {
+			newBuf := NewTrackedBuffer(buf.nodeFormatter)
+			expr.Format(newBuf)
+			varList[i] = newBuf.String()
 		}
-		//varList := strings.Join(node.VarList, ", ")
-		//buf.Myprintf("execute %s using %s", node.Name, varList)
+		res := strings.Join(varList, ", ")
+		buf.Myprintf("execute %s using %s", node.Name, res)
 	}
 }
 
