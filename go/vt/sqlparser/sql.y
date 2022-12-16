@@ -414,7 +414,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <boolean> enforced_opt
 %type <str> compare
 %type <ins> insert_data
-%type <expr> value value_expression naked_value_expression num_val as_of_opt integral_or_value_arg integral_or_interval_expr
+%type <expr> value value_expression simple_value_expression num_val as_of_opt integral_or_value_arg integral_or_interval_expr
 %type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
 %type <expr> func_datetime_precision function_call_window function_call_aggregate_with_window
 %type <str> is_suffix
@@ -5120,133 +5120,17 @@ aliased_table_options:
 //    $$ = &AsOf{Time: string($5)}
 //  }
 
-// this is a duplicate of value expressions, minus the column identifiers and special case keywords
-// it also allows naked identifiers
-naked_value_expression:
-  value
-  {
-    $$ = $1
-  }
-| value_expression '&' value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: BitAndStr, Right: $3}
-  }
-| value_expression '|' value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: BitOrStr, Right: $3}
-  }
-| value_expression '^' value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: BitXorStr, Right: $3}
-  }
-| value_expression '+' value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: PlusStr, Right: $3}
-  }
-| value_expression '-' value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: MinusStr, Right: $3}
-  }
-| value_expression '*' value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: MultStr, Right: $3}
-  }
-| value_expression '/' value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: DivStr, Right: $3}
-  }
-| value_expression DIV value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: IntDivStr, Right: $3}
-  }
-| value_expression '%' value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: ModStr, Right: $3}
-  }
-| value_expression MOD value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: ModStr, Right: $3}
-  }
-| value_expression SHIFT_LEFT value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: ShiftLeftStr, Right: $3}
-  }
-| value_expression SHIFT_RIGHT value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: ShiftRightStr, Right: $3}
-  }
-| value_expression COLLATE charset
-  {
-    $$ = &CollateExpr{Expr: $1, Charset: $3}
-  }
-| BINARY value_expression %prec UNARY
-  {
-    $$ = &UnaryExpr{Operator: BinaryStr, Expr: $2}
-  }
-| underscore_charsets value_expression %prec UNARY
-  {
-    $$ = &UnaryExpr{Operator: $1, Expr: $2}
-  }
-| '+'  value_expression %prec UNARY
-  {
-    if num, ok := $2.(*SQLVal); ok && num.Type == IntVal {
-      $$ = num
-    } else {
-      $$ = &UnaryExpr{Operator: UPlusStr, Expr: $2}
-    }
-  }
-| '-'  value_expression %prec UNARY
-  {
-    if num, ok := $2.(*SQLVal); ok && num.Type == IntVal {
-      // Handle double negative
-      if num.Val[0] == '-' {
-        num.Val = num.Val[1:]
-        $$ = num
-      } else {
-        $$ = NewIntVal(append([]byte("-"), num.Val...))
-      }
-    } else {
-      $$ = &UnaryExpr{Operator: UMinusStr, Expr: $2}
-    }
-  }
-| '~'  value_expression
-  {
-    $$ = &UnaryExpr{Operator: TildaStr, Expr: $2}
-  }
-| '!' value_expression %prec UNARY
-  {
-    $$ = &UnaryExpr{Operator: BangStr, Expr: $2}
-  }
-| INTERVAL value_expression sql_id
-  {
-    // This rule prevents the usage of INTERVAL
-    // as a function. If support is needed for that,
-    // we'll need to revisit this. The solution
-    // will be non-trivial because of grammar conflicts.
-    $$ = &IntervalExpr{Expr: $2, Unit: $3.String()}
-  }
-| tuple_expression
-  {
-    $$ = $1
-  }
-| ID
-  {
-    $$ = NewStrVal($1)
-  }
-| function_call_generic
-| function_call_keyword
-| function_call_nonkeyword
-| function_call_conflict
-| function_call_window
-| function_call_aggregate_with_window
-
 as_of_opt:
   {
     $$ = nil
   }
-| AS OF naked_value_expression
+| AS OF simple_value_expression
   {
     $$ = $3
+  }
+| AS OF ID
+  {
+    $$ = NewStrVal($3)
   }
 
 column_list_opt:
@@ -5793,7 +5677,7 @@ expression_list:
     $$ = append($1, $3)
   }
 
-value_expression:
+simple_value_expression:
   value
   {
     $$ = $1
@@ -5896,6 +5780,28 @@ value_expression:
   {
     $$ = &UnaryExpr{Operator: BangStr, Expr: $2}
   }
+| boolean_value
+  {
+    $$ = $1
+  }
+| tuple_expression
+  {
+    $$ = $1
+  }
+| subquery
+  {
+    $$ = $1
+  }
+| function_call_generic
+| function_call_keyword
+| function_call_nonkeyword
+| function_call_conflict
+| function_call_window
+| function_call_aggregate_with_window
+
+
+value_expression:
+  simple_value_expression
 | INTERVAL value_expression sql_id
   {
     // This rule prevents the usage of INTERVAL
@@ -5912,10 +5818,6 @@ value_expression:
   {
     $$ = &ColName{Name: NewColIdent(string($1))}
   }
-| boolean_value
-  {
-    $$ = $1
-  }
 | column_name
   {
     $$ = $1
@@ -5924,20 +5826,6 @@ value_expression:
   {
     $$ = &ColName{Name: NewColIdent(string($1))}
   }
-| tuple_expression
-  {
-    $$ = $1
-  }
-| subquery
-  {
-    $$ = $1
-  }
-| function_call_generic
-| function_call_keyword
-| function_call_nonkeyword
-| function_call_conflict
-| function_call_window
-| function_call_aggregate_with_window
 
 /*
   Regular function calls without special token or syntax, guaranteed to not
