@@ -5124,9 +5124,13 @@ as_of_opt:
   {
     $$ = nil
   }
-| AS OF value_expression
+| AS OF STRING
   {
-    $$ = $3
+    $$ = NewStrVal($3)
+  }
+| AS OF ID
+  {
+    $$ = NewStrVal($3)
   }
 
 column_list_opt:
