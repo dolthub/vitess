@@ -272,7 +272,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 // Replication Tokens
 %token <bytes> REPLICA SOURCE STOP RESET FILTER
 %token <bytes> SOURCE_HOST SOURCE_USER SOURCE_PASSWORD SOURCE_PORT SOURCE_CONNECT_RETRY SOURCE_RETRY_COUNT
-%token <bytes> REPLICATE_DO_TABLE REPLICATE_IGNORE_TABLE
+%token <bytes> REPLICATE_DO_TABLE REPLICATE_IGNORE_TABLE REPLICATION_SLAVE_ADMIN
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT WORK RELEASE CHAIN
@@ -1389,6 +1389,10 @@ grant_privilege:
 | REPLICATION SLAVE grant_privilege_columns_opt
   {
     $$ = Privilege{Type: PrivilegeType_ReplicationSlave, Columns: $3}
+  }
+| REPLICATION_SLAVE_ADMIN grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_Dynamic, Columns: $2, DynamicName: "REPLICATION_SLAVE_ADMIN"}
   }
 | SELECT grant_privilege_columns_opt
   {
