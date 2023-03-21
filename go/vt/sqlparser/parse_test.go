@@ -2865,6 +2865,10 @@ var (
 			input:  "CREATE EVENT event1 ON SCHEDULE EVERY 1 MINUTE STARTS CURRENT_TIMESTAMP + INTERVAL 2 HOUR ENDS CURRENT_TIMESTAMP + INTERVAL 3 HOUR ON COMPLETION NOT PRESERVE  DO INSERT INTO mytable VALUES (1)",
 			output: "create event event1 on schedule every 1 MINUTE starts CURRENT_TIMESTAMP() + interval 2 HOUR ends CURRENT_TIMESTAMP() + interval 3 HOUR on completion not preserve do insert into mytable values (1)",
 		},
+		{
+			input:  "CREATE EVENT e_call_myproc ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 DAY DO CALL myproc(5, 27)",
+			output: "create event e_call_myproc on schedule at CURRENT_TIMESTAMP() + interval 1 DAY do call myproc(5, 27)",
+		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
 	// validSQL is used by TestParseNextValid, which expects a semicolon to mean the end of a full statement.

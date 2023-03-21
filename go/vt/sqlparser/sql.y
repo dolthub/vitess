@@ -1090,13 +1090,13 @@ create_statement:
     }
     $$ = &CreateRole{IfNotExists: notExists, Roles: $4}
   }
-| CREATE definer_opt EVENT not_exists_opt event_name ON SCHEDULE event_schedule event_on_completion_preserve_opt event_status_opt comment_keyword_opt DO statement_list_statement
+| CREATE definer_opt EVENT not_exists_opt event_name ON SCHEDULE event_schedule event_on_completion_preserve_opt event_status_opt comment_keyword_opt DO lexer_position statement_list_statement lexer_position
   {
     var notExists bool
     if $4 != 0 {
       notExists = true
     }
-    $$ = &DDL{Action: CreateStr, EventSpec: &EventSpec{EventName: $5, Definer: $2, IfNotExists: notExists, OnSchedule: $8, OnCompletionPreserve: $9, Status: $10, Comment: $11, Body: $13}}
+    $$ = &DDL{Action: CreateStr, EventSpec: &EventSpec{EventName: $5, Definer: $2, IfNotExists: notExists, OnSchedule: $8, OnCompletionPreserve: $9, Status: $10, Comment: $11, Body: $14}, SubStatementPositionStart: $13, SubStatementPositionEnd: $15 - 1}
   }
 
 default_role_opt:
