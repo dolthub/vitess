@@ -4730,7 +4730,7 @@ show_statement:
 | SHOW CREATE TABLE table_name as_of_opt
   {
     showTablesOpt := &ShowTablesOpt{AsOf:$5}
-    $$ = &Show{Type: string($2) + " " + string($3), Table: $4, ShowTablesOpt: showTablesOpt}
+    $$ = &Show{Type: CreateTableStr, Table: $4, ShowTablesOpt: showTablesOpt}
   }
 | SHOW CREATE PROCEDURE table_name
   {
@@ -4743,6 +4743,10 @@ show_statement:
 | SHOW CREATE VIEW table_name
   {
     $$ = &Show{Type: string($2) + " " + string($3), Table: $4}
+  }
+| SHOW CREATE EVENT table_name
+  {
+    $$ = &Show{Type: CreateEventStr, Table: $4}
   }
 | SHOW DATABASES like_or_where_opt
   {

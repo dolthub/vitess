@@ -2896,6 +2896,9 @@ var (
 		}, {
 			input: "SHOW EVENTS FROM dbName WHERE status = 'enabled'",
 			output: "show events from dbName where `status` = 'enabled'",
+		}, {
+			input: "SHOW CREATE EVENT myevent",
+			output: "show create event myevent",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.

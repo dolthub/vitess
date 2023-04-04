@@ -3177,6 +3177,12 @@ func (node *Explain) Format(buf *TrackedBuffer) {
 const (
 	CreateTriggerStr   = "create trigger"
 	CreateProcedureStr = "create procedure"
+	CreateEventStr = "create event"
+	CreateTableStr = "create table"
+
+	ProcedureStatusStr = "procedure status"
+	FunctionStatusStr = "function status"
+	TableStatusStr = "table status"
 )
 
 // Show represents a show statement.
@@ -3231,7 +3237,7 @@ func (node *Show) Format(buf *TrackedBuffer) {
 			return
 		}
 	case "index":
-		buf.Myprintf("show index from %v", node.Table)
+		buf.Myprintf("show %s from %v", loweredType, node.Table)
 		if node.Database != "" {
 			buf.Myprintf(" from %s", node.Database)
 		}
@@ -3239,41 +3245,10 @@ func (node *Show) Format(buf *TrackedBuffer) {
 			buf.Myprintf(" where %v", node.ShowIndexFilterOpt)
 		}
 		return
-	case CreateTriggerStr:
-		buf.Myprintf("show create trigger %v", node.Table)
+	case CreateTriggerStr, CreateProcedureStr, CreateEventStr:
+		buf.Myprintf("show %s %v", loweredType, node.Table)
 		return
-	case CreateProcedureStr:
-		buf.Myprintf("show create procedure %v", node.Table)
-		return
-	case "processlist":
-		buf.Myprintf("show ")
-		if node.Full {
-			buf.Myprintf("full ")
-		}
-		buf.Myprintf("processlist")
-		return
-	case "procedure status":
-		buf.Myprintf("show procedure status")
-		if node.Filter != nil {
-			buf.Myprintf("%v", node.Filter)
-		}
-		return
-	case "function status":
-		buf.Myprintf("show function status")
-		if node.Filter != nil {
-			buf.Myprintf("%v", node.Filter)
-		}
-		return
-	case "table status":
-		buf.Myprintf("show table status")
-		if node.Database != "" {
-			buf.Myprintf(" from %s", node.Database)
-		}
-		if node.Filter != nil {
-			buf.Myprintf("%v", node.Filter)
-		}
-		return
-	case "create table":
+	case CreateTableStr:
 		if node.HasTable() {
 			buf.Myprintf("show %s %v", loweredType, node.Table)
 
@@ -3284,6 +3259,28 @@ func (node *Show) Format(buf *TrackedBuffer) {
 			}
 			return
 		}
+	case "processlist":
+		buf.Myprintf("show ")
+		if node.Full {
+			buf.Myprintf("full ")
+		}
+		buf.Myprintf("processlist")
+		return
+	case ProcedureStatusStr, FunctionStatusStr:
+		buf.Myprintf("show %s", loweredType)
+		if node.Filter != nil {
+			buf.Myprintf("%v", node.Filter)
+		}
+		return
+	case TableStatusStr:
+		buf.Myprintf("show table status")
+		if node.Database != "" {
+			buf.Myprintf(" from %s", node.Database)
+		}
+		if node.Filter != nil {
+			buf.Myprintf("%v", node.Filter)
+		}
+		return
 	}
 
 	if node.Database != "" {
