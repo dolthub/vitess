@@ -2082,8 +2082,8 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 				}
 			}
 
-			if !event.OnCompletionPreserve {
-				sb.WriteString("on completion not preserve ")
+			if event.OnCompletionPreserve {
+				sb.WriteString("on completion preserve ")
 			}
 			if event.Comment != nil {
 				sb.WriteString(fmt.Sprintf("comment %s ", event.Comment))
