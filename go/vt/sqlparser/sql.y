@@ -2017,7 +2017,7 @@ event_ends_opt:
 
 event_on_completion_preserve_opt:
   {
-    $$ = true
+    $$ = false
   }
 | ON COMPLETION PRESERVE
   {

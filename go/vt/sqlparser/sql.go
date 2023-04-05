@@ -12561,7 +12561,7 @@ yydefault:
 		yyDollar = yyS[yypt-0 : yypt+1]
 //line sql.y:2019
 		{
-			yyVAL.boolean = true
+			yyVAL.boolean = false
 		}
 	case 346:
 		yyDollar = yyS[yypt-3 : yypt+1]
