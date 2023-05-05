@@ -4491,7 +4491,12 @@ partition_definition:
 alter_event_statement:
   ALTER definer_opt EVENT event_name event_on_completion_preserve_opt rename_event_name_opt event_status_opt comment_keyword_opt
   {
-    $$ = &DDL{Action: AlterStr, EventSpec: &EventSpec{EventName: $4, Definer: $2, OnCompletionPreserve: $5, RenameName: $6, Status: $7, Comment: $8}}
+    es := &EventSpec{EventName: $4, Definer: $2, OnCompletionPreserve: $5, RenameName: $6, Status: $7, Comment: $8}
+    if err := es.ValidateAlterEvent(); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = &DDL{Action: AlterStr, EventSpec: es}
   }
 | ALTER definer_opt EVENT event_name ON SCHEDULE event_schedule event_on_completion_preserve_opt rename_event_name_opt event_status_opt comment_keyword_opt
   {

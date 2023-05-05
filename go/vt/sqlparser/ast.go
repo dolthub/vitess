@@ -1794,6 +1794,14 @@ type EventSpec struct {
 	RenameName EventName
 }
 
+// ValidateAlterEvent checks that at least one event field is defined to alter.
+func (es *EventSpec) ValidateAlterEvent() error {
+	if es.OnSchedule == nil && es.OnCompletionPreserve == EventOnCompletion_Undefined && es.RenameName.IsEmpty() && es.Status == EventStatus_Undefined && es.Comment == nil && es.Body == nil {
+		return fmt.Errorf("You have an error in your SQL syntax; At least one event field to alter needs to be defined")
+	}
+	return nil
+}
+
 type EventOnCompletion string
 
 const (

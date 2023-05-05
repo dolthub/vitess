@@ -6087,6 +6087,9 @@ var (
 		input:        "CREATE PROCEDURE testproc() BEGIN while1: WHILE a > 7 DO BEGIN END; END WHILE while2; END",
 		output:       "End-label while2 without match at position 85 near 'while2'",
 		excludeMulti: true,
+	}, {
+		input:  "ALTER EVENT myevent",
+		output: "You have an error in your SQL syntax; At least one event field to alter needs to be defined at position 20 near 'myevent'",
 	},
 	}
 )
