@@ -2906,9 +2906,6 @@ var (
 			input:  "SHOW CREATE EVENT myevent",
 			output: "show create event myevent",
 		}, {
-			input:  "ALTER DEFINER = `newuser`@`localhost` EVENT myevent;",
-			output: "alter definer = `newuser`@`localhost` event myevent",
-		}, {
 			input:  "ALTER EVENT myevent ON SCHEDULE AT CURRENT_TIMESTAMP;",
 			output: "alter event myevent on schedule at CURRENT_TIMESTAMP()",
 		}, {
@@ -2935,6 +2932,9 @@ var (
 		}, {
 			input:  "ALTER EVENT myevent RENAME TO new_event DISABLE COMMENT 'renaming and disabling the event'",
 			output: "alter event myevent rename to new_event disable comment 'renaming and disabling the event'",
+		}, {
+			input:  "ALTER DEFINER = `newuser`@`localhost` EVENT myevent ON COMPLETION NOT PRESERVE;",
+			output: "alter definer = `newuser`@`localhost` event myevent on completion not preserve",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
@@ -6090,6 +6090,9 @@ var (
 	}, {
 		input:  "ALTER EVENT myevent",
 		output: "You have an error in your SQL syntax; At least one event field to alter needs to be defined at position 20 near 'myevent'",
+	}, {
+		input:  "ALTER DEFINER = `newuser`@`localhost` EVENT myevent",
+		output: "You have an error in your SQL syntax; At least one event field to alter needs to be defined at position 52 near 'myevent'",
 	},
 	}
 )
