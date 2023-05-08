@@ -7208,11 +7208,11 @@ lock_opt:
 // Because the rules are together, the parser can keep shifting
 // the tokens until it disambiguates a as sql_id and select as keyword.
 insert_data:
-  VALUES tuple_list
+  value_or_values tuple_list
   {
     $$ = &Insert{Rows: $2}
   }
-| openb closeb VALUES tuple_list
+| openb closeb value_or_values tuple_list
   {
     $$ = &Insert{Columns: []ColIdent{}, Rows: $4}
   }
@@ -7225,7 +7225,7 @@ insert_data:
     // Drop the redundant parenthesis.
     $$ = &Insert{Rows: $2}
   }
-| openb ins_column_list closeb VALUES tuple_list
+| openb ins_column_list closeb value_or_values tuple_list
   {
     $$ = &Insert{Columns: $2, Rows: $5}
   }
@@ -7238,6 +7238,10 @@ insert_data:
     // Drop the redundant parenthesis.
     $$ = &Insert{Columns: $2, Rows: $5}
   }
+
+value_or_values:
+  VALUES
+| VALUE
 
 ins_column_list_opt:
   {
