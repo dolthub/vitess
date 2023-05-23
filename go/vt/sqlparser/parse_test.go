@@ -123,7 +123,28 @@ var (
 		},
 		{
 			input: "select 1",
-		}, {
+		},
+		{
+			input: "select 1 as ''",
+			output: "select 1 as ''",
+		},
+		{
+			input: "select 1 as '       '",
+			output: "select 1 as ''",
+		},
+		{
+			input: "select 1 as '\n\n\n'",
+			output: "select 1 as ''",
+		},
+		{
+			input: "select 1 as ' \n\n test'",
+			output: "select 1 as 'test'",
+		},
+		{
+			input: "select 1 as '         test  '",
+			output: "select 1 as 'test  '",
+		},
+		{
 			input: "select 1 from t",
 		}, {
 			input: "select a, b from t",
