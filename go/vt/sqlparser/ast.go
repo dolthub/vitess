@@ -128,20 +128,31 @@ func parseTokenizer(sql string, tokenizer *Tokenizer) (Statement, error) {
 
 // For select statements, capture the verbatim select expressions from the original query text
 func captureSelectExpressions(sql string, tokenizer *Tokenizer) {
-	if s, ok := tokenizer.ParseTree.(SelectStatement); ok {
-		s.walkSubtree(func(node SQLNode) (bool, error) {
-			if node, ok := node.(*AliasedExpr); ok && node.EndParsePos > node.StartParsePos {
-				_, ok := node.Expr.(*ColName)
-				if ok {
-					// column names don't need any special handling to capture the input expression
-					return false, nil
-				} else {
-					node.InputExpression = trimQuotes(strings.TrimLeft(sql[node.StartParsePos:node.EndParsePos], " \n\t"))
-				}
-			}
-			return true, nil
-		})
+	s, ok := tokenizer.ParseTree.(SelectStatement)
+	if !ok {
+		return
 	}
+	s.walkSubtree(func(node SQLNode) (bool, error) {
+		n, ok := node.(*AliasedExpr)
+		if !ok {
+			return true, nil
+		}
+		if n.EndParsePos <= n.StartParsePos {
+			return true, nil
+		}
+		// column names don't need any special handling to capture the input expression
+		if _, ok := n.Expr.(*ColName); ok {
+			return false, nil
+		}
+
+		// InputExpressions ending in "AS" empty string are supposed to have "" as the input expression
+		n.InputExpression = trimQuotes(strings.TrimLeft(sql[n.StartParsePos:n.EndParsePos], " \n\t"))
+		if len(n.InputExpression) >= 2 && strings.ToLower(n.InputExpression[len(n.InputExpression)-2:]) == "as" {
+			n.InputExpression = ""
+		}
+
+		return true, nil
+	})
 }
 
 // For DDL statements that capture the position of a sub-statement (create view and others), we need to adjust these
@@ -6494,7 +6505,7 @@ func (node ColIdent) IsEmpty() bool {
 // instead. The Stringer conformance is for usage
 // in templates.
 func (node ColIdent) String() string {
-	return node.val
+	return node.val // TODO: trim space here or just check for spaces
 }
 
 // CompliantName returns a compliant id name
