@@ -6503,9 +6503,10 @@ func (node ColIdent) IsEmpty() bool {
 // String returns the unescaped column name. It must
 // not be used for SQL generation. Use sqlparser.String
 // instead. The Stringer conformance is for usage
-// in templates.
+// in templates. It trims leading whitespaces.
 func (node ColIdent) String() string {
-	return node.val // TODO: trim space here or just check for spaces
+	// TODO: should throw warning if whitespaces are actually removed
+	return strings.TrimLeft(node.val, " \n\t")
 }
 
 // CompliantName returns a compliant id name
