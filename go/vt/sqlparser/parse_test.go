@@ -937,10 +937,10 @@ var (
 		}, {
 			input: "insert into a(a, b) values (1, ifnull(null, default(b)))",
 		}, {
-			input: "insert into a(a, b) value (1, ifnull(null, default(b)))",
+			input:  "insert into a(a, b) value (1, ifnull(null, default(b)))",
 			output: "insert into a(a, b) values (1, ifnull(null, default(b)))",
 		}, {
-			input: "insert into a value (1, ifnull(null, default(b)))",
+			input:  "insert into a value (1, ifnull(null, default(b)))",
 			output: "insert into a values (1, ifnull(null, default(b)))",
 		}, {
 			input: "insert /* qualified column list */ into a(a, b) values (1, 2)",
@@ -2947,6 +2947,9 @@ var (
 		}, {
 			input:  "ALTER DEFINER = `newuser`@`localhost` EVENT myevent ON COMPLETION NOT PRESERVE;",
 			output: "alter definer = `newuser`@`localhost` event myevent on completion not preserve",
+		}, {
+			input:  "SELECT * FROM information_schema.events;",
+			output: "select * from information_schema.`events`",
 		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
