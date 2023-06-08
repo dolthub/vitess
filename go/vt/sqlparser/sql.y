@@ -2853,6 +2853,16 @@ column_type_options:
     }
     $$ = $1
   }
+| column_type_options REFERENCES table_name '(' column_list ')'
+  // TODO: Need other forms for fk_on_delete fk_on_update !
+  {
+    opt := ColumnType{ForeignKeyOpt: &ForeignKeyDefinition{ReferencedTable: $3, ReferencedColumns: $5}}
+    if err := $1.merge(opt); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = $1
+  }
 
 column_type:
   numeric_type signed_or_unsigned_opt zero_fill_opt

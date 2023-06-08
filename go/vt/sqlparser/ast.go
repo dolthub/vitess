@@ -2542,6 +2542,9 @@ type ColumnType struct {
 	// Key specification
 	KeyOpt ColumnKeyOption
 
+	// Foreign key specification
+	ForeignKeyOpt *ForeignKeyDefinition
+
 	// Generated columns
 	GeneratedExpr Expr    // The expression used to generate this column
 	Stored        BoolVal // Default is Virtual (not stored)
@@ -2589,6 +2592,13 @@ func (ct *ColumnType) merge(other ColumnType) error {
 			return errors.New("cannot include more than one key option for a column definition")
 		}
 		ct.KeyOpt = other.KeyOpt
+	}
+
+	if other.ForeignKeyOpt != nil {
+		if ct.ForeignKeyOpt != nil {
+			return errors.New("cannot include more than one foreign key option for a column definition")
+		}
+		ct.ForeignKeyOpt = other.ForeignKeyOpt
 	}
 
 	if other.Comment != nil {
@@ -2718,6 +2728,19 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	if ct.KeyOpt == colKeyFulltextKey {
 		opts = append(opts, keywordStrings[FULLTEXT])
 	}
+	if ct.ForeignKeyOpt != nil {
+		// TODO: This isn't great to format this here, right? Splits up handling of ForeignKeyDefinition?
+		opts = append(opts, KeywordString(REFERENCES),
+			ct.ForeignKeyOpt.ReferencedTable.String(),
+			fmt.Sprintf("%v", ct.ForeignKeyOpt.ReferencedColumns))
+		if ct.ForeignKeyOpt.OnDelete != DefaultAction {
+			opts = append(opts, "on delete", fmt.Sprintf("%v", ct.ForeignKeyOpt.OnDelete))
+		}
+		if ct.ForeignKeyOpt.OnUpdate != DefaultAction {
+			opts = append(opts, "on update", fmt.Sprintf("%v", ct.ForeignKeyOpt.OnUpdate))
+		}
+	}
+
 	if ct.GeneratedExpr != nil {
 		opts = append(opts, keywordStrings[GENERATED], keywordStrings[ALWAYS], keywordStrings[AS], "("+String(ct.GeneratedExpr)+")")
 		if ct.Stored {
