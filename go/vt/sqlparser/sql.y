@@ -4142,7 +4142,15 @@ table_option:
   }
 | SECONDARY_ENGINE equal_opt ID
   {
-    $$ = string($1) + "=" + string($3)
+    $$ = string($1) + " " + string($3)
+  }
+| SECONDARY_ENGINE equal_opt STRING
+  {
+    $$ = string($1) + " " + string($3)
+  }
+| SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = string($1) + " " + "'" + string($3) + "'"
   }
 | STATS_AUTO_RECALC equal_opt DEFAULT
   {
@@ -4549,7 +4557,18 @@ alter_table_statement_part:
   {
     $$ = &DDL{Action: AlterStr, AlterCollationSpec: &AlterCollationSpec{CharacterSet: "", Collation: $4}}
   }
-// TODO: add table options for alter table
+| SECONDARY_ENGINE equal_opt ID
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| SECONDARY_ENGINE equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
 
 column_order_opt:
   {
