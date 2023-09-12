@@ -5391,6 +5391,7 @@ func TestCreateTable(t *testing.T) {
 			"	col_character3 character(3) character set ascii,\n" +
 			"	col_character4 character(4) character set ascii collate ascii_bin,\n" +
 			"	col_char_varying char varying(2),\n" +
+			"	col_char_varying2 char varying(10) character set utf8,\n" +
 			"	col_nchar nchar,\n" +
 			"	col_nchar2 nchar(2),\n" +
 			"	col_nchar_varchar nchar varchar(2),\n" +
