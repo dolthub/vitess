@@ -3214,6 +3214,46 @@ var (
 			input: "alter table t secondary_engine_attribute 'rapid'",
 			output: "alter table t",
 		},
+		{
+			input: "create table t (i int) checksum=0",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") checksum 0",
+		},
+		{
+			input: "create table t (i int) checksum 0",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") checksum 0",
+		},
+		{
+			input: "alter table t checksum 1",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t checksum = 1",
+			output: "alter table t",
+		},
+		{
+			input: "create table t (i int) table_checksum=0",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") CHECKSUM 0",
+		},
+		{
+			input: "create table t (i int) table_checksum 0",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") CHECKSUM 0",
+		},
+		{
+			input: "alter table t table_checksum 1",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t table_checksum = 1",
+			output: "alter table t",
+		},
 	}
 
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
