@@ -3740,11 +3740,11 @@ index_option:
   {
     $$ = &IndexOption{Name: string($1), Value: NewStrVal($2)}
   }
-| ENGINE_ATTRIBUTE equal_opt ID
+| ENGINE_ATTRIBUTE equal_opt STRING
   {
     $$ = &IndexOption{Name: string($1), Value: NewStrVal($3)}
   }
-| SECONDARY_ENGINE_ATTRIBUTE equal_opt ID
+| SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
   {
     $$ = &IndexOption{Name: string($1), Value: NewStrVal($3)}
   }
