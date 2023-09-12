@@ -3215,16 +3215,20 @@ var (
 			output: "alter table t",
 		},
 		{
+			input: "table t",
+			output: "select * from t",
+		},
+		{
 			input: "create table t (i int) checksum=0",
 			output: "create table t (\n" +
 				"\ti int\n" +
 				") checksum 0",
 		},
 		{
-			input: "create table t (i int) checksum 0",
+			input: "create table t (i int) checksum 100",
 			output: "create table t (\n" +
 				"\ti int\n" +
-				") checksum 0",
+				") checksum 100",
 		},
 		{
 			input: "alter table t checksum 1",
@@ -3241,10 +3245,10 @@ var (
 				") CHECKSUM 0",
 		},
 		{
-			input: "create table t (i int) table_checksum 0",
+			input: "create table t (i int) table_checksum 100",
 			output: "create table t (\n" +
 				"\ti int\n" +
-				") CHECKSUM 0",
+				") CHECKSUM 100",
 		},
 		{
 			input: "alter table t table_checksum 1",
