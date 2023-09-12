@@ -3258,6 +3258,18 @@ var (
 			input: "alter table t table_checksum = 1",
 			output: "alter table t",
 		},
+		{
+			input: "create table t (i int) union (a, b, c)",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") union (a,b,c)",
+		},
+		{
+			input: "create table t (i int) union (`a`, `b`, `c`)",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") union (a,b,c)",
+		},
 	}
 
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
