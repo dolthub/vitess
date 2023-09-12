@@ -4596,6 +4596,22 @@ alter_table_statement_part:
   {
     $$ = &DDL{Action: AlterStr}
   }
+| UNION equal_opt openb any_identifier_list closeb
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| INSERT_METHOD equal_opt NO
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| INSERT_METHOD equal_opt FIRST
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| INSERT_METHOD equal_opt LAST
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
 
 column_order_opt:
   {
