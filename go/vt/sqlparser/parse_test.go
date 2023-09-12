@@ -3275,6 +3275,12 @@ var (
 			output: "alter table t",
 		},
 		{
+			input: "create table t (i int) insert_method last",
+			output: "create table t (\n" +
+				"\ti int\n" +
+				") insert_method last",
+		},
+		{
 			input: "create table t (i int) insert_method=last",
 			output: "create table t (\n" +
 				"\ti int\n" +
@@ -3282,6 +3288,10 @@ var (
 		},
 		{
 			input: "alter table t insert_method last",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t insert_method=last",
 			output: "alter table t",
 		},
 	}
