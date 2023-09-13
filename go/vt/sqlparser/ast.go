@@ -713,9 +713,15 @@ type Union struct {
 
 // Union.Type
 const (
-	UnionStr         = "union"
-	UnionAllStr      = "union all"
-	UnionDistinctStr = "union distinct"
+	UnionStr             = "union"
+	UnionAllStr          = "union all"
+	UnionDistinctStr     = "union distinct"
+	IntersectStr         = "intersect"
+	IntersectAllStr      = "intersect all"
+	IntersectDistinctStr = "intersect distinct"
+	ExceptStr            = "except"
+	ExceptAllStr         = "except all"
+	ExceptDistinctStr    = "except distinct"
 )
 
 // AddOrder adds an order by element

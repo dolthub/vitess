@@ -207,7 +207,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> FOR_SYSTEM_TIME
 %token <bytes> FOR_VERSION
 
-%left <bytes> UNION
+%left <bytes> UNION INTERSECT
 %token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL 
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC DUPLICATE DEFAULT SET LOCK UNLOCK KEYS OF
 %token <bytes> OUTFILE DUMPFILE DATA LOAD LINES TERMINATED ESCAPED ENCLOSED OPTIONALLY STARTING
@@ -432,7 +432,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <statement> begin_statement commit_statement rollback_statement start_transaction_statement load_statement
 %type <bytes> work_opt no_opt chain_opt release_opt index_name_opt
 %type <bytes2> comment_opt comment_list
-%type <str> union_op insert_or_replace
+%type <str> union_op intersect_op except_op insert_or_replace
 %type <str> distinct_opt straight_join_opt cache_opt match_option format_opt
 %type <separator> separator_opt
 %type <expr> like_escape_opt
@@ -718,6 +718,14 @@ base_select:
     $$ = $1
   }
 | union_lhs union_op union_rhs
+  {
+    $$ = &Union{Type: $2, Left: $1, Right: $3}
+  }
+| union_lhs intersect_op union_rhs
+  {
+    $$ = &Union{Type: $2, Left: $1, Right: $3}
+  }
+| union_lhs except_op union_rhs
   {
     $$ = &Union{Type: $2, Left: $1, Right: $3}
   }
@@ -5352,6 +5360,34 @@ union_op:
 | UNION DISTINCT
   {
     $$ = UnionDistinctStr
+  }
+
+intersect_op:
+  INTERSECT
+  {
+    $$ = IntersectStr
+  }
+| INTERSECT ALL
+  {
+    $$ = IntersectAllStr
+  }
+| INTERSECT DISTINCT
+  {
+    $$ = IntersectDistinctStr
+  }
+
+except_op:
+  EXCEPT
+  {
+    $$ = ExceptStr
+  }
+| EXCEPT ALL
+  {
+    $$ = ExceptAllStr
+  }
+| EXCEPT DISTINCT
+  {
+    $$ = ExceptDistinctStr
   }
 
 sql_calc_found_rows_opt:
