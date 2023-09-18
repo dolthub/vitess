@@ -207,9 +207,9 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> FOR_SYSTEM_TIME
 %token <bytes> FOR_VERSION
 
-%right <bytes> EXCEPT
-%right <bytes> UNION
-%right <bytes> INTERSECT
+%left <bytes> EXCEPT
+%left <bytes> UNION
+%left <bytes> INTERSECT
 %token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL 
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC DUPLICATE DEFAULT SET LOCK UNLOCK KEYS OF
 %token <bytes> OUTFILE DUMPFILE DATA LOAD LINES TERMINATED ESCAPED ENCLOSED OPTIONALLY STARTING
