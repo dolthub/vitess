@@ -207,9 +207,9 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> FOR_SYSTEM_TIME
 %token <bytes> FOR_VERSION
 
-%left <bytes> EXCEPT
-%left <bytes> UNION
-%left <bytes> INTERSECT
+%right <bytes> EXCEPT
+%right <bytes> UNION
+%right <bytes> INTERSECT
 %token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL 
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC DUPLICATE DEFAULT SET LOCK UNLOCK KEYS OF
 %token <bytes> OUTFILE DUMPFILE DATA LOAD LINES TERMINATED ESCAPED ENCLOSED OPTIONALLY STARTING
@@ -404,7 +404,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> NVAR PASSWORD_LOCK
 
 %type <statement> command
-%type <selStmt>  create_query_expression select_statement base_select with_select base_select_no_cte union_lhs union_rhs select_statement_with_no_trailing_into
+%type <selStmt> create_query_expression select_statement base_select with_select base_select_no_cte select_statement_with_no_trailing_into
+%type <selStmt> set_op intersect_base union_lhs union_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <statement> create_statement rename_statement drop_statement truncate_statement call_statement
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
@@ -719,17 +720,65 @@ base_select:
   {
     $$ = $1
   }
-| union_lhs union_op union_rhs
+| set_op
   {
-    $$ = &Union{Type: $2, Left: $1, Right: $3}
+    $$ = $1
   }
-| union_lhs intersect_op union_rhs
+
+set_op:
+  intersect_base
+  {
+    $$ = $1
+  }
+| union_lhs union_op union_rhs
   {
     $$ = &Union{Type: $2, Left: $1, Right: $3}
   }
 | union_lhs except_op union_rhs
   {
     $$ = &Union{Type: $2, Left: $1, Right: $3}
+  }
+
+intersect_base:
+  base_select_no_cte intersect_op base_select_no_cte
+  {
+    $$ = &Union{Type: $2, Left: $1, Right: $3}
+  }
+| intersect_base intersect_op base_select_no_cte
+  {
+    $$ = &Union{Type: $2, Left: $1, Right: $3}
+  }
+
+union_lhs:
+  base_select
+  {
+    if $1.GetInto() != nil {
+      yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
+      return 1
+    }
+    $$ = $1
+  }
+| openb select_statement_with_no_trailing_into closeb
+  {
+    $$ = &ParenSelect{Select: $2}
+  }
+
+union_rhs:
+  base_select_no_cte
+  {
+    if $1.GetInto() != nil {
+      yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
+      return 1
+    }
+    $$ = $1
+  }
+| openb select_statement_with_no_trailing_into closeb
+  {
+    $$ = &ParenSelect{Select: $2}
+  }
+| intersect_base
+  {
+    $$ = $1
   }
 
 with_select:
@@ -832,34 +881,6 @@ common_table_expression:
   table_alias ins_column_list_opt AS subquery_or_values
   {
     $$ = &CommonTableExpr{&AliasedTableExpr{Expr:$4, As: $1}, $2}
-  }
-
-union_lhs:
-  base_select
-  {
-    if $1.GetInto() != nil {
-      yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
-      return 1
-    }
-    $$ = $1
-  }
-| openb select_statement_with_no_trailing_into closeb
-  {
-    $$ = &ParenSelect{Select: $2}
-  }
-
-union_rhs:
-  base_select_no_cte
-  {
-    if $1.GetInto() != nil {
-      yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
-      return 1
-    }
-    $$ = $1
-  }
-| openb select_statement_with_no_trailing_into closeb
-  {
-    $$ = &ParenSelect{Select: $2}
   }
 
 insert_statement:
