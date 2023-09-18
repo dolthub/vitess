@@ -182,6 +182,11 @@ func TestSetOperatorPrecedence(t *testing.T) {
 			output: "(select * from a intersect select * from b)",
 		},
 
+		{
+			input:  "select 1 intersect (select 2 union select 3)",
+			output: "(select 1 intersect (select 2 union select 3))",
+		},
+
 	}
 	for _, tcase := range validSQL {
 		tree, err := Parse(tcase.input)
