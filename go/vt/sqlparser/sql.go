@@ -11527,49 +11527,49 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:734
 		{
-			yyVAL.selStmt = &Union{Type: yyDollar[2].str, Left: yyDollar[1].selStmt, Right: yyDollar[3].selStmt}
+			yyVAL.selStmt = &SetOp{Type: yyDollar[2].str, Left: yyDollar[1].selStmt, Right: yyDollar[3].selStmt}
 		}
 	case 49:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:738
 		{
-			yyVAL.selStmt = &Union{Type: yyDollar[2].str, Left: yyDollar[1].selStmt, Right: yyDollar[3].selStmt}
+			yyVAL.selStmt = &SetOp{Type: yyDollar[2].str, Left: yyDollar[1].selStmt, Right: yyDollar[3].selStmt}
 		}
 	case 50:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:744
 		{
-			yyVAL.selStmt = &Union{Type: yyDollar[2].str, Left: yyDollar[1].selStmt, Right: yyDollar[3].selStmt}
+			yyVAL.selStmt = &SetOp{Type: yyDollar[2].str, Left: yyDollar[1].selStmt, Right: yyDollar[3].selStmt}
 		}
 	case 51:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:748
 		{
-			yyVAL.selStmt = &Union{Type: yyDollar[2].str, Left: yyDollar[1].selStmt, Right: yyDollar[4].selStmt}
+			yyVAL.selStmt = &SetOp{Type: yyDollar[2].str, Left: yyDollar[1].selStmt, Right: yyDollar[4].selStmt}
 		}
 	case 52:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:752
 		{
-			yyVAL.selStmt = &Union{Type: yyDollar[4].str, Left: yyDollar[2].selStmt, Right: yyDollar[5].selStmt}
+			yyVAL.selStmt = &SetOp{Type: yyDollar[4].str, Left: yyDollar[2].selStmt, Right: yyDollar[5].selStmt}
 		}
 	case 53:
 		yyDollar = yyS[yypt-7 : yypt+1]
 //line sql.y:756
 		{
-			yyVAL.selStmt = &Union{Type: yyDollar[4].str, Left: yyDollar[2].selStmt, Right: yyDollar[6].selStmt}
+			yyVAL.selStmt = &SetOp{Type: yyDollar[4].str, Left: yyDollar[2].selStmt, Right: yyDollar[6].selStmt}
 		}
 	case 54:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:760
 		{
-			yyVAL.selStmt = &Union{Type: yyDollar[2].str, Left: yyDollar[1].selStmt, Right: yyDollar[3].selStmt}
+			yyVAL.selStmt = &SetOp{Type: yyDollar[2].str, Left: yyDollar[1].selStmt, Right: yyDollar[3].selStmt}
 		}
 	case 55:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:764
 		{
-			yyVAL.selStmt = &Union{Type: yyDollar[2].str, Left: yyDollar[1].selStmt, Right: yyDollar[4].selStmt}
+			yyVAL.selStmt = &SetOp{Type: yyDollar[2].str, Left: yyDollar[1].selStmt, Right: yyDollar[4].selStmt}
 		}
 	case 56:
 		yyDollar = yyS[yypt-1 : yypt+1]

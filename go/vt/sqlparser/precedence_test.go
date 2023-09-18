@@ -124,7 +124,7 @@ func TestIsPrecedence(t *testing.T) {
 
 func fmtSetOp(s SelectStatement) string {
 	switch s := s.(type) {
-	case *Union:
+	case *SetOp:
 		return fmt.Sprintf("(%s %s %s)", fmtSetOp(s.Left), s.Type, fmtSetOp(s.Right))
 	case *Select:
 		return String(s)
