@@ -744,9 +744,25 @@ intersect_base:
   {
     $$ = &Union{Type: $2, Left: $1, Right: $3}
   }
+| base_select_no_cte intersect_op openb select_statement_with_no_trailing_into closeb
+  {
+    $$ = &Union{Type: $2, Left: $1, Right: $4}
+  }
+| openb select_statement_with_no_trailing_into closeb intersect_op base_select_no_cte
+  {
+    $$ = &Union{Type: $4, Left: $2, Right: $5}
+  }
+| openb select_statement_with_no_trailing_into closeb intersect_op openb select_statement_with_no_trailing_into closeb
+  {
+    $$ = &Union{Type: $4, Left: $2, Right: $6}
+  }
 | intersect_base intersect_op base_select_no_cte
   {
     $$ = &Union{Type: $2, Left: $1, Right: $3}
+  }
+| intersect_base intersect_op openb select_statement_with_no_trailing_into closeb
+  {
+    $$ = &Union{Type: $2, Left: $1, Right: $4}
   }
 
 union_lhs:
