@@ -181,7 +181,6 @@ func TestSetOperatorPrecedence(t *testing.T) {
 			input:  "(table a) intersect (table b)",
 			output: "(select * from a intersect select * from b)",
 		},
-
 		{
 			input:  "select 1 intersect (select 2 union select 3)",
 			output: "(select 1 intersect (select 2 union select 3))",

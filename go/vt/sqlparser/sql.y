@@ -739,6 +739,8 @@ set_op:
     $$ = &SetOp{Type: $2, Left: $1, Right: $3}
   }
 
+// TODO: condense base_select_no_cte and openb select_statement_with_no_trailing_into closeb
+// TODO: add documentation
 intersect_base:
   base_select_no_cte intersect_op base_select_no_cte
   {
