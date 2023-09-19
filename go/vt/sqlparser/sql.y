@@ -404,8 +404,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> NVAR PASSWORD_LOCK
 
 %type <statement> command
-%type <selStmt> create_query_expression select_statement base_select with_select base_select_no_cte select_statement_with_no_trailing_into
-%type <selStmt> set_op intersect_base union_lhs union_rhs
+%type <selStmt> create_query_expression select_statement with_select select_or_set_op base_select base_select_no_cte select_statement_with_no_trailing_into
+%type <selStmt> set_op intersect_stmt union_except_lhs union_except_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <statement> create_statement rename_statement drop_statement truncate_statement call_statement
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
@@ -714,8 +714,9 @@ stream_statement:
     $$ = &Stream{Comments: Comments($2), SelectExpr: $3, Table: $5}
   }
 
-// base_select is an unparenthesized SELECT with no order by clause or beyond.
-base_select:
+// select_or_set_op is an unparenthesized SELECT without an order by clause or UNION/INTERSECT/EXCEPT operation
+// TODO: select_or_set_op should also include openb select_statement_with_no_trailing_into closeb; so it should just use base_select
+select_or_set_op:
   base_select_no_cte
   {
     $$ = $1
@@ -725,63 +726,37 @@ base_select:
     $$ = $1
   }
 
+// set_op is a UNION/INTERSECT/EXCEPT operation
 set_op:
-  intersect_base
+  intersect_stmt
   {
     $$ = $1
   }
-| union_lhs union_op union_rhs
+| union_except_lhs union_op union_except_rhs
   {
     $$ = &SetOp{Type: $2, Left: $1, Right: $3}
   }
-| union_lhs except_op union_rhs
+| union_except_lhs except_op union_except_rhs
   {
     $$ = &SetOp{Type: $2, Left: $1, Right: $3}
   }
 
-// TODO: condense base_select_no_cte and openb select_statement_with_no_trailing_into closeb
-// TODO: add documentation
-intersect_base:
-  base_select_no_cte intersect_op base_select_no_cte
+// intersect_stmt is an INTERSECT operation
+// in order to enforce its higher precedence over UNION/EXCEPT, it is defined as a terminal rule
+// this way, base_select and other intersect_stmt are greedily paired up
+intersect_stmt:
+  base_select intersect_op base_select
   {
     $$ = &SetOp{Type: $2, Left: $1, Right: $3}
   }
-| base_select_no_cte intersect_op openb select_statement_with_no_trailing_into closeb
-  {
-    $$ = &SetOp{Type: $2, Left: $1, Right: $4}
-  }
-| openb select_statement_with_no_trailing_into closeb intersect_op base_select_no_cte
-  {
-    $$ = &SetOp{Type: $4, Left: $2, Right: $5}
-  }
-| openb select_statement_with_no_trailing_into closeb intersect_op openb select_statement_with_no_trailing_into closeb
-  {
-    $$ = &SetOp{Type: $4, Left: $2, Right: $6}
-  }
-| intersect_base intersect_op base_select_no_cte
+| intersect_stmt intersect_op base_select
   {
     $$ = &SetOp{Type: $2, Left: $1, Right: $3}
   }
-| intersect_base intersect_op openb select_statement_with_no_trailing_into closeb
-  {
-    $$ = &SetOp{Type: $2, Left: $1, Right: $4}
-  }
 
-union_lhs:
-  base_select
-  {
-    if $1.GetInto() != nil {
-      yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
-      return 1
-    }
-    $$ = $1
-  }
-| openb select_statement_with_no_trailing_into closeb
-  {
-    $$ = &ParenSelect{Select: $2}
-  }
-
-union_rhs:
+// TODO: add (VALUES ROW(...), ROW(...), ...) support
+// base_select is either a simple SELECT or a SELECT wrapped in parentheses
+base_select:
   base_select_no_cte
   {
     if $1.GetInto() != nil {
@@ -794,17 +769,37 @@ union_rhs:
   {
     $$ = &ParenSelect{Select: $2}
   }
-| intersect_base
+
+// union_except_lhs is either a simple select or a set_op
+// this allows further nesting of UNION/INTERSECT/EXCEPT
+union_except_lhs:
+  base_select
+  {
+    $$ = $1
+  }
+| set_op
+  {
+    $$ = $1
+  }
+
+// union_except_rhs is either a simple SELECT or an intersect_stmt
+// this is a terminal rule, to prevent further nesting of set_op
+union_except_rhs:
+  base_select
+  {
+    $$ = $1
+  }
+| intersect_stmt
   {
     $$ = $1
   }
 
 with_select:
-  base_select
+  select_or_set_op
   {
     $$ = $1
   }
-| WITH with_clause base_select
+| WITH with_clause select_or_set_op
   {
     $3.SetWith($2)
     $$ = $3

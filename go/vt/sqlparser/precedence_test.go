@@ -128,6 +128,8 @@ func fmtSetOp(s SelectStatement) string {
 		return fmt.Sprintf("(%s %s %s)", fmtSetOp(s.Left), s.Type, fmtSetOp(s.Right))
 	case *Select:
 		return String(s)
+	case *ParenSelect:
+		return String(s)
 	}
 	return ""
 }
@@ -178,8 +180,16 @@ func TestSetOperatorPrecedence(t *testing.T) {
 		},
 
 		{
+			input:  "(table a) union (table b)",
+			output: "((select * from a) union (select * from b))",
+		},
+		{
 			input:  "(table a) intersect (table b)",
-			output: "(select * from a intersect select * from b)",
+			output: "((select * from a) intersect (select * from b))",
+		},
+		{
+			input:  "(table a) except (table b)",
+			output: "((select * from a) except (select * from b))",
 		},
 		{
 			input:  "select 1 intersect (select 2 union select 3)",
