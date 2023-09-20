@@ -404,8 +404,8 @@ type Statement interface {
 
 type Statements []Statement
 
-func (*SetOp) iStatement()  {}
-func (*Select) iStatement() {}
+func (*SetOp)  iStatement()            {}
+func (*Select) iStatement()            {}
 func (*Stream) iStatement()            {}
 func (*Insert) iStatement()            {}
 func (*Update) iStatement()            {}
@@ -466,9 +466,9 @@ type SelectStatement interface {
 	WalkableSQLNode
 }
 
-func (*Select) iSelectStatement()      {}
-func (*SetOp) iSelectStatement()       {}
-func (*ParenSelect) iSelectStatement() {}
+func (*Select) iSelectStatement()          {}
+func (*SetOp) iSelectStatement()           {}
+func (*ParenSelect) iSelectStatement()     {}
 func (*ValuesStatement) iSelectStatement() {}
 
 // Select represents a SELECT statement.
