@@ -145,7 +145,7 @@ const (
 // bit-shift the mysql flags by two byte so we
 // can merge them with the mysql or vitess types.
 const (
-	mysqlUnsigned = 32
+	mysqlUnsigned = 128
 	mysqlBinary   = 128
 	mysqlEnum     = 256
 	mysqlSet      = 2048
