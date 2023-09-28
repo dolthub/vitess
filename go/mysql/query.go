@@ -649,8 +649,9 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 				return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading parameter flags failed")
 			}
 
+			// TODO: execute is special in the way it specifies types?
 			// convert MySQL type to internal type.
-			valType, err := sqltypes.MySQLToType(int64(mysqlType), int64(flags))
+			valType, err := sqltypes.MySQLToType(int64(mysqlType), int64(flags) >> 2)
 			if err != nil {
 				return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "MySQLToType(%v,%v) failed: %v", mysqlType, flags, err)
 			}

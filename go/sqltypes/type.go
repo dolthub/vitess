@@ -145,7 +145,7 @@ const (
 // bit-shift the mysql flags by two byte so we
 // can merge them with the mysql or vitess types.
 const (
-	mysqlUnsigned = 128
+	mysqlUnsigned = 32
 	mysqlBinary   = 128
 	mysqlEnum     = 256
 	mysqlSet      = 2048
@@ -251,7 +251,7 @@ func MySQLToType(mysqlType, flags int64) (typ querypb.Type, err error) {
 	return modifyType(result, flags), nil
 }
 
-//TypeEquivalenceCheck returns whether two types are equivalent.
+// AreTypesEquivalent returns whether two types are equivalent.
 func AreTypesEquivalent(mysqlTypeFromBinlog, mysqlTypeFromSchema querypb.Type) bool {
 	return (mysqlTypeFromBinlog == mysqlTypeFromSchema) ||
 		(mysqlTypeFromBinlog == VarChar && mysqlTypeFromSchema == VarBinary) ||
