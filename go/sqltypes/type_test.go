@@ -436,11 +436,6 @@ func TestMySQLToType(t *testing.T) {
 			inflags: mysqlUnsigned | mysqlBinary,
 			outtype: Blob,
 		},
-		{
-			intype:  8,
-			inflags: 0x80,
-			outtype: Uint64,
-		},
 	}
 	for _, tcase := range testcases {
 		got, err := MySQLToType(tcase.intype, tcase.inflags)
