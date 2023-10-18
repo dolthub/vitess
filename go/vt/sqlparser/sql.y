@@ -119,6 +119,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
   aliasedTableName *AliasedTableExpr
   TableSpec  *TableSpec
   columnType    ColumnType
+  queryOpts     QueryOpts
   JSONTableSpec *JSONTableSpec
   JSONTableColDef *JSONTableColDef
   JSONTableColOpts JSONTableColOpts
@@ -436,7 +437,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <bytes> work_opt no_opt chain_opt release_opt index_name_opt
 %type <bytes2> comment_opt comment_list
 %type <str> union_op intersect_op except_op insert_or_replace
-%type <str> cache sql_calc_found_rows distinct_all_opt distinct_all
+%type <str> distinct_all_opt
 %type <str> match_option format_opt
 %type <separator> separator_opt
 %type <expr> like_escape_opt
@@ -515,8 +516,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <boolean> full_opt
 %type <showFilter> like_or_where_opt
 %type <byt> exists_opt not_exists_opt temp_opt
-%type <str> query_opt
-%type <strs> query_opts_list_opt query_opts_list
+%type <queryOpts> query_opts
 %type <str> key_type key_type_opt
 %type <str> flush_type flush_type_opt
 %type <empty> to_opt to_or_as as_opt column_opt
@@ -698,7 +698,7 @@ select_statement:
     }
     $$ = $1
   }
-| SELECT comment_opt query_opts_list_opt NEXT num_val for_from table_name
+| SELECT comment_opt query_opts NEXT num_val for_from table_name
   {
     $$ = &Select{
     	Comments: Comments($2),
@@ -825,7 +825,7 @@ with_clause:
 }
 
 base_select_no_cte:
-  SELECT comment_opt query_opts_list_opt select_expression_list into_opt from_opt where_expression_opt group_by_opt having_opt window_opt
+  SELECT comment_opt query_opts select_expression_list into_opt from_opt where_expression_opt group_by_opt having_opt window_opt
   {
     $$ = &Select{
     	Comments: Comments($2),
@@ -5509,70 +5509,70 @@ except_op:
     $$ = ExceptDistinctStr
   }
 
-query_opt:
-  cache
+query_opts:
   {
+    $$ = QueryOpts{}
+  }
+| query_opts ALL
+  {
+    opt := QueryOpts{All: true}
+    if err := $1.merge(opt); err != nil {
+    	yylex.Error(err.Error())
+	return 1
+    }
     $$ = $1
   }
-| sql_calc_found_rows
+| query_opts DISTINCT
   {
+    opt := QueryOpts{Distinct: true}
+    if err := $1.merge(opt); err != nil {
+    	yylex.Error(err.Error())
+	return 1
+    }
     $$ = $1
   }
-| distinct_all
+| query_opts STRAIGHT_JOIN
   {
+    opt := QueryOpts{StraightJoinHint: true}
+    if err := $1.merge(opt); err != nil {
+    	yylex.Error(err.Error())
+	return 1
+    }
     $$ = $1
   }
-| STRAIGHT_JOIN
+| query_opts SQL_CALC_FOUND_ROWS
   {
-    $$ = StraightJoinHintStr
-  }
-
-query_opts_list_opt:
-  {
-    $$ = nil
-  }
-| query_opts_list
-  {
+    opt := QueryOpts{SQLCalcFoundRows: true}
+    if err := $1.merge(opt); err != nil {
+    	yylex.Error(err.Error())
+	return 1
+    }
     $$ = $1
   }
-
-query_opts_list:
-  query_opt
+| query_opts SQL_CACHE
   {
-    $$ = []string{$1}
+    opt := QueryOpts{SQLCache: true}
+    if err := $1.merge(opt); err != nil {
+    	yylex.Error(err.Error())
+	return 1
+    }
+    $$ = $1
   }
-| query_opts_list query_opt
+| query_opts SQL_NO_CACHE
   {
-    $$ = append($1, $2)
-  }
-
-sql_calc_found_rows:
-  SQL_CALC_FOUND_ROWS
-  {
-    $$ = SQLCalcFoundRowsStr
-  }
-
-cache:
-  SQL_NO_CACHE
-  {
-    $$ = SQLNoCacheStr
-  }
-| SQL_CACHE
-  {
-    $$ = SQLCacheStr
+    opt := QueryOpts{SQLNoCache: true}
+    if err := $1.merge(opt); err != nil {
+    	yylex.Error(err.Error())
+	return 1
+    }
+    $$ = $1
   }
 
 distinct_all_opt:
   {
     $$ = ""
   }
-| distinct_all
-  {
-    $$ = $1
-  }
-
-distinct_all:
-  ALL
+| ALL
   {
     $$ = AllStr
   }
