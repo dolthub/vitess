@@ -5522,9 +5522,9 @@ query_opt:
   {
     $$ = $1
   }
-| straight_join
+| STRAIGHT_JOIN
   {
-    $$ = $1
+    $$ = StraightJoinHintStr
   }
 
 query_opts_list_opt:

@@ -380,14 +380,36 @@ var (
 			output: "select * from t1 where col in (select 1 union select 2)",
 		}, {
 			input: "select * from t1 where exists (select a from t2 union select b from t3)",
-		}, {
+		},
+		{
 			input: "select /* distinct */ distinct 1 from t",
-		}, {
+		},
+		{
 			input:  "select all col from t",
 			output: "select all col from t",
-		}, {
+		},
+		{
 			input: "select /* straight_join */ straight_join 1 from t",
-		}, {
+		},
+		{
+			input:"select sql_calc_found_rows distinct * from t",
+		},
+        {
+			input:"select distinct sql_calc_found_rows * from t",
+		},
+        {
+			input:"select distinct sql_calc_found_rows distinct * from t",
+		},
+        {
+			input:"select sql_no_cache sql_cache all distinct sql_calc_found_rows straight_join * from t",
+		},
+        {
+			input:"select straight_join sql_calc_found_rows distinct all sql_cache sql_no_cache * from t",
+		},
+        {
+			input:"select sql_no_cache sql_cache all distinct sql_calc_found_rows straight_join straight_join sql_calc_found_rows distinct all sql_cache sql_no_cache * from t",
+		},
+		{
 			input: "select /* for update */ 1 from t for update",
 		}, {
 			input: "select /* skip locked */ 1 from t for update skip locked",
@@ -3355,8 +3377,7 @@ var (
 		{
 			input:  "alter table t insert_method=last",
 			output: "alter table t",
-		}, {},
-
+		},
 	}
 
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
@@ -4754,6 +4775,9 @@ func runParseTestCaseWithParserOptions(t *testing.T, tcase parseTest, options Pa
 			tcase.output = tcase.input
 		}
 		tree, err := ParseWithOptions(tcase.input, options)
+		if err != nil {
+			panic(tcase.input)
+		}
 		require.NoError(t, err)
 
 		assertTestcaseOutput(t, tcase, tree)
