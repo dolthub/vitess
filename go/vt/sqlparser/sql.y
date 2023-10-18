@@ -437,7 +437,6 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <bytes2> comment_opt comment_list
 %type <str> union_op intersect_op except_op insert_or_replace
 %type <str> cache sql_calc_found_rows distinct_all_opt distinct_all
-//%type <str> sql_calc_found_rows_opt straight_join_opt cache_opt
 %type <str> match_option format_opt
 %type <separator> separator_opt
 %type <expr> like_escape_opt
@@ -5547,29 +5546,11 @@ query_opts_list:
     $$ = append($1, $2)
   }
 
-//sql_calc_found_rows_opt:
-//  {
-//    $$ = 0
-//  }
-//| sql_calc_found_rows
-//  {
-//    $$ = 1
-//  }
-
 sql_calc_found_rows:
   SQL_CALC_FOUND_ROWS
   {
-    $$ = 1
+    $$ = SQLCalcFoundRowsStr
   }
-
-//cache_opt:
-//  {
-//    $$ = ""
-//  }
-//| cache
-//  {
-//    $$ = $1
-//  }
 
 cache:
   SQL_NO_CACHE
@@ -5603,15 +5584,6 @@ distinct_all:
   {
     $$ = DistinctStr
   }
-
-//straight_join_opt:
-//  {
-//    $$ = ""
-//  }
-//| straight_join
-//  {
-//    $$ = $1
-//  }
 
 select_expression_list:
   lexer_old_position select_expression lexer_old_position

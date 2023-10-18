@@ -474,16 +474,7 @@ func (*ValuesStatement) iSelectStatement() {}
 // Select represents a SELECT statement.
 type Select struct {
 	Comments      Comments
-
-	// TODO: replace these
-	Cache         string
-	CalcFoundRows bool
-	Distinct      string
-	Hints         string
-
-	// TODO: with this
 	QueryOpts     []string
-
 	With          *With
 	SelectExprs   SelectExprs
 	From          TableExprs
@@ -497,10 +488,18 @@ type Select struct {
 	Into          *Into
 }
 
-// Select.Distinct
+// Select.QueryOpts
+// TODO: remove trailing spaces?
 const (
-	DistinctStr      = "distinct "
-	StraightJoinHint = "straight_join "
+	DistinctStr      = "distinct"
+	AllStr		     = "all"
+
+	StraightJoinHintStr = "straight_join"
+
+	SQLCalcFoundRowsStr = "sql_calc_found_rows"
+
+	SQLCacheStr   = "sql_cache"
+	SQLNoCacheStr = "sql_no_cache"
 )
 
 // Select.Lock
@@ -508,12 +507,6 @@ const (
 	ForUpdateStr           = " for update"
 	ShareModeStr           = " lock in share mode"
 	ForUpdateSkipLockedStr = " for update skip locked"
-)
-
-// Select.Cache
-const (
-	SQLCacheStr   = "sql_cache "
-	SQLNoCacheStr = "sql_no_cache "
 )
 
 // AddOrder adds an order by element
@@ -555,14 +548,11 @@ func (node *Select) SetLimit(limit *Limit) {
 
 // Format formats the node.
 func (node *Select) Format(buf *TrackedBuffer) {
-	calcFoundRows := ""
-	if node.CalcFoundRows {
-		calcFoundRows = "sql_calc_found_rows "
-	}
+	queryOpts := strings.Join(node.QueryOpts, " ")
 
-	buf.Myprintf("%vselect %v%s%s%s%s%v",
+	buf.Myprintf("%vselect %v%s%v",
 		node.With,
-		node.Comments, node.Cache, calcFoundRows, node.Distinct, node.Hints, node.SelectExprs,
+		node.Comments, queryOpts, node.SelectExprs,
 	)
 
 	if node.From != nil {
