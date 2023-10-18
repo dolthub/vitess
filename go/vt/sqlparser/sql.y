@@ -436,7 +436,9 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <bytes> work_opt no_opt chain_opt release_opt index_name_opt
 %type <bytes2> comment_opt comment_list
 %type <str> union_op intersect_op except_op insert_or_replace
-%type <str> distinct_opt straight_join_opt cache_opt match_option format_opt
+%type <str> cache sql_calc_found_rows distinct_all_opt distinct_all
+//%type <str> sql_calc_found_rows_opt straight_join_opt cache_opt
+%type <str> match_option format_opt
 %type <separator> separator_opt
 %type <expr> like_escape_opt
 %type <selectExprs> select_expression_list argument_expression_list argument_expression_list_opt
@@ -513,7 +515,9 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> from_database_opt columns_or_fields
 %type <boolean> full_opt
 %type <showFilter> like_or_where_opt
-%type <byt> exists_opt not_exists_opt sql_calc_found_rows_opt temp_opt
+%type <byt> exists_opt not_exists_opt temp_opt
+%type <str> query_opt
+%type <strs> query_opts_list_opt query_opts_list
 %type <str> key_type key_type_opt
 %type <str> flush_type flush_type_opt
 %type <empty> to_opt to_or_as as_opt column_opt
@@ -695,9 +699,14 @@ select_statement:
     }
     $$ = $1
   }
-| SELECT comment_opt cache_opt NEXT num_val for_from table_name
+| SELECT comment_opt query_opts_list_opt NEXT num_val for_from table_name
   {
-    $$ = &Select{Comments: Comments($2), Cache: $3, SelectExprs: SelectExprs{Nextval{Expr: $5}}, From: TableExprs{&AliasedTableExpr{Expr: $7}}}
+    $$ = &Select{
+    	Comments: Comments($2),
+    	QueryOpts: $3,
+    	SelectExprs: SelectExprs{Nextval{Expr: $5}},
+    	From: TableExprs{&AliasedTableExpr{Expr: $7}},
+    }
   }
 
 select_statement_with_no_trailing_into:
@@ -817,11 +826,18 @@ with_clause:
 }
 
 base_select_no_cte:
-  SELECT comment_opt cache_opt sql_calc_found_rows_opt distinct_opt straight_join_opt select_expression_list into_opt from_opt where_expression_opt group_by_opt having_opt window_opt
+  SELECT comment_opt query_opts_list_opt select_expression_list into_opt from_opt where_expression_opt group_by_opt having_opt window_opt
   {
-    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $5, Hints: $6, SelectExprs: $7, From: $9, Where: NewWhere(WhereStr, $10), GroupBy: GroupBy($11), Having: NewWhere(HavingStr, $12), Window: $13, Into: $8}
-    if $4 == 1 {
-      $$.(*Select).CalcFoundRows = true
+    $$ = &Select{
+    	Comments: Comments($2),
+    	QueryOpts: $3,
+	SelectExprs: $4,
+	Into: $5,
+	From: $6,
+	Where: NewWhere(WhereStr, $7),
+	GroupBy: GroupBy($8),
+	Having: NewWhere(HavingStr, $9),
+	Window: $10,
     }
   }
 | TABLE table_reference
@@ -5494,33 +5510,92 @@ except_op:
     $$ = ExceptDistinctStr
   }
 
-sql_calc_found_rows_opt:
+query_opt:
+  cache
   {
-    $$ = 0
+    $$ = $1
   }
-| SQL_CALC_FOUND_ROWS
+| sql_calc_found_rows
+  {
+    $$ = $1
+  }
+| distinct_all
+  {
+    $$ = $1
+  }
+| straight_join
+  {
+    $$ = $1
+  }
+
+query_opts_list_opt:
+  {
+    $$ = nil
+  }
+| query_opts_list
+  {
+    $$ = $1
+  }
+
+query_opts_list:
+  query_opt
+  {
+    $$ = []string{$1}
+  }
+| query_opts_list query_opt
+  {
+    $$ = append($1, $2)
+  }
+
+//sql_calc_found_rows_opt:
+//  {
+//    $$ = 0
+//  }
+//| sql_calc_found_rows
+//  {
+//    $$ = 1
+//  }
+
+sql_calc_found_rows:
+  SQL_CALC_FOUND_ROWS
   {
     $$ = 1
   }
 
-cache_opt:
-{
-  $$ = ""
-}
-| SQL_NO_CACHE
-{
-  $$ = SQLNoCacheStr
-}
-| SQL_CACHE
-{
-  $$ = SQLCacheStr
-}
+//cache_opt:
+//  {
+//    $$ = ""
+//  }
+//| cache
+//  {
+//    $$ = $1
+//  }
 
-distinct_opt:
+cache:
+  SQL_NO_CACHE
+  {
+    $$ = SQLNoCacheStr
+  }
+| SQL_CACHE
+  {
+    $$ = SQLCacheStr
+  }
+
+distinct_all_opt:
   {
     $$ = ""
   }
 | ALL
+  {
+    $$ = AllStr
+  }
+| DISTINCT
+  {
+    $$ = DistinctStr
+  }
+
+distinct_all:
+  ALL
   {
     $$ = ""
   }
@@ -5529,14 +5604,14 @@ distinct_opt:
     $$ = DistinctStr
   }
 
-straight_join_opt:
-  {
-    $$ = ""
-  }
-| STRAIGHT_JOIN
-  {
-    $$ = StraightJoinHint
-  }
+//straight_join_opt:
+//  {
+//    $$ = ""
+//  }
+//| straight_join
+//  {
+//    $$ = $1
+//  }
 
 select_expression_list:
   lexer_old_position select_expression lexer_old_position
@@ -6740,7 +6815,7 @@ value_expression:
   introduce side effects due to being a simple identifier
 */
 function_call_generic:
-  sql_id openb distinct_opt argument_expression_list_opt closeb
+  sql_id openb distinct_all_opt argument_expression_list_opt closeb
   {
     $$ = &FuncExpr{Name: $1, Distinct: $3 == DistinctStr, Exprs: $4}
   }
@@ -6754,11 +6829,11 @@ function_call_generic:
    OVER clause (not legal on any other non-window, non-aggregate function)
  */
 function_call_aggregate_with_window:
- MAX openb distinct_opt argument_expression_list closeb over_opt
+ MAX openb distinct_all_opt argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $4, Distinct: $3 == DistinctStr, Over: $6}
   }
-| AVG openb distinct_opt argument_expression_list closeb over_opt
+| AVG openb distinct_all_opt argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $4, Distinct: $3 == DistinctStr, Over: $6}
   }
@@ -6774,7 +6849,7 @@ function_call_aggregate_with_window:
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| COUNT openb distinct_opt argument_expression_list closeb over_opt
+| COUNT openb distinct_all_opt argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $4, Distinct: $3 == DistinctStr, Over: $6}
   }
@@ -6786,7 +6861,7 @@ function_call_aggregate_with_window:
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| MIN openb distinct_opt argument_expression_list closeb over_opt
+| MIN openb distinct_all_opt argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $4, Distinct: $3 == DistinctStr, Over: $6}
   }
@@ -6806,7 +6881,7 @@ function_call_aggregate_with_window:
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| SUM openb distinct_opt argument_expression_list closeb over_opt
+| SUM openb distinct_all_opt argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $4, Distinct: $3 == DistinctStr, Over: $6}
   }
@@ -6966,7 +7041,7 @@ function_call_keyword:
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
-| GROUP_CONCAT openb distinct_opt argument_expression_list order_by_opt separator_opt closeb
+| GROUP_CONCAT openb distinct_all_opt argument_expression_list order_by_opt separator_opt closeb
   {
     $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6}
   }

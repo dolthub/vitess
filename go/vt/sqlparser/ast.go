@@ -473,11 +473,17 @@ func (*ValuesStatement) iSelectStatement() {}
 
 // Select represents a SELECT statement.
 type Select struct {
+	Comments      Comments
+
+	// TODO: replace these
 	Cache         string
 	CalcFoundRows bool
-	Comments      Comments
 	Distinct      string
 	Hints         string
+
+	// TODO: with this
+	QueryOpts     []string
+
 	With          *With
 	SelectExprs   SelectExprs
 	From          TableExprs
