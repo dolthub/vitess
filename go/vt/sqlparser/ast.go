@@ -489,17 +489,16 @@ type Select struct {
 }
 
 // Select.QueryOpts
-// TODO: remove trailing spaces?
 const (
-	DistinctStr      = "distinct"
-	AllStr		     = "all"
+	DistinctStr      = "distinct "
+	AllStr		     = "all "
 
-	StraightJoinHintStr = "straight_join"
+	StraightJoinHintStr = "straight_join "
 
-	SQLCalcFoundRowsStr = "sql_calc_found_rows"
+	SQLCalcFoundRowsStr = "sql_calc_found_rows "
 
-	SQLCacheStr   = "sql_cache"
-	SQLNoCacheStr = "sql_no_cache"
+	SQLCacheStr   = "sql_cache "
+	SQLNoCacheStr = "sql_no_cache "
 )
 
 // Select.Lock
@@ -548,7 +547,7 @@ func (node *Select) SetLimit(limit *Limit) {
 
 // Format formats the node.
 func (node *Select) Format(buf *TrackedBuffer) {
-	queryOpts := strings.Join(node.QueryOpts, " ")
+	queryOpts := strings.Join(node.QueryOpts, "")
 
 	buf.Myprintf("%vselect %v%s%v",
 		node.With,

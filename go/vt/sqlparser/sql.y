@@ -5566,19 +5566,15 @@ distinct_all_opt:
   {
     $$ = ""
   }
-| ALL
+| distinct_all
   {
-    $$ = AllStr
-  }
-| DISTINCT
-  {
-    $$ = DistinctStr
+    $$ = $1
   }
 
 distinct_all:
   ALL
   {
-    $$ = ""
+    $$ = AllStr
   }
 | DISTINCT
   {

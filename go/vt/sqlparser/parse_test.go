@@ -384,7 +384,7 @@ var (
 			input: "select /* distinct */ distinct 1 from t",
 		}, {
 			input:  "select all col from t",
-			output: "select col from t",
+			output: "select all col from t",
 		}, {
 			input: "select /* straight_join */ straight_join 1 from t",
 		}, {
@@ -3355,7 +3355,8 @@ var (
 		{
 			input:  "alter table t insert_method=last",
 			output: "alter table t",
-		},
+		}, {},
+
 	}
 
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
