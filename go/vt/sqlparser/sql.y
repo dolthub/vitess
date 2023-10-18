@@ -436,8 +436,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <statement> begin_statement commit_statement rollback_statement start_transaction_statement load_statement
 %type <bytes> work_opt no_opt chain_opt release_opt index_name_opt
 %type <bytes2> comment_opt comment_list
-%type <str> union_op intersect_op except_op insert_or_replace
-%type <str> distinct_all_opt
+%type <str> distinct_opt union_op intersect_op except_op insert_or_replace
 %type <str> match_option format_opt
 %type <separator> separator_opt
 %type <expr> like_escape_opt
@@ -5568,7 +5567,7 @@ query_opts:
     $$ = $1
   }
 
-distinct_all_opt:
+distinct_opt:
   {
     $$ = ""
   }
@@ -6783,7 +6782,7 @@ value_expression:
   introduce side effects due to being a simple identifier
 */
 function_call_generic:
-  sql_id openb distinct_all_opt argument_expression_list_opt closeb
+  sql_id openb distinct_opt argument_expression_list_opt closeb
   {
     $$ = &FuncExpr{Name: $1, Distinct: $3 == DistinctStr, Exprs: $4}
   }
@@ -6797,11 +6796,11 @@ function_call_generic:
    OVER clause (not legal on any other non-window, non-aggregate function)
  */
 function_call_aggregate_with_window:
- MAX openb distinct_all_opt argument_expression_list closeb over_opt
+ MAX openb distinct_opt argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $4, Distinct: $3 == DistinctStr, Over: $6}
   }
-| AVG openb distinct_all_opt argument_expression_list closeb over_opt
+| AVG openb distinct_opt argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $4, Distinct: $3 == DistinctStr, Over: $6}
   }
@@ -6817,7 +6816,7 @@ function_call_aggregate_with_window:
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| COUNT openb distinct_all_opt argument_expression_list closeb over_opt
+| COUNT openb distinct_opt argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $4, Distinct: $3 == DistinctStr, Over: $6}
   }
@@ -6829,7 +6828,7 @@ function_call_aggregate_with_window:
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| MIN openb distinct_all_opt argument_expression_list closeb over_opt
+| MIN openb distinct_opt argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $4, Distinct: $3 == DistinctStr, Over: $6}
   }
@@ -6849,7 +6848,7 @@ function_call_aggregate_with_window:
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| SUM openb distinct_all_opt argument_expression_list closeb over_opt
+| SUM openb distinct_opt argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $4, Distinct: $3 == DistinctStr, Over: $6}
   }
@@ -7009,7 +7008,7 @@ function_call_keyword:
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
-| GROUP_CONCAT openb distinct_all_opt argument_expression_list order_by_opt separator_opt closeb
+| GROUP_CONCAT openb distinct_opt argument_expression_list order_by_opt separator_opt closeb
   {
     $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6}
   }

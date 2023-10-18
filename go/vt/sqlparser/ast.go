@@ -539,15 +539,12 @@ type Select struct {
 
 // Select.QueryOpts
 const (
-	DistinctStr      = "distinct "
-	AllStr		     = "all "
-
+	DistinctStr         = "distinct "
+	AllStr              = "all "
 	StraightJoinHintStr = "straight_join "
-
 	SQLCalcFoundRowsStr = "sql_calc_found_rows "
-
-	SQLCacheStr   = "sql_cache "
-	SQLNoCacheStr = "sql_no_cache "
+	SQLCacheStr         = "sql_cache "
+	SQLNoCacheStr       = "sql_no_cache "
 )
 
 // Select.Lock
