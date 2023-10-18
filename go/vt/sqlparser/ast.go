@@ -2149,7 +2149,7 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			}
 
 			buf.Myprintf("%sdo %v", sb.String(), event.Body)
-		} else {
+		} else { // TABLE
 			notExists := ""
 			if node.IfNotExists {
 				notExists = " if not exists"
@@ -2759,7 +2759,7 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	}
 
 	if ct.GeneratedExpr != nil {
-		opts = append(opts, keywordStrings[GENERATED], keywordStrings[ALWAYS], keywordStrings[AS], "("+String(ct.GeneratedExpr)+")")
+		opts = append(opts, keywordStrings[GENERATED], keywordStrings[ALWAYS], keywordStrings[AS], String(ct.GeneratedExpr))
 		if ct.Stored {
 			opts = append(opts, keywordStrings[STORED])
 		} else {
