@@ -6084,6 +6084,21 @@ func TestCreateTable(t *testing.T) {
 				"PARTITION BY LINEAR HASH (a)" +
 				"PARTITIONS 10 SUBPARTITION BY LINEAR HASH (b) SUBPARTITIONS 20 ",
 		},
+		{
+			input: "create table t (\n" +
+				"\ti1 int1,\n" +
+				"\ti2 int2,\n" +
+				"\ti3 int3,\n" +
+				"\ti4 int4,\n" +
+				"\ti8 int8)",
+			output: "create table t (\n" +
+				"\ti1 TINYINT,\n" +
+				"\ti2 SMALLINT,\n" +
+				"\ti3 MEDIUMINT,\n" +
+				"\ti4 INT,\n" +
+				"\ti8 BIGINT\n" +
+				")",
+		},
 	}
 	for _, tcase := range testCases {
 		t.Run(tcase.input, func(t *testing.T) {
