@@ -3103,23 +3103,23 @@ int_type:
   }
 | INT1
   {
-    $$ = ColumnType{Type: "TINYINT"}
+    $$ = ColumnType{Type: "tinyint"}
   }
 | INT2
   {
-    $$ = ColumnType{Type: "SMALLINT"}
+    $$ = ColumnType{Type: "smallint"}
   }
 | INT3
   {
-    $$ = ColumnType{Type: "MEDIUMINT"}
+    $$ = ColumnType{Type: "mediumint"}
   }
 | INT4
   {
-    $$ = ColumnType{Type: "INT"}
+    $$ = ColumnType{Type: "int"}
   }
 | INT8
   {
-    $$ = ColumnType{Type: "BIGINT"}
+    $$ = ColumnType{Type: "bigint"}
   }
 
 decimal_type:

@@ -14504,31 +14504,31 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:3105
 		{
-			yyVAL.columnType = ColumnType{Type: "TINYINT"}
+			yyVAL.columnType = ColumnType{Type: "tinyint"}
 		}
 	case 571:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:3109
 		{
-			yyVAL.columnType = ColumnType{Type: "SMALLINT"}
+			yyVAL.columnType = ColumnType{Type: "smallint"}
 		}
 	case 572:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:3113
 		{
-			yyVAL.columnType = ColumnType{Type: "MEDIUMINT"}
+			yyVAL.columnType = ColumnType{Type: "mediumint"}
 		}
 	case 573:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:3117
 		{
-			yyVAL.columnType = ColumnType{Type: "INT"}
+			yyVAL.columnType = ColumnType{Type: "int"}
 		}
 	case 574:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:3121
 		{
-			yyVAL.columnType = ColumnType{Type: "BIGINT"}
+			yyVAL.columnType = ColumnType{Type: "bigint"}
 		}
 	case 575:
 		yyDollar = yyS[yypt-2 : yypt+1]
