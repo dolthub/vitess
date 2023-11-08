@@ -102,6 +102,10 @@ var (
 			output: "set global GTID_PURGED = '+beabe64c-9dc6-11ed-8021-a0f9021e8e70:1-126'",
 		},
 		{
+			input:  "SET @@GLOBAL.GTID_PURGED:= /*!80000 '+'*/ 'beabe64c-9dc6-11ed-8021-a0f9021e8e70:1-126';",
+			output: "set global GTID_PURGED = '+beabe64c-9dc6-11ed-8021-a0f9021e8e70:1-126'",
+		},
+		{
 			input: "start replica",
 		},
 		{
@@ -1112,6 +1116,9 @@ var (
 			input:  "insert /* set default */ into a set a = default, b = 2",
 			output: "insert /* set default */ into a(a, b) values (default, 2)",
 		}, {
+			input:  "insert /* set default */ into a set a := default, b := 2",
+			output: "insert /* set default */ into a(a, b) values (default, 2)",
+		}, {
 			input: "insert /* value expression list */ into a values (a + 1, 2 * 3)",
 		}, {
 			input: "insert /* default */ into a values (default, 2 * 3)",
@@ -1163,6 +1170,9 @@ var (
 			output: "create table A (\n\tA int\n)",
 		}, {
 			input: "update /* simple */ a set b = 3",
+		}, {
+			input:  "update /* simple */ a set b := 3",
+			output: "update /* simple */ a set b = 3",
 		}, {
 			input: "update /* a.b */ a.b set b = 3",
 		}, {
@@ -1297,6 +1307,9 @@ var (
 			input:  "set session autocommit = ON",
 			output: "set session autocommit = 'ON'",
 		}, {
+			input:  "set session autocommit := ON",
+			output: "set session autocommit = 'ON'",
+		}, {
 			input:  "set global autocommit = OFF",
 			output: "set global autocommit = 'OFF'",
 		}, {
@@ -1335,6 +1348,9 @@ var (
 			input: "set @user.var = 1",
 		}, {
 			input: "set @user.var.name = 1",
+		}, {
+			input:  "set @user.var.name := 1",
+			output: "set @user.var.name = 1",
 		}, {
 			input:  "set autocommit = on",
 			output: "set autocommit = 'on'",
