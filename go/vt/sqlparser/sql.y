@@ -6489,14 +6489,6 @@ expression:
   {
     $$ = &Default{ColName: $2}
   }
-| column_name ASSIGNMENT_OP expression
-  {
-    if $1.String()[0] != '@' {
-      yylex.Error("syntax error")
-      return 1
-    }
-    $$ = &SetVarExpr{Name: $1, Expr: $3, Scope: SetScope_None}
-  }
 
 default_opt:
   /* empty */

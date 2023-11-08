@@ -3235,9 +3235,6 @@ var (
 		}, {
 			input:  "ALTER TABLE webhook_events ADD COLUMN event varchar(255) DEFAULT NULL;",
 			output: "alter table webhook_events add column (\n\t`event` varchar(255) default null\n)",
-		}, {
-			input:  "select @id := 1",
-			output: "select @id = 1",
 		},
 		// Create Spatial Reference System Statements
 		{
@@ -6786,9 +6783,6 @@ var (
 	}, {
 		input:  "ALTER DEFINER = `newuser`@`localhost` EVENT myevent",
 		output: "You have an error in your SQL syntax; At least one event field to alter needs to be defined at position 52 near 'myevent'",
-	}, {
-		input:  "select id := 1",
-		output: "syntax error at position 15 near '1'",
 	},
 	}
 
