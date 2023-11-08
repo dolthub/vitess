@@ -86,6 +86,10 @@ var (
 			output: "set @foo = 'one'",
 		},
 		{
+			input:  "SET @foo := 'o' 'ne';",
+			output: "set @foo = 'one'",
+		},
+		{
 			input:  "SET @foo = \"o\" \"ne\";",
 			output: "set @foo = 'one'",
 		},
@@ -392,27 +396,27 @@ var (
 			input: "select /* straight_join */ straight_join 1 from t",
 		},
 		{
-			input: "select sql_calc_found_rows distinct * from t",
+			input:  "select sql_calc_found_rows distinct * from t",
 			output: "select distinct sql_calc_found_rows * from t",
 		},
 		{
-			input: "select distinct sql_calc_found_rows * from t",
+			input:  "select distinct sql_calc_found_rows * from t",
 			output: "select distinct sql_calc_found_rows * from t",
 		},
 		{
-			input: "select distinct sql_calc_found_rows distinct * from t",
+			input:  "select distinct sql_calc_found_rows distinct * from t",
 			output: "select distinct sql_calc_found_rows * from t",
 		},
 		{
-			input: "select sql_cache distinct sql_calc_found_rows straight_join * from t",
+			input:  "select sql_cache distinct sql_calc_found_rows straight_join * from t",
 			output: "select distinct straight_join sql_calc_found_rows sql_cache * from t",
 		},
 		{
-			input: "select straight_join sql_calc_found_rows all sql_no_cache * from t",
+			input:  "select straight_join sql_calc_found_rows all sql_no_cache * from t",
 			output: "select all straight_join sql_calc_found_rows sql_no_cache * from t",
 		},
 		{
-			input: "select sql_cache distinct sql_calc_found_rows straight_join straight_join sql_calc_found_rows distinct sql_cache * from t",
+			input:  "select sql_cache distinct sql_calc_found_rows straight_join straight_join sql_calc_found_rows distinct sql_cache * from t",
 			output: "select distinct straight_join sql_calc_found_rows sql_cache * from t",
 		},
 		{
@@ -2991,6 +2995,9 @@ var (
 			output: "alter table t character set utf8mb4",
 		}, {
 			input:  "alter table t character set = utf8mb4",
+			output: "alter table t character set utf8mb4",
+		}, {
+			input:  "alter table t character set := utf8mb4",
 			output: "alter table t character set utf8mb4",
 		}, {
 			input:  "alter table t character set utf8mb4 collate utf8mb4_0900_bin",

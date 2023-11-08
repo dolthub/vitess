@@ -522,19 +522,19 @@ func (q QueryOpts) Format(buf *TrackedBuffer) {
 
 // Select represents a SELECT statement.
 type Select struct {
-	Comments      Comments
-	QueryOpts     QueryOpts
-	With          *With
-	SelectExprs   SelectExprs
-	From          TableExprs
-	Where         *Where
-	GroupBy       GroupBy
-	Having        *Where
-	Window        Window
-	OrderBy       OrderBy
-	Limit         *Limit
-	Lock          string
-	Into          *Into
+	Comments    Comments
+	QueryOpts   QueryOpts
+	With        *With
+	SelectExprs SelectExprs
+	From        TableExprs
+	Where       *Where
+	GroupBy     GroupBy
+	Having      *Where
+	Window      Window
+	OrderBy     OrderBy
+	Limit       *Limit
+	Lock        string
+	Into        *Into
 }
 
 // Select.QueryOpts
@@ -4944,6 +4944,7 @@ const (
 	NotRegexpStr         = "not regexp"
 	JSONExtractOp        = "->"
 	JSONUnquoteExtractOp = "->>"
+	AssignmentOpStr      = ":="
 )
 
 // Format formats the node.
