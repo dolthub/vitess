@@ -4745,6 +4745,7 @@ func (*ConvertUsingExpr) iExpr()  {}
 func (*MatchExpr) iExpr()         {}
 func (*GroupConcatExpr) iExpr()   {}
 func (*Default) iExpr()           {}
+func (*SetVarExpr) iExpr()        {}
 
 // ReplaceExpr finds the from expression from root
 // and replaces it with to. If from matches root,
@@ -6659,6 +6660,10 @@ func (node *SetVarExpr) walkSubtree(visit Visit) error {
 		node.Name,
 		node.Expr,
 	)
+}
+
+func (node *SetVarExpr) replace(from, to Expr) bool {
+	return false
 }
 
 // OnDup represents an ON DUPLICATE KEY clause.
