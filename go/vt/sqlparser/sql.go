@@ -15818,7 +15818,7 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:3899
 		{
-			yyVAL.str = AssignmentOpStr
+			yyVAL.str = ":="
 		}
 	case 746:
 		yyDollar = yyS[yypt-3 : yypt+1]

@@ -4944,7 +4944,6 @@ const (
 	NotRegexpStr         = "not regexp"
 	JSONExtractOp        = "->"
 	JSONUnquoteExtractOp = "->>"
-	AssignmentOpStr      = ":="
 )
 
 // Format formats the node.

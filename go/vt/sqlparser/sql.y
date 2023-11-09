@@ -3897,7 +3897,7 @@ assignment_op:
   }
 | ASSIGNMENT_OP
   {
-    $$ = AssignmentOpStr
+    $$ = ":="
   }
 
 index_info:

@@ -267,7 +267,7 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		typ1, res1 := tkn.scanIdentifier(byte(tkn.lastChar), false)
 		return typ1, append(res, res1[1:]...) // Concatenate the two partial symbols
 	case ch == ':':
-		return tkn.scanBindVar()
+		return tkn.scanColonPrefixToken()
 	case ch == ';':
 		if tkn.multi {
 			// In multi mode, ';' is treated as EOF. So, we don't advance.
@@ -508,7 +508,8 @@ func (tkn *Tokenizer) scanLiteralIdentifier(startingChar uint16) (int, []byte) {
 	return ID, buffer.Bytes()
 }
 
-func (tkn *Tokenizer) scanBindVar() (int, []byte) {
+// scanColonPrefixToken handles bind variables(e.g. ':v1') and ':=' assignment operator.
+func (tkn *Tokenizer) scanColonPrefixToken() (int, []byte) {
 	buffer := &bytes2.Buffer{}
 	buffer.WriteByte(byte(tkn.lastChar))
 	token := VALUE_ARG
