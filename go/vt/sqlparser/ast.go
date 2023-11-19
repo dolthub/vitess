@@ -5089,6 +5089,30 @@ func (node *ExistsExpr) replace(from, to Expr) bool {
 	return false
 }
 
+// AllExpr represents an ALL expression.
+type AllExpr struct {
+	Subquery *Subquery
+}
+
+// Format formats the node.
+func (node *AllExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("all %v", node.Subquery)
+}
+
+func (node *AllExpr) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Subquery,
+	)
+}
+
+func (node *AllExpr) replace(from, to Expr) bool {
+	return false
+}
+
 // ExprFromValue converts the given Value into an Expr or returns an error.
 func ExprFromValue(value sqltypes.Value) (Expr, error) {
 	// The type checks here follow the rules defined in sqltypes/types.go.

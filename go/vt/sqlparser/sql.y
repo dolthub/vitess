@@ -6515,15 +6515,15 @@ condition:
   {
     $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
   }
-| value_expression compare ALL value_expression
+| value_expression compare ALL subquery
+  {
+    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: &AllExpr{Subquery: $4}}
+  }
+| value_expression compare ANY subquery
   {
     $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $4}
   }
-| value_expression compare ANY value_expression
-  {
-    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $4}
-  }
-| value_expression compare SOME value_expression
+| value_expression compare SOME subquery
   {
     $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $4}
   }
