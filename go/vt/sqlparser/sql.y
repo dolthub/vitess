@@ -7067,7 +7067,6 @@ function_call_keyword:
   Function calls using non reserved keywords but with special syntax forms.
   Dedicated grammar rules are needed because of the special syntax
 */
-// TODO: might have to split off into separate rules as on update does not work with current_date
 function_call_nonkeyword:
 // functions that do not support fractional second precision (fsp)
   CURRENT_DATE func_parens_opt
