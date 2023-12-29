@@ -7083,13 +7083,17 @@ function_call_nonkeyword:
     $$ = &FuncExpr{Name: NewColIdent(string($1))}
   }
 // functions that can be called with optional second argument
+| function_call_on_update
+  {
+    $$ = $1
+  }
 | CURRENT_TIME func_datetime_prec_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2}}}
   }
-| function_call_on_update
+| UTC_TIME func_datetime_prec_opt
   {
-    $$ = $1
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2}}}
   }
 | TIMESTAMPADD openb time_unit ',' value_expression ',' value_expression closeb
   {
@@ -7124,10 +7128,6 @@ function_call_on_update:
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2}}}
   }
 | LOCALTIMESTAMP func_datetime_prec_opt
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2}}}
-  }
-| UTC_TIME func_datetime_prec_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2}}}
   }
