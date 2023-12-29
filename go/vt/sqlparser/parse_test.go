@@ -4478,34 +4478,75 @@ func TestInvalid(t *testing.T) {
 	invalidSQL := []struct {
 		input string
 		err   string
-	}{{
-		input: "SET @foo = `o` `ne`;",
-		err:   "syntax error",
-	}, {
-		input: "select '1' '2",
-		err:   "syntax error",
-	}, {
-		input: "CHANGE REPLICATION FILTER",
-		err:   "syntax error",
-	}, {
-		input: "change replication filter REPLICATE_DO_TABLE=()",
-		err:   "syntax error",
-	}, {
-		input: "CHANGE REPLICATION SOURCE TO",
-		err:   "syntax error",
-	}, {
-		input: "select a from (select * from tbl)",
-		err:   "Every derived table must have its own alias",
-	}, {
-		input: "select a, b from (select * from tbl) sort by a",
-		err:   "syntax error",
-	}, {
-		input: "with test as (select 1), test_two as (select 2) select * from test, test_two union all with b as (select 1, 2) select * from b",
-		err:   "syntax error",
-	}, {
-		input: "select * from test order by a union select * from test",
-		err:   "syntax error",
-	},
+	}{
+		{
+			input: "SET @foo = `o` `ne`;",
+			err:   "syntax error",
+		},
+		{
+			input: "select '1' '2",
+			err:   "syntax error",
+		},
+		{
+			input: "CHANGE REPLICATION FILTER",
+			err:   "syntax error",
+		},
+		{
+			input: "change replication filter REPLICATE_DO_TABLE=()",
+			err:   "syntax error",
+		},
+		{
+			input: "CHANGE REPLICATION SOURCE TO",
+			err:   "syntax error",
+		},
+		{
+			input: "select a from (select * from tbl)",
+			err:   "Every derived table must have its own alias",
+		},
+		{
+			input: "select a, b from (select * from tbl) sort by a",
+			err:   "syntax error",
+		},
+		{
+			input: "with test as (select 1), test_two as (select 2) select * from test, test_two union all with b as (select 1, 2) select * from b",
+			err:   "syntax error",
+		},
+		{
+			input: "select * from test order by a union select * from test",
+			err:   "syntax error",
+		},
+		{
+			input: "select current_timestamp(-1)",
+			err:   "syntax error",
+		},
+		{
+			input: "select current_timestamp(1 + 1)",
+			err:   "syntax error",
+		},
+		{
+			input: "select current_timestamp('abc')",
+			err:   "syntax error",
+		},
+		{
+			input: "select current_timestamp(1.0)",
+			err:   "syntax error",
+		},
+		{
+			input: "select current_timestamp(now())",
+			err:   "syntax error",
+		},
+		{
+			input: "select current_timestamp(i)",
+			err:   "syntax error",
+		},
+		{
+			input: "select current_timestamp(@a)",
+			err:   "syntax error",
+		},
+		{
+			input: "select current_timestamp(null)",
+			err:   "syntax error",
+		},
 		{
 			input: "create spatial reference system 1234\n" +
 				"name 'name'\n" +
