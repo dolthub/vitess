@@ -7095,6 +7095,10 @@ function_call_nonkeyword:
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2}}}
   }
+| UTC_TIMESTAMP func_datetime_prec_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2}}}
+  }
 | TIMESTAMPADD openb time_unit ',' value_expression ',' value_expression closeb
   {
     $$ = &TimestampFuncExpr{Name:string("timestampadd"), Unit:string($3), Expr1:$5, Expr2:$7}
@@ -7128,10 +7132,6 @@ function_call_on_update:
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2}}}
   }
 | LOCALTIMESTAMP func_datetime_prec_opt
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2}}}
-  }
-| UTC_TIMESTAMP func_datetime_prec_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2}}}
   }
