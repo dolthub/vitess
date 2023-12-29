@@ -4586,7 +4586,7 @@ func TestInvalid(t *testing.T) {
 		err:   "cannot include AUTO_INCREMENT more than once at position 133 near 'auto_increment'",
 	}, {
 		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique on update utc_timestamp())",
-		err:   "cannot include ON UPDATE more than once at position 144",
+		err:   "syntax error at position 142 near 'utc_timestamp'",
 	}, {
 		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique default 1)",
 		err:   "cannot include DEFAULT more than once at position 128",
@@ -4607,7 +4607,7 @@ func TestInvalid(t *testing.T) {
 		err:   "cannot include AUTO_INCREMENT more than once at position 136 near 'auto_increment'",
 	}, {
 		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique on update utc_timestamp())",
-		err:   "cannot include ON UPDATE more than once at position 147",
+		err:   "syntax error at position 145 near 'utc_timestamp'",
 	}, {
 		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique default 1)",
 		err:   "cannot include DEFAULT more than once at position 131",
@@ -5951,7 +5951,21 @@ func TestCreateTable(t *testing.T) {
 			"	unique  namedx (full_name),\n" +
 			"	primary key (id)\n" +
 			")",
-	}, {
+	},
+	{
+		// test now
+		input: "create table t (\n" +
+			"	time1 timestamp default now(),\n" +
+			"	time2 timestamp default now() on update now(),\n" +
+			"	time3 timestamp(3) default now(3) on update now(3)\n" +
+			")",
+		output: "create table t (\n" +
+			"	time1 timestamp default now(),\n" +
+			"	time2 timestamp default now() on update now(),\n" +
+			"	time3 timestamp(3) default now(3) on update now(3)\n" +
+			")",
+	},
+	{
 		// test current_timestamp with and without ()
 		input: "create table t (\n" +
 			"	time1 timestamp default current_timestamp,\n" +
@@ -5967,7 +5981,8 @@ func TestCreateTable(t *testing.T) {
 			"	time4 timestamp default current_timestamp(0) on update current_timestamp(0),\n" +
 			"	time5 timestamp(3) default current_timestamp(3) on update current_timestamp(3)\n" +
 			")",
-	}, {
+	},
+	{
 		// test inline check constraint
 		input: "create table t (\n" +
 			"	a int,\n" +
