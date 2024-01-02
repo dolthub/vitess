@@ -7135,7 +7135,6 @@ function_call_on_update:
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2}}}
   }
 
-
 // Optional parens for certain keyword functions that don't require them.
 func_parens_opt:
   /* empty */
