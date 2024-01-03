@@ -7058,10 +7058,6 @@ function_call_keyword:
   {
     $$ = &ValuesFuncExpr{Name: NewColName(string($3))}
   }
-| VERSION openb closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1))}
-  }
 | REPEAT openb argument_expression_list closeb
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
@@ -9087,6 +9083,7 @@ non_reserved_keyword:
 | USER_RESOURCES
 | VALUE
 | VARIABLES
+| VERSION
 | VCPU
 | VISIBLE
 | UNDEFINED
@@ -9117,7 +9114,6 @@ non_reserved_keyword2:
 | SUPER
 | TIMESTAMPADD
 | TIMESTAMPDIFF
-| VERSION
 | VERSIONS
 | VIEW
 
