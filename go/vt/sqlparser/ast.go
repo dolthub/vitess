@@ -5929,7 +5929,11 @@ type CharExpr struct {
 
 // Format formats the node.
 func (node *CharExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("char(%v using %s)", node.Exprs, node.Type)
+	if node.Type == "" {
+		buf.Myprintf("CHAR(%v)", node.Exprs)
+		return
+	}
+	buf.Myprintf("CHAR(%v USING %s)", node.Exprs, node.Type)
 }
 
 func (node *CharExpr) walkSubtree(visit Visit) error {
