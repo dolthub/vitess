@@ -5417,6 +5417,10 @@ func TestFunctionCalls(t *testing.T) {
 			input:  "SELECT POSITION('abc' in 'xyz')",
 			output: "select LOCATE('abc', 'xyz')",
 		},
+		{
+			input:  "SELECT POSITION(1 + 1 in foo)",
+			output: "select LOCATE(1 + 1, foo)",
+		},
 	}
 
 	// Unimplemented or broken functionality
