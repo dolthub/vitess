@@ -9166,7 +9166,7 @@ column_name_safe_keyword:
 | MIN
 | SUM
 
-// Keywords that aren't reserved or non-reserved in mysql, but are labeled as keywords in our grammar because of their special syntax.
+// Names of functions that require special grammar support. These aren't reserved or non-reserved in MySQL's docs, but are labeled as keywords in our grammar because of their custom syntax.
 function_call_keywords:
   CAST
 | POSITION

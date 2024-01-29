@@ -6360,7 +6360,7 @@ func TestCreateTable(t *testing.T) {
 		})
 	}
 
-	// these are keywords in our grammar due to their speecial syntax, but they should parse unquoted in MySQL
+	// these are keywords in our grammar due to their special syntax, but they should parse unquoted in MySQL
 	nonsupportedKeywords := []string{
 		"comment",
 		"cast",
