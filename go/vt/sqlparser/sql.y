@@ -6229,7 +6229,7 @@ inner_join:
 straight_join:
   STRAIGHT_JOIN
   {
-    $$ = StraightJoinStr
+    $$ = JoinStr
   }
 
 outer_join:

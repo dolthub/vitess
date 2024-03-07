@@ -605,10 +605,14 @@ var (
 		}, {
 			input:  "select /* cross join */ 1 from t1 cross join t2",
 			output: "select /* cross join */ 1 from t1 join t2",
-		}, {
+		},
+		{
 			input: "select /* straight_join */ 1 from t1 straight_join t2",
-		}, {
+			output: "select /* straight_join */ 1 from t1 join t2",
+		},
+		{
 			input: "select /* straight_join on */ 1 from t1 straight_join t2 on a = b",
+			output: "select /* straight_join on */ 1 from t1 join t2 on a = b",
 		}, {
 			input: "select /* left join */ 1 from t1 left join t2 on a = b",
 		}, {

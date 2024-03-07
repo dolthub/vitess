@@ -18814,7 +18814,7 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:6231
 		{
-			yyVAL.str = StraightJoinStr
+			yyVAL.str = JoinStr
 		}
 	case 1251:
 		yyDollar = yyS[yypt-2 : yypt+1]
