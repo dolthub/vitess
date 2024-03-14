@@ -2502,7 +2502,7 @@ type TableSpec struct {
 	Columns     []*ColumnDefinition
 	Indexes     []*IndexDefinition
 	Constraints []*ConstraintDefinition
-	Options     string
+	Options     []*TableOption
 }
 
 // Format formats the node.
@@ -2543,6 +2543,11 @@ func (ts *TableSpec) AddIndex(id *IndexDefinition) {
 // AddConstraint appends the given index to the list in the spec
 func (ts *TableSpec) AddConstraint(cd *ConstraintDefinition) {
 	ts.Constraints = append(ts.Constraints, cd)
+}
+
+// AddOption appends the given option to the list in the spec
+func (ts *TableSpec) AddOption(to *TableOption) {
+	ts.Options = append(ts.Options, to)
 }
 
 func (ts *TableSpec) walkSubtree(visit Visit) error {
@@ -3299,6 +3304,12 @@ type IndexOption struct {
 	Name  string
 	Value *SQLVal
 	Using string
+}
+
+// TableOption describes a table option in a CREATE TABLE statement
+type TableOption struct {
+	Name  string
+	Value string
 }
 
 // ColumnKeyOption indicates whether or not the given column is defined as an
