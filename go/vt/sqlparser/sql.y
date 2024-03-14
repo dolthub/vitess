@@ -554,13 +554,13 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> equal_opt assignment_op
 %type <TableSpec> table_spec table_column_list
 %type <str> table_opt_value row_fmt_opt
-%type <str> linear_partition_opt linear_opt partition_num_opt subpartition_opt subpartition_num_opt
+%type <str> partition_option linear_partition_opt linear_opt partition_num_opt subpartition_opt subpartition_num_opt
 %type <indexInfo> index_info
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
 %type <indexOption> index_option
 %type <indexOptions> index_option_list index_option_list_opt
-%type <tableOption> table_option partition_option
+%type <tableOption> table_option
 %type <tableOptions> table_option_list partition_options
 %type <flushOption> flush_option
 %type <replicationOptions> replication_option_list replication_filter_option_list
@@ -4203,15 +4203,15 @@ table_option:
   }
 | COMMENT_KEYWORD equal_opt STRING
   {
-    $$ = &TableOption{Name: string($1), Value: "'" + $3 + "'"}
+    $$ = &TableOption{Name: string($1), Value: "'" + string($3) + "'"}
   }
 | COMPRESSION equal_opt STRING
   {
-    $$ = &TableOption{Name: string($1), Value: $3}
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | CONNECTION equal_opt STRING
   {
-    $$ = &TableOption{Name: string($1), Value: "'" + $3 + "'"}
+    $$ = &TableOption{Name: string($1), Value: "'" + string($3) + "'"}
   }
 | DATA DIRECTORY equal_opt STRING
   {
@@ -4231,7 +4231,7 @@ table_option:
   }
 | ENGINE equal_opt any_identifier
   {
-    $$ = &TableOption{Name: string($1), Value: $3}
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | ENGINE_ATTRIBUTE equal_opt STRING
   {
@@ -4239,23 +4239,23 @@ table_option:
   }
 | INSERT_METHOD equal_opt NO
   {
-    $$ = &TableOption{Name: string($1), Value: $3}
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | INSERT_METHOD equal_opt FIRST
   {
-    $$ = &TableOption{Name: string($1), Value: $3}
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | INSERT_METHOD equal_opt LAST
   {
-    $$ = &TableOption{Name: string($1), Value: $3}
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | KEY_BLOCK_SIZE equal_opt table_opt_value
   {
-    $$ = &TableOption{Name: string($1), Value: $3}
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | MAX_ROWS equal_opt table_opt_value
   {
-    $$ = &TableOption{Name: string($1), Value: $3}
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | MIN_ROWS equal_opt table_opt_value
   {
@@ -4279,15 +4279,15 @@ table_option:
   }
 | SECONDARY_ENGINE equal_opt ID
   {
-    $$ = &TableOption{Name: string($1), Value: $3}
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | SECONDARY_ENGINE equal_opt NULL
   {
-    $$ = &TableOption{Name: string($1), Value: $3}
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | SECONDARY_ENGINE equal_opt STRING
   {
-    $$ = &TableOption{Name: string($1), Value: $3}
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
   {
@@ -4454,9 +4454,9 @@ partition_option:
     $$ = string($1) + " (" + string($3) + ")"
   }
 | LIST COLUMNS openb column_list closeb
- {
-   $$ = string($1) + " " + string($2) + " (column_list)"
- }
+  {
+    $$ = string($1) + " " + string($2) + " (column_list)"
+  }
 
 linear_partition_opt:
   linear_opt HASH openb value closeb
