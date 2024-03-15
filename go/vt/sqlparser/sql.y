@@ -554,14 +554,14 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> equal_opt assignment_op
 %type <TableSpec> table_spec table_column_list
 %type <str> table_opt_value row_fmt_opt
-%type <str> partition_option linear_partition_opt linear_opt partition_num_opt subpartition_opt subpartition_num_opt
+%type <str> partition_options partition_option linear_partition_opt linear_opt partition_num_opt subpartition_opt subpartition_num_opt
 %type <indexInfo> index_info
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
 %type <indexOption> index_option
 %type <indexOptions> index_option_list index_option_list_opt
 %type <tableOption> table_option
-%type <tableOptions> table_option_list partition_options
+%type <tableOptions> table_option_list
 %type <flushOption> flush_option
 %type <replicationOptions> replication_option_list replication_filter_option_list
 %type <replicationOption> replication_option replication_filter_option
@@ -2796,11 +2796,9 @@ table_spec:
   {
     $$ = $2
     for _, opt := range $4 {
-      $$.AddOption(opt)
+      $$.AddTableOption(opt)
     }
-    for _, part := range $5 {
-      $$.AddOption(part)
-    }
+    $$.PartitionOpts = $5
   }
 
 table_column_list:
@@ -4157,7 +4155,7 @@ enforced_opt:
 
 table_option_list:
   {
-    $$ = []*TableOption{}
+    $$ = nil
   }
 | table_option_list table_option
   {
@@ -4165,7 +4163,7 @@ table_option_list:
   }
 | table_option_list ',' table_option
   {
-    $$ = append($1, $2)
+    $$ = append($1, $3)
   }
 
 table_option:
@@ -4251,11 +4249,11 @@ table_option:
   }
 | KEY_BLOCK_SIZE equal_opt table_opt_value
   {
-    $$ = &TableOption{Name: string($1), Value: string($3)}
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
 | MAX_ROWS equal_opt table_opt_value
   {
-    $$ = &TableOption{Name: string($1), Value: string($3)}
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
 | MIN_ROWS equal_opt table_opt_value
   {
@@ -4263,7 +4261,7 @@ table_option:
   }
 | PACK_KEYS equal_opt coericble_to_integral
   {
-    $$ = &TableOption{Name: string($1), Value: $3}
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | PASSWORD equal_opt STRING
   {
@@ -4295,19 +4293,19 @@ table_option:
   }
 | STATS_AUTO_RECALC equal_opt DEFAULT
   {
-    $$ = &TableOption{Name: string($1), Value: $3}
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | STATS_AUTO_RECALC equal_opt coericble_to_integral
   {
-    $$ = &TableOption{Name: string($1), Value: $3}
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | STATS_PERSISTENT equal_opt DEFAULT
   {
-    $$ = &TableOption{Name: string($1), Value: $3}
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | STATS_PERSISTENT equal_opt coericble_to_integral
   {
-    $$ = &TableOption{Name: string($1), Value: $3}
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | STATS_SAMPLE_PAGES equal_opt table_opt_value
   {
@@ -4319,7 +4317,7 @@ table_option:
   }
 | TABLESPACE any_identifier
   {
-    $$ = &TableOption{Name: string($1), Value: $2}
+    $$ = &TableOption{Name: string($1), Value: string($2)}
   }
 | TABLESPACE any_identifier STORAGE DISK
   {
@@ -6783,7 +6781,7 @@ value_expression:
   }
 | value_expression COLLATE charset
   {
-    $$ = &CollateExpr{Expr: $1, Charset: $3}
+    $$ = &CollateExpr{Expr: $1, Collation: $3}
   }
 | BINARY value_expression %prec UNARY
   {
