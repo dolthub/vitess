@@ -16249,7 +16249,7 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:4203
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].bytes), Value: "'" + string(yyDollar[3].bytes) + "'"}
+			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].bytes), Value: string(yyDollar[3].bytes)}
 		}
 	case 808:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16261,19 +16261,19 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:4211
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].bytes), Value: "'" + string(yyDollar[3].bytes) + "'"}
+			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].bytes), Value: string(yyDollar[3].bytes)}
 		}
 	case 810:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:4215
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].bytes) + " " + string(yyDollar[2].bytes), Value: "'" + string(yyDollar[4].bytes) + "'"}
+			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].bytes) + " " + string(yyDollar[2].bytes), Value: string(yyDollar[4].bytes)}
 		}
 	case 811:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:4219
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].bytes) + " " + string(yyDollar[2].bytes), Value: "'" + string(yyDollar[4].bytes) + "'"}
+			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].bytes) + " " + string(yyDollar[2].bytes), Value: string(yyDollar[4].bytes)}
 		}
 	case 812:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16285,7 +16285,7 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:4227
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].bytes), Value: "'" + string(yyDollar[3].bytes) + "'"}
+			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].bytes), Value: string(yyDollar[3].bytes)}
 		}
 	case 814:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16297,7 +16297,7 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:4235
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].bytes), Value: "'" + string(yyDollar[3].bytes) + "'"}
+			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].bytes), Value: string(yyDollar[3].bytes)}
 		}
 	case 816:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16345,7 +16345,7 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:4267
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].bytes), Value: "'" + string(yyDollar[3].bytes) + "'"}
+			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].bytes), Value: string(yyDollar[3].bytes)}
 		}
 	case 824:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -16381,7 +16381,7 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:4291
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].bytes), Value: "'" + string(yyDollar[3].bytes) + "'"}
+			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].bytes), Value: string(yyDollar[3].bytes)}
 		}
 	case 830:
 		yyDollar = yyS[yypt-3 : yypt+1]

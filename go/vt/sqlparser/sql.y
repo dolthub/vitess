@@ -4201,7 +4201,7 @@ table_option:
   }
 | COMMENT_KEYWORD equal_opt STRING
   {
-    $$ = &TableOption{Name: string($1), Value: "'" + string($3) + "'"}
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | COMPRESSION equal_opt STRING
   {
@@ -4209,15 +4209,15 @@ table_option:
   }
 | CONNECTION equal_opt STRING
   {
-    $$ = &TableOption{Name: string($1), Value: "'" + string($3) + "'"}
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | DATA DIRECTORY equal_opt STRING
   {
-    $$ = &TableOption{Name: string($1) + " "  + string($2), Value: "'" + string($4) + "'"}
+    $$ = &TableOption{Name: string($1) + " "  + string($2), Value: string($4)}
   }
 | INDEX DIRECTORY equal_opt STRING
   {
-    $$ = &TableOption{Name: string($1) + " "  + string($2), Value: "'" + string($4) + "'"}
+    $$ = &TableOption{Name: string($1) + " "  + string($2), Value: string($4)}
   }
 | DELAY_KEY_WRITE equal_opt coericble_to_integral
   {
@@ -4225,7 +4225,7 @@ table_option:
   }
 | ENCRYPTION equal_opt STRING
   {
-    $$ = &TableOption{Name: string($1), Value: "'" + string($3) + "'"}
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | ENGINE equal_opt any_identifier
   {
@@ -4233,7 +4233,7 @@ table_option:
   }
 | ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $$ = &TableOption{Name: string($1), Value: "'" + string($3) + "'"}
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | INSERT_METHOD equal_opt NO
   {
@@ -4265,7 +4265,7 @@ table_option:
   }
 | PASSWORD equal_opt STRING
   {
-    $$ = &TableOption{Name: string($1), Value: "'" + string($3) + "'"}
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | ROW_FORMAT equal_opt row_fmt_opt
   {
@@ -4289,7 +4289,7 @@ table_option:
   }
 | SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $$ = &TableOption{Name: string($1), Value: "'" + string($3) + "'"}
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | STATS_AUTO_RECALC equal_opt DEFAULT
   {

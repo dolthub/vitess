@@ -2524,6 +2524,13 @@ func (ts *TableSpec) Format(buf *TrackedBuffer) {
 	for _, c := range ts.Constraints {
 		buf.Myprintf(",\n\t%v", c)
 	}
+	buf.Myprintf("\n)")
+	for _, tblOpt := range ts.TableOpts {
+		buf.Myprintf(" %s %s", tblOpt.Name, tblOpt.Value)
+	}
+	if len(ts.PartitionOpts) > 0 {
+		buf.Myprintf(" %s", ts.PartitionOpts)
+	}
 
 	//buf.Myprintf("\n)%s", strings.Replace(ts.TableOpts, ", ", ",\n  ", -1))
 }
@@ -3312,7 +3319,7 @@ type IndexOption struct {
 // TableOption describes a table option in a CREATE TABLE statement
 type TableOption struct {
 	Name  string
-	Value string // TODO: maybe *SQLVal?
+	Value string
 }
 
 // ColumnKeyOption indicates whether or not the given column is defined as an
