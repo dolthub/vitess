@@ -6055,7 +6055,7 @@ func TestCreateTable(t *testing.T) {
 		{
 			// table options
 			input: "create table t (\n" +
-				"	id int auto_increment\n" +
+				"\tid int auto_increment\n" +
 				") engine InnoDB" +
 				" auto_increment 123" +
 				" avg_row_length 1" +
@@ -6112,6 +6112,16 @@ func TestCreateTable(t *testing.T) {
 				" stats_sample_pages 1" +
 				" tablespace tablespace_name storage disk" +
 				" tablespace tablespace_name",
+		},
+		{
+			// table options out of order
+			input: "create table t (\n" +
+				"	id int auto_increment\n" +
+				") engine InnoDB" +
+				" avg_row_length 1" +
+				" character set utf8mb4" +
+				" auto_increment 123" +
+				" character set latin1",
 		},
 		{
 			// passing hex nums to table options
@@ -6408,7 +6418,8 @@ func TestCreateTable(t *testing.T) {
 				"	time4 timestamp default localtime(0) on update localtime(0),\n" +
 				"	time5 timestamp(6) default localtime(6) on update localtime(6)\n" +
 				")",
-		}, {
+		},
+		{
 			// test localtimestamp with and without ()
 			input: "create table t (\n" +
 				"	time1 timestamp default localtimestamp,\n" +
@@ -6424,7 +6435,8 @@ func TestCreateTable(t *testing.T) {
 				"	time4 timestamp default localtimestamp(0) on update localtimestamp(0),\n" +
 				"	time5 timestamp(1) default localtimestamp(1) on update localtimestamp(1)\n" +
 				")",
-		}, {
+		},
+		{
 			input: "create table t (\n" +
 				"	id serial not null,\n" +
 				"	a bigint not null\n" +
@@ -6598,16 +6610,6 @@ func TestCreateTable(t *testing.T) {
 	}
 	for _, tcase := range testCases {
 		runParseTestCase(t, tcase)
-		//t.Run(tcase.input, func(t *testing.T) {
-		//	tree, err := Parse(tcase.input)
-		//	if err != nil {
-		//		t.Errorf("input: %s, err: %v", tcase.input, err)
-		//		return
-		//	}
-		//	if got, want := String(tree.(*DDL)), tcase.output; got != want {
-		//		t.Errorf("Parse(%s):\nGot:%s\nWant:%s", tcase.input, got, want)
-		//	}
-		//})
 	}
 
 	// these are keywords in our grammar due to their special syntax, but they should parse unquoted in MySQL
