@@ -1,6 +1,6 @@
 module github.com/dolthub/vitess
 
-go 1.21
+go 1.19
 
 require (
 	github.com/stretchr/testify v1.4.0
