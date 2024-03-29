@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"google.golang.org/protobuf/proto"
 
 	querypb "github.com/dolthub/vitess/go/vt/proto/query"
@@ -139,6 +140,13 @@ func TestBuildBindVariable(t *testing.T) {
 			in: float64(1),
 			out: &querypb.BindVariable{
 				Type:  querypb.Type_FLOAT64,
+				Value: []byte("1"),
+			},
+		},
+		{
+			in: decimal.NewFromInt(1),
+			out: &querypb.BindVariable{
+				Type:  querypb.Type_DECIMAL,
 				Value: []byte("1"),
 			},
 		},
