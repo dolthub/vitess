@@ -23,7 +23,7 @@ import (
 	"strconv"
 	"time"
 
-		"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	querypb "github.com/dolthub/vitess/go/vt/proto/query"
 )

@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shopspring/decimal"
 	"google.golang.org/protobuf/proto"
 
 	querypb "github.com/dolthub/vitess/go/vt/proto/query"
