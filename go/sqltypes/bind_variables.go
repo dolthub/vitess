@@ -126,6 +126,7 @@ func BuildBindVariable(v interface{}) (*querypb.BindVariable, error) {
 			Type:   querypb.Type_TIMESTAMP,
 			Value: []byte(v.String()),
 		}, nil
+	// TODO: somehow support types.Timespan
 	case nil:
 		return NullBindVariable, nil
 	case Value:
