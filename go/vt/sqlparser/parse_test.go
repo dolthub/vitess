@@ -1635,7 +1635,7 @@ var (
 			input: "alter table a drop constraint b",
 		},
 		{
-			input: "alter table a rename constraint oldfk to newfk",
+			input: "alter table a rename constraint foreign key oldfk to newfk",
 		},
 		{
 			input:  "alter table a drop id",
