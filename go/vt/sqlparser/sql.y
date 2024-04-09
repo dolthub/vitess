@@ -4701,6 +4701,20 @@ alter_table_statement_part:
     ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($7), Details: &ForeignKeyDefinition{}})
     $$ = ddl
   }
+| RENAME CONSTRAINT CHECK ID TO ID
+  {
+    ddl := &DDL{Action: AlterStr, ConstraintAction: RenameStr, TableSpec: &TableSpec{}}
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($4), Details: &CheckConstraintDefinition{}})
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($6), Details: &CheckConstraintDefinition{}})
+    $$ = ddl
+  }
+| RENAME CONSTRAINT ID TO ID
+  {
+    ddl := &DDL{Action: AlterStr, ConstraintAction: RenameStr, TableSpec: &TableSpec{}}
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($3)})
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{Name: string($5)})
+    $$ = ddl
+  }
 | AUTO_INCREMENT equal_opt expression
   {
     $$ = &DDL{Action: AlterStr, AutoIncSpec: &AutoIncSpec{Value: $3}}
