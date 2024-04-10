@@ -3205,6 +3205,9 @@ var (
 			input:  "create view v_today(today) as select CURRENT_DATE() WITH CHECK OPTION",
 			output: "create view v_today(today) as select CURRENT_DATE() with cascaded check option",
 		}, {
+			input:  "create view v_today(today) as select CURRENT_DATE() WITH CASCADED CHECK OPTION",
+			output: "create view v_today(today) as select CURRENT_DATE() with cascaded check option",
+		}, {
 			input:  "create view v_today(today) as select CURRENT_DATE() WITH LOCAL CHECK OPTION",
 			output: "create view v_today(today) as select CURRENT_DATE() with local check option",
 		}, {
