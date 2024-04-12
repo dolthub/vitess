@@ -2024,6 +2024,7 @@ type DDL struct {
 	SpecialCommentMode        bool
 	SubStatementPositionStart int
 	SubStatementPositionEnd   int
+	SubStatementStr           string
 
 	// FromViews is set if Action is DropStr.
 	FromViews TableNames
