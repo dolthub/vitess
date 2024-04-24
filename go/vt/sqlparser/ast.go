@@ -164,16 +164,21 @@ func parseTokenizer(sql string, tokenizer *Tokenizer) (Statement, error) {
 
 // For select statements, capture the verbatim select expressions from the original query text
 func captureSelectExpressions(sql string, tokenizer *Tokenizer) {
-	if s, ok := tokenizer.ParseTree.(SelectStatement); ok {
-		s.walkSubtree(func(node SQLNode) (bool, error) {
-			if node, ok := node.(*AliasedExpr); ok && node.EndParsePos > node.StartParsePos {
-				_, ok := node.Expr.(*ColName)
-				if ok {
-					// column names don't need any special handling to capture the input expression
-					return false, nil
-				} else {
-					node.InputExpression = trimQuotes(strings.Trim(sql[node.StartParsePos:node.EndParsePos], " \n\t"))
-				}
+	if w, ok := tokenizer.ParseTree.(WalkableSQLNode); ok {
+		w.walkSubtree(func(node SQLNode) (bool, error) {
+			if s, ok := node.(SelectStatement); ok {
+				s.walkSubtree(func(node SQLNode) (bool, error) {
+					if node, ok := node.(*AliasedExpr); ok && node.EndParsePos > node.StartParsePos {
+						_, ok := node.Expr.(*ColName)
+						if ok {
+							// column names don't need any special handling to capture the input expression
+							return false, nil
+						} else {
+							node.InputExpression = trimQuotes(strings.Trim(sql[node.StartParsePos:node.EndParsePos], " \n\t"))
+						}
+					}
+					return true, nil
+				})
 			}
 			return true, nil
 		})
@@ -2338,6 +2343,12 @@ func (node *DDL) walkSubtree(visit Visit) error {
 			return err
 		}
 	}
+
+	if node.ViewSpec != nil {
+		err := Walk(visit, node.ViewSpec.ViewExpr)
+		return err
+	}
+	// TODO: add missing nodes that are walkable
 	return nil
 }
 
