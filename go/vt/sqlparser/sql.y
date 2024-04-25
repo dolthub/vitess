@@ -534,7 +534,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> algorithm_view_opt algorithm_part_opt definer_opt security_opt
 %type <viewSpec> view_opts
 %type <viewCheckOption> opt_with_check_option
-%type <bytes> reserved_keyword qualified_column_name_safe_reserved_keyword non_reserved_keyword column_name_safe_keyword function_call_keywords non_reserved_keyword2 non_reserved_keyword3 all_non_reserved any_non_reserved
+%type <bytes> reserved_keyword qualified_column_name_safe_reserved_keyword non_reserved_keyword column_name_safe_keyword function_call_keywords non_reserved_keyword2 non_reserved_keyword3 all_non_reserved id_or_non_reserved
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt existing_window_name_opt
 %type <colIdents> reserved_sql_id_list
 %type <expr> charset_value
@@ -4064,7 +4064,7 @@ index_column:
   }
 
 foreign_key_definition:
-  CONSTRAINT any_non_reserved foreign_key_details
+  CONSTRAINT id_or_non_reserved foreign_key_details
   {
     $$ = &ConstraintDefinition{Name: string($2), Details: $3}
   }
@@ -4099,13 +4099,13 @@ index_name_opt:
   {
     $$ = nil
   }
-| any_non_reserved
+| id_or_non_reserved
   {
     $$ = $1
   }
 
 check_constraint_definition:
-  CONSTRAINT any_non_reserved check_constraint_info
+  CONSTRAINT id_or_non_reserved check_constraint_info
   {
     $$ = &ConstraintDefinition{Name: string($2), Details: $3}
   }
@@ -4741,7 +4741,7 @@ alter_table_statement_part:
     ddl.TableSpec.AddConstraint($2)
     $$ = ddl
   }
-| DROP CONSTRAINT any_non_reserved
+| DROP CONSTRAINT id_or_non_reserved
   {
     $$ = &DDL{
     	Action: AlterStr,
@@ -4755,7 +4755,7 @@ alter_table_statement_part:
 	},
     }
   }
-| DROP CHECK any_non_reserved
+| DROP CHECK id_or_non_reserved
   {
     $$ = &DDL{
     	Action: AlterStr,
@@ -4770,19 +4770,19 @@ alter_table_statement_part:
 	},
     }
   }
-| ALTER CONSTRAINT any_non_reserved ENFORCED
+| ALTER CONSTRAINT id_or_non_reserved ENFORCED
   {
     $$ = &DDL{Action: AlterStr}
   }
-| ALTER CHECK any_non_reserved ENFORCED
+| ALTER CHECK id_or_non_reserved ENFORCED
   {
     $$ = &DDL{Action: AlterStr}
   }
-| ALTER CONSTRAINT any_non_reserved NOT_ENFORCED
+| ALTER CONSTRAINT id_or_non_reserved NOT_ENFORCED
   {
     $$ = &DDL{Action: AlterStr}
   }
-| ALTER CHECK any_non_reserved NOT_ENFORCED
+| ALTER CHECK id_or_non_reserved NOT_ENFORCED
   {
     $$ = &DDL{Action: AlterStr}
   }
@@ -4823,11 +4823,11 @@ alter_table_statement_part:
 	},
     }
   }
-| ALTER INDEX any_non_reserved VISIBLE
+| ALTER INDEX id_or_non_reserved VISIBLE
   {
     $$ = &DDL{Action: AlterStr}
   }
-| ALTER INDEX any_non_reserved INVISIBLE
+| ALTER INDEX id_or_non_reserved INVISIBLE
   {
     $$ = &DDL{Action: AlterStr}
   }
@@ -4900,7 +4900,7 @@ alter_table_statement_part:
   {
     $$ = &DDL{Action: AlterStr}
   }
-| DROP column_opt any_non_reserved
+| DROP column_opt id_or_non_reserved
   {
     $$ = &DDL{
     	Action: AlterStr,
@@ -4928,7 +4928,7 @@ alter_table_statement_part:
 	},
     }
   }
-| DROP FOREIGN KEY any_non_reserved
+| DROP FOREIGN KEY id_or_non_reserved
   {
     ddl := &DDL{
     	Action: AlterStr,
@@ -4974,7 +4974,7 @@ alter_table_statement_part:
     $$ = ddl
   }
 // | ORDER BY col_name [, col_name] ...
-| RENAME COLUMN any_non_reserved to_or_as any_non_reserved
+| RENAME COLUMN id_or_non_reserved to_or_as id_or_non_reserved
   {
     $$ = &DDL{
     	Action: AlterStr,
@@ -5002,7 +5002,7 @@ alter_table_statement_part:
     	ToTables: TableNames{$3},
     }
   }
-| RENAME CONSTRAINT FOREIGN KEY any_non_reserved TO any_non_reserved
+| RENAME CONSTRAINT FOREIGN KEY id_or_non_reserved TO id_or_non_reserved
   {
     ddl := &DDL{
     	Action: AlterStr,
@@ -5019,7 +5019,7 @@ alter_table_statement_part:
     })
     $$ = ddl
   }
-| RENAME CONSTRAINT CHECK any_non_reserved TO any_non_reserved
+| RENAME CONSTRAINT CHECK id_or_non_reserved TO id_or_non_reserved
   {
     ddl := &DDL{
     	Action: AlterStr,
@@ -5036,7 +5036,7 @@ alter_table_statement_part:
     })
     $$ = ddl
   }
-| RENAME CONSTRAINT any_non_reserved TO any_non_reserved
+| RENAME CONSTRAINT id_or_non_reserved TO id_or_non_reserved
   {
     ddl := &DDL{
     	Action: AlterStr,
@@ -5117,7 +5117,7 @@ with_or_without:
     $$ = false
   }
 
-any_non_reserved:
+id_or_non_reserved:
   ID
 | all_non_reserved
 
