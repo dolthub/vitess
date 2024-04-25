@@ -6582,6 +6582,21 @@ func TestCreateTable(t *testing.T) {
 		{
 			input: "create table t (\n" +
 				"\ti int\n" +
+				") partition by LIST (i + j)",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n" +
+				") partition by LIST (month(i))",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n" +
+				") partition by LIST (concat(i))",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n" +
 				") partition by LIST COLUMNS (c1, c2, c3)",
 			output: "create table t (\n" +
 				"\ti int\n" +
