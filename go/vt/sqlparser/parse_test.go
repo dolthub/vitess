@@ -6554,6 +6554,21 @@ func TestCreateTable(t *testing.T) {
 		{
 			input: "create table t (\n" +
 				"\ti int\n" +
+				") partition by RANGE (i + j)",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n" +
+				") partition by RANGE (month(i))",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n" +
+				") partition by RANGE (concat(i))",
+		},
+		{
+			input: "create table t (\n" +
+				"\ti int\n" +
 				") partition by RANGE COLUMNS (c1, c2, c3)",
 			output: "create table t (\n" +
 				"\ti int\n" +
