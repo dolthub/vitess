@@ -3376,19 +3376,24 @@ var (
 		}, {
 			input:  "CREATE TABLE t (id INT PRIMARY KEY, col1 GEOMETRYCOLLECTION NOT NULL SRID 0)",
 			output: "create table t (\n\tid INT primary key,\n\tcol1 GEOMETRYCOLLECTION not null srid 0\n)",
-		}, {
+		},
+		{
 			input:  "ALTER TABLE t ADD COLUMN col1 POINT NOT NULL SRID 0 DEFAULT (POINT(1, 2))",
 			output: "alter table t add column (\n\tcol1 POINT not null srid 0 default (POINT(1, 2))\n)",
-		}, {
+		},
+		{
 			input:  "ALTER TABLE t MODIFY COLUMN col1 POINT NOT NULL DEFAULT (POINT(1, 2)) SRID 1234",
 			output: "alter table t modify column col1 (\n\tcol1 POINT not null srid 1234 default (POINT(1, 2))\n)",
-		}, {
+		},
+		{
 			input:  "ALTER TABLE t modify col1 varchar(255) NOT NULL COLLATE 'utf8mb4_0900_ai_ci'",
 			output: "alter table t modify column col1 (\n\tcol1 varchar(255) collate utf8mb4_0900_ai_ci not null\n)",
-		}, {
+		},
+		{
 			input:  "ALTER TABLE t modify col1 varchar(255) COLLATE 'utf8mb4_0900_ai_ci' NOT NULL",
 			output: "alter table t modify column col1 (\n\tcol1 varchar(255) collate utf8mb4_0900_ai_ci not null\n)",
-		}, {
+		},
+		{
 			input:  "CREATE TABLE t (col1 BIGINT PRIMARY KEY, col2 DOUBLE DEFAULT -1.1)",
 			output: "create table t (\n\tcol1 BIGINT primary key,\n\tcol2 DOUBLE default -1.1\n)",
 		}, {
@@ -3567,6 +3572,107 @@ var (
 			output: "create table t (\n" +
 				"\ti int\n" +
 				") secondary_engine NULL",
+		},
+		// No-op alter statements
+		{
+			input: "alter table t alter constraint name enforced",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t alter check name enforced",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t alter constraint name not enforced",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t alter check name not enforced",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t algorithm default",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t algorithm instant",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t algorithm inplace",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t algorithm copy",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t algorithm = default",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t algorithm = instant",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t algorithm = inplace",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t algorithm = copy",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t alter index name visible",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t alter index name invisible",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t discard tablespace",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t import tablespace",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t force",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t lock default",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t lock none",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t lock shared",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t lock exclusive",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t lock = default",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t lock = none",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t lock = shared",
+			output: "alter table t",
+		},
+		{
+			input: "alter table t lock = exclusive",
+			output: "alter table t",
 		},
 		{
 			input:  "alter table t secondary_engine=rapid",

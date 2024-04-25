@@ -279,6 +279,9 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES DEFINER INVOKER
 %token <bytes> INOUT OUT DETERMINISTIC CONTAINS READS MODIFIES SQL SECURITY TEMPORARY ALGORITHM MERGE TEMPTABLE UNDEFINED
 %token <bytes> EVENT EVENTS SCHEDULE EVERY STARTS ENDS COMPLETION PRESERVE CASCADED
+%token <bytes> INSTANT INPLACE COPY
+%token <bytes> DISCARD IMPORT
+%token <bytes> SHARED EXCLUSIVE
 %token <bytes> WITHOUT VALIDATION
 
 // SIGNAL Tokens
@@ -4767,8 +4770,38 @@ alter_table_statement_part:
 	},
     }
   }
-// | ALTER {CHECK | CONSTRAINT} symbol [NOT] ENFORCED
-// | ALGORITHM [=] {DEFAULT | INSTANT | INPLACE | COPY}
+| ALTER CONSTRAINT any_non_reserved ENFORCED
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ALTER CHECK any_non_reserved ENFORCED
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ALTER CONSTRAINT any_non_reserved NOT_ENFORCED
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ALTER CHECK any_non_reserved NOT_ENFORCED
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ALGORITHM equal_opt DEFAULT
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ALGORITHM equal_opt INSTANT
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ALGORITHM equal_opt INPLACE
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ALGORITHM equal_opt COPY
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
 | ALTER column_opt sql_id SET DEFAULT value_expression
   {
     $$ = &DDL{
@@ -4790,7 +4823,14 @@ alter_table_statement_part:
 	},
     }
   }
-// | ALTER INDEX index_name {VISIBLE | INVISIBLE}
+| ALTER INDEX any_non_reserved VISIBLE
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ALTER INDEX any_non_reserved INVISIBLE
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
 | CHANGE column_opt ID column_definition column_order_opt
   {
     ddl := &DDL{
@@ -4852,7 +4892,14 @@ alter_table_statement_part:
 	},
     }
   }
-//  | {DISCARD | IMPORT} TABLESPACE
+| DISCARD TABLESPACE
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| IMPORT TABLESPACE
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
 | DROP column_opt any_non_reserved
   {
     $$ = &DDL{
@@ -4894,8 +4941,26 @@ alter_table_statement_part:
     })
     $$ = ddl
   }
-// | FORCE
-// | LOCK [=] {DEFAULT | NONE | SHARED | EXCLUSIVE}
+| FORCE
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| LOCK equal_opt DEFAULT
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| LOCK equal_opt NONE
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| LOCK equal_opt SHARED
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| LOCK equal_opt EXCLUSIVE
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
 | MODIFY column_opt column_definition column_order_opt
   {
     ddl := &DDL{
@@ -4992,7 +5057,7 @@ alter_table_statement_part:
     	Action: AlterStr,
     }
   }
-// TODO: these are table options
+// TODO: move these to table options
 | SECONDARY_ENGINE equal_opt ID
   {
     $$ = &DDL{Action: AlterStr}
@@ -5037,7 +5102,6 @@ alter_table_statement_part:
   {
     $$ = &DDL{Action: AlterStr, AutoIncSpec: &AutoIncSpec{Value: $3}}
   }
-// TODO: partition options
 | partition_operation
   {
     $$ = &DDL{Action: AlterStr, PartitionSpec: $1}
@@ -9269,6 +9333,7 @@ non_reserved_keyword:
 | DESCRIPTION
 | DIRECTORY
 | DISABLE
+| DISCARD
 | DISK
 | DO
 | DUMPFILE
@@ -9311,6 +9376,7 @@ non_reserved_keyword:
 | HISTORY
 | HOSTS
 | HOUR
+| IMPORT
 | INACTIVE
 | INDEXES
 | INITIAL
