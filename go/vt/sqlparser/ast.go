@@ -1959,10 +1959,8 @@ func (c Characteristic) String() string {
 
 // AlterTable represents an ALTER table statement, which can include multiple DDL clauses.
 type AlterTable struct {
-	Table        TableName
-	Statements   []*DDL
-	TableOpts    []*TableOption
-	PartitionOpt *PartitionOption
+	Table      TableName
+	Statements []*DDL
 }
 
 var _ SQLNode = (*AlterTable)(nil)
