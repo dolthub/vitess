@@ -2506,8 +2506,8 @@ var (
 					WHERE (SELECT min(pk) FROM one_pk WHERE pk > opk.pk) IS NOT NULL
 					ORDER BY max`,
 			useSelectExpressionLiteral: true,
-			output: "select pk, (select max(pk) from one_pk where pk < opk.pk) as `max`," +
-				" (select min(pk) from one_pk where pk > opk.pk) as `min` " +
+			output: "select pk, (select max(pk) from one_pk where pk < opk.pk) `max`," +
+				" (select min(pk) from one_pk where pk > opk.pk) `min` " +
 				"from one_pk as opk " +
 				"where (select min(pk) from one_pk where pk > opk.pk) " +
 				"is not null order by `max` asc",

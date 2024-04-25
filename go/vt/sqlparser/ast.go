@@ -164,25 +164,31 @@ func parseTokenizer(sql string, tokenizer *Tokenizer) (Statement, error) {
 
 // For select statements, capture the verbatim select expressions from the original query text
 func captureSelectExpressions(sql string, tokenizer *Tokenizer) {
-	if w, ok := tokenizer.ParseTree.(WalkableSQLNode); ok {
+	if s, isSelect := tokenizer.ParseTree.(SelectStatement); isSelect {
+		walkSelectExpressions(s, sql)
+	} else if w, ok := tokenizer.ParseTree.(WalkableSQLNode); ok {
 		w.walkSubtree(func(node SQLNode) (bool, error) {
-			if s, ok := node.(SelectStatement); ok {
-				s.walkSubtree(func(node SQLNode) (bool, error) {
-					if node, ok := node.(*AliasedExpr); ok && node.EndParsePos > node.StartParsePos {
-						_, ok := node.Expr.(*ColName)
-						if ok {
-							// column names don't need any special handling to capture the input expression
-							return false, nil
-						} else {
-							node.InputExpression = trimQuotes(strings.Trim(sql[node.StartParsePos:node.EndParsePos], " \n\t"))
-						}
-					}
-					return true, nil
-				})
+			if s, isSelect = node.(SelectStatement); isSelect {
+				walkSelectExpressions(s, sql)
 			}
 			return true, nil
 		})
 	}
+}
+
+func walkSelectExpressions(s SelectStatement, sql string) {
+	s.walkSubtree(func(node SQLNode) (bool, error) {
+		if node, ok := node.(*AliasedExpr); ok && node.EndParsePos > node.StartParsePos {
+			_, ok := node.Expr.(*ColName)
+			if ok {
+				// column names don't need any special handling to capture the input expression
+				return false, nil
+			} else {
+				node.InputExpression = trimQuotes(strings.Trim(sql[node.StartParsePos:node.EndParsePos], " \n\t"))
+			}
+		}
+		return true, nil
+	})
 }
 
 // For DDL statements that capture the position of a sub-statement (create view and others), we need to adjust these
