@@ -4539,25 +4539,6 @@ range_or_list:
     $$ = true
   }
 
-algorithm_part_opt:
-  {
-    $$ = ""
-  }
-| ALGORITHM '=' INTEGRAL
-  {
-    $$ = string($1) + " = " + string($3)
-  }
-
-range_or_list:
-  RANGE
-  {
-    $$ = string($1)
-  }
-| LIST
-  {
-    $$ = string($1)
-  }
-
 partition_num_opt:
   {
     $$ = nil
