@@ -4536,6 +4536,21 @@ algorithm_part_opt:
 range_or_list:
   RANGE
   {
+    $$ = true
+  }
+
+algorithm_part_opt:
+  {
+    $$ = ""
+  }
+| ALGORITHM '=' INTEGRAL
+  {
+    $$ = string($1) + " = " + string($3)
+  }
+
+range_or_list:
+  RANGE
+  {
     $$ = string($1)
   }
 | LIST
