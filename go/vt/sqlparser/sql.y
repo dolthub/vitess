@@ -4536,7 +4536,11 @@ algorithm_part_opt:
 range_or_list:
   RANGE
   {
-    $$ = true
+    $$ = string($1)
+  }
+| LIST
+  {
+    $$ = string($1)
   }
 
 partition_num_opt:
