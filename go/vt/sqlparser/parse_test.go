@@ -1577,10 +1577,82 @@ var (
 		}, {
 			input:  "alter table a rename key foo to bar",
 			output: "alter table a rename index foo to bar",
-		}, {
+		},
+		{
+			input:  "alter table a add partition (partition p values less than (val))",
+		},
+		{
+			input:  "alter table a drop partition p",
+		},
+		{
+			input:  "alter table a discard partition p tablespace",
+		},
+		{
+			input:  "alter table a discard partition all tablespace",
+		},
+		{
+			input:  "alter table a import partition p tablespace",
+		},
+		{
+			input:  "alter table a import partition all tablespace",
+		},
+		{
+			input:  "alter table a truncate partition p tablespace",
+		},
+		{
+			input:  "alter table a truncate partition all tablespace",
+		},
+		{
+			input:  "alter table a coalesce partition 5",
+		},
+		{
 			input:  "alter table a reorganize partition b into (partition c values less than (?), partition d values less than (maxvalue))",
 			output: "alter table a reorganize partition b into (partition c values less than (:v1), partition d values less than (maxvalue))",
-		}, {
+		},
+		{
+			input:  "alter table a exchange partition p with table t",
+			output: "alter table a exchange partition p with table t without validation",
+		},
+		{
+			input:  "alter table a exchange partition p with table t with validation",
+		},
+		{
+			input:  "alter table a exchange partition p with table t without validation",
+		},
+		{
+			input:  "alter table a analyze partition p",
+		},
+		{
+			input:  "alter table a analyze partition all",
+		},
+		//{
+		//	input:  "alter table a check partition p",
+		//},
+		//{
+		//	input:  "alter table a check partition all",
+		//},
+		{
+			input:  "alter table a optimize partition p",
+		},
+		{
+			input:  "alter table a optimize partition all",
+		},
+		{
+			input:  "alter table a rebuild partition p",
+		},
+		{
+			input:  "alter table a rebuild partition all",
+		},
+		{
+			input:  "alter table a repair partition p",
+		},
+		{
+			input:  "alter table a repair partition all",
+		},
+		{
+			input:  "alter table a remove partitioning",
+		},
+		{
 			input:  "alter table a add column id int",
 			output: "alter table a add column (\n\tid int\n)",
 		}, {
@@ -2669,16 +2741,6 @@ var (
 			input:  "alter table a modify foo int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null after bar",
 			output: "alter table a modify column foo (\n\tfoo int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n) after bar",
 		}, {
-			input: "alter table t add column c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null," +
-				" change foo bar int not null auto_increment first," +
-				" reorganize partition b into (partition c values less than (:v1), partition d values less than (maxvalue))," +
-				" add spatial index idx (id)",
-			output: `alter table t add column (
-	c int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique
-), change column foo (
-	bar int not null auto_increment
-) first, reorganize partition b into (partition c values less than (:v1), partition d values less than (maxvalue)), add spatial index idx (id)`,
-		}, {
 			input:  "alter table t alter foo set default 5",
 			output: "alter table t alter column foo set default 5",
 		}, {
@@ -3189,28 +3251,48 @@ var (
 		}, {
 			input:  "create table t (pk int not null, constraint `mykey` primary key `pk_id` (`pk`))",
 			output: "create table t (\n\tpk int not null,\n\tprimary key (pk)\n)",
-		}, {
+		},
+		{
 			input:  "alter table t default character set utf8mb4",
 			output: "alter table t character set utf8mb4",
-		}, {
+		},
+		{
 			input:  "alter table t character set = utf8mb4",
 			output: "alter table t character set utf8mb4",
-		}, {
+		},
+		{
 			input:  "alter table t character set := utf8mb4",
 			output: "alter table t character set utf8mb4",
-		}, {
+		},
+		{
 			input:  "alter table t character set utf8mb4 collate utf8mb4_0900_bin",
 			output: "alter table t character set utf8mb4 collate utf8mb4_0900_bin",
-		}, {
+		},
+		{
 			input:  "alter table t character set 'utf8mb4' collate = 'utf8mb4_0900_bin'",
 			output: "alter table t character set utf8mb4 collate utf8mb4_0900_bin",
-		}, {
+		},
+		{
 			input:  "alter table t collate utf8mb4_0900_bin",
 			output: "alter table t collate utf8mb4_0900_bin",
-		}, {
+		},
+		{
 			input:  "alter table t collate = 'utf8mb4_0900_bin'",
 			output: "alter table t collate utf8mb4_0900_bin",
-		}, {
+		},
+		{
+			input:  "alter table t collate = 'utf8mb4_0900_bin'",
+			output: "alter table t collate utf8mb4_0900_bin",
+		},
+		{
+			input:  "alter table t convert to character set utf8mb4",
+			output: "alter table t character set utf8mb4",
+		},
+		{
+			input:  "alter table t convert to character set utf8mb4 collate utf8mb4_0900_bin",
+			output: "alter table t character set utf8mb4 collate utf8mb4_0900_bin",
+		},
+		{
 			input:  "SELECT _utf8mb4'abc'",
 			output: "select _utf8mb4 'abc'",
 		}, {
@@ -3675,6 +3757,106 @@ var (
 			output: "alter table t",
 		},
 		{
+			input:  "alter table t autoextend_size='asdf'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t auto_increment=1",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t avg_row_length=1",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t checksum 1",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t checksum = 1",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t table_checksum 1",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t table_checksum = 1",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t comment='asdf'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t compression='asdf'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t connection='asdf'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t data directory = 'asdf'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t index directory = 'asdf'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t delay_key_write = 123",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t encryption='asdf'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t engine=eng",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t engine_attribute='asdf'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t insert_method last",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t insert_method=last",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t key_block_size='asdf'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t max_rows='asdf'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t min_rows='asdf'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t pack_keys=123",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t password='asdf'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t row_format=dynamic",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t start transaction",
+			output: "alter table t",
+		},
+		{
 			input:  "alter table t secondary_engine=rapid",
 			output: "alter table t",
 		},
@@ -3711,6 +3893,41 @@ var (
 			output: "alter table t",
 		},
 		{
+			input:  "alter table t stats_auto_recalc = default",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t stats_persistent = default",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t stats_sample_pages = 'asdf'",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t tablespace asdf",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t tablespace asdf storage disk",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t tablespace asdf storage memory",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t union = (a, b, c)",
+			output: "alter table t",
+		},
+
+		{
+			input:  "alter table t modify col varchar(20) not null, algorithm = inplace, lock = none;",
+			output: "alter table t modify column col (\n" +
+				"\tcol varchar(20) not null\n" +
+				"),,",
+		},
+		{
 			input:  "table t",
 			output: "select * from t",
 		},
@@ -3727,14 +3944,6 @@ var (
 				") checksum 100",
 		},
 		{
-			input:  "alter table t checksum 1",
-			output: "alter table t",
-		},
-		{
-			input:  "alter table t checksum = 1",
-			output: "alter table t",
-		},
-		{
 			input: "create table t (i int) table_checksum=0",
 			output: "create table t (\n" +
 				"\ti int\n" +
@@ -3745,14 +3954,6 @@ var (
 			output: "create table t (\n" +
 				"\ti int\n" +
 				") CHECKSUM 100",
-		},
-		{
-			input:  "alter table t table_checksum 1",
-			output: "alter table t",
-		},
-		{
-			input:  "alter table t table_checksum = 1",
-			output: "alter table t",
 		},
 		{
 			input: "create table t (i int) union (a, b, c)",
@@ -3781,14 +3982,6 @@ var (
 			output: "create table t (\n" +
 				"\ti int\n" +
 				") insert_method last",
-		},
-		{
-			input:  "alter table t insert_method last",
-			output: "alter table t",
-		},
-		{
-			input:  "alter table t insert_method=last",
-			output: "alter table t",
 		},
 	}
 

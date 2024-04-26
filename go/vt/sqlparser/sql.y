@@ -149,6 +149,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
   partDefs      []*PartitionDefinition
   partDef       *PartitionDefinition
   partSpec      *PartitionSpec
+  partSpecs     []*PartitionSpec
   viewSpec      *ViewSpec
   viewCheckOption ViewCheckOption
   showFilter    *ShowFilter
@@ -283,6 +284,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> DISCARD IMPORT
 %token <bytes> SHARED EXCLUSIVE
 %token <bytes> WITHOUT VALIDATION
+%token <bytes> COALESCE EXCHANGE REBUILD REMOVE PARTITIONING
 
 // SIGNAL Tokens
 %token <bytes> CLASS_ORIGIN SUBCLASS_ORIGIN MESSAGE_TEXT MYSQL_ERRNO CONSTRAINT_CATALOG CONSTRAINT_SCHEMA
@@ -440,12 +442,12 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> trigger_time trigger_event
 %type <boolean> with_or_without
 %type <statement> alter_statement alter_table_statement alter_database_statement alter_event_statement alter_user_statement
-%type <ddl> create_table_prefix rename_list alter_table_statement_part
+%type <ddl> create_table_prefix rename_list alter_table_statement_part alter_table_options
 %type <ddls> alter_table_statement_list
 %type <statement> analyze_statement analyze_opt show_statement use_statement prepare_statement execute_statement deallocate_statement
 %type <statement> describe_statement explain_statement explainable_statement
 %type <statement> begin_statement commit_statement rollback_statement start_transaction_statement load_statement
-%type <bytes> work_opt no_opt chain_opt release_opt index_name_opt
+%type <bytes> work_opt no_opt chain_opt release_opt index_name_opt no_first_last
 %type <bytes2> comment_opt comment_list
 %type <str> distinct_opt union_op intersect_op except_op insert_or_replace
 %type <str> match_option format_opt
@@ -586,6 +588,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <partDefs> partition_definitions partition_definitions_opt
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
+%type <partSpecs> partition_operation_list_opt partition_operation_list
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update drop_statement_action
 %type <str> pk_name_opt constraint_symbol_opt infile_opt ignore_or_replace_opt
 %type <exprs> call_param_list_opt
@@ -4276,15 +4279,7 @@ table_option:
   {
     $$ = &TableOption{Name: string($1), Value: string($3)}
   }
-| INSERT_METHOD equal_opt NO
-  {
-    $$ = &TableOption{Name: string($1), Value: string($3)}
-  }
-| INSERT_METHOD equal_opt FIRST
-  {
-    $$ = &TableOption{Name: string($1), Value: string($3)}
-  }
-| INSERT_METHOD equal_opt LAST
+| INSERT_METHOD equal_opt no_first_last
   {
     $$ = &TableOption{Name: string($1), Value: string($3)}
   }
@@ -4373,6 +4368,20 @@ table_option:
     $$ = &TableOption{Name: string($1), Value: "(" + $4 + ")"}
   }
 
+no_first_last:
+  NO
+  {
+    $$ = $1
+  }
+| FIRST
+  {
+    $$ = $1
+  }
+| LAST
+  {
+    $$ = $1
+  }
+
 table_option_collate:
   any_identifier
   {
@@ -4456,8 +4465,6 @@ any_identifier_list:
     $$ = $1 + "," + string($3)
   }
 
-// TODO: should this also include non_reserved_keywords2, non_reserved_keywords3?
-// TODO: should this include column_name_safe_keyword?
 any_identifier:
   ID
 | non_reserved_keyword
@@ -4624,16 +4631,20 @@ alter_database_statement:
   }
 
 alter_table_statement:
-  ALTER ignore_opt TABLE table_name alter_table_statement_list
+  ALTER ignore_opt TABLE table_name alter_table_statement_list partition_operation_list_opt
   {
     for i := 0; i < len($5); i++ {
-      if $5[i].Action == RenameStr {
-        $5[i].FromTables = append(TableNames{$4}, $5[i].FromTables...)
-      } else {
-        $5[i].Table = $4
-      }
+    	if $5[i].Action == RenameStr {
+    		$5[i].FromTables = append(TableNames{$4}, $5[i].FromTables...)
+	} else {
+		$5[i].Table = $4
+	}
     }
-    $$ = &AlterTable{Table: $4, Statements: $5}
+    $$ = &AlterTable{Table: $4, Statements: $5, PartitionSpecs: $6}
+  }
+| ALTER ignore_opt TABLE table_name partition_operation_list
+  {
+    $$ = &AlterTable{Table: $4, PartitionSpecs: $5}
   }
 
 alter_table_statement_list:
@@ -4873,7 +4884,26 @@ alter_table_statement_part:
 	},
     }
   }
-// | CONVERT TO CHARACTER SET charset_name [COLLATE collation_name]
+| CONVERT TO CHARACTER SET charset
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+    	AlterCollationSpec: &AlterCollationSpec{
+    		CharacterSet: $5,
+    		Collation: "",
+	},
+    }
+  }
+| CONVERT TO CHARACTER SET charset COLLATE charset
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+    	AlterCollationSpec: &AlterCollationSpec{
+    		CharacterSet: $5,
+    		Collation: $7,
+	},
+    }
+  }
 | DISABLE KEYS
   {
     $$ = &DDL{
@@ -5057,20 +5087,22 @@ alter_table_statement_part:
     	Action: AlterStr,
     }
   }
-// TODO: move these to table options
-| SECONDARY_ENGINE equal_opt ID
+| alter_table_options
+  {
+    $$ = $1
+  }
+
+// TODO: these are the same as table_option_list, but we need to have the return type be different
+alter_table_options:
+  AUTOEXTEND_SIZE equal_opt table_opt_value
   {
     $$ = &DDL{Action: AlterStr}
   }
-| SECONDARY_ENGINE equal_opt STRING
+| AUTO_INCREMENT equal_opt expression
   {
-    $$ = &DDL{Action: AlterStr}
+    $$ = &DDL{Action: AlterStr, AutoIncSpec: &AutoIncSpec{Value: $3}}
   }
-| SECONDARY_ENGINE equal_opt NULL
-  {
-     $$ = &DDL{Action: AlterStr}
-   }
-| SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
+| AVG_ROW_LENGTH equal_opt table_opt_value
   {
     $$ = &DDL{Action: AlterStr}
   }
@@ -5082,29 +5114,129 @@ alter_table_statement_part:
   {
     $$ = &DDL{Action: AlterStr}
   }
+| COMMENT_KEYWORD equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| COMPRESSION equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| CONNECTION equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| DATA DIRECTORY equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| INDEX DIRECTORY equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| DELAY_KEY_WRITE equal_opt coericble_to_integral
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ENCRYPTION equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ENGINE equal_opt any_identifier
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| INSERT_METHOD equal_opt no_first_last
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| KEY_BLOCK_SIZE equal_opt table_opt_value
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| MAX_ROWS equal_opt table_opt_value
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| MIN_ROWS equal_opt table_opt_value
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| PACK_KEYS equal_opt coericble_to_integral
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| PASSWORD equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ROW_FORMAT equal_opt row_fmt_opt
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| START TRANSACTION
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| SECONDARY_ENGINE equal_opt ID
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| SECONDARY_ENGINE equal_opt NULL
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| SECONDARY_ENGINE equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| STATS_AUTO_RECALC equal_opt DEFAULT
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| STATS_AUTO_RECALC equal_opt coericble_to_integral
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| STATS_PERSISTENT equal_opt DEFAULT
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| STATS_PERSISTENT equal_opt coericble_to_integral
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| STATS_SAMPLE_PAGES equal_opt table_opt_value
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| TABLESPACE table_opt_value
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| TABLESPACE any_identifier
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| TABLESPACE any_identifier STORAGE DISK
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| TABLESPACE any_identifier STORAGE MEMORY
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
 | UNION equal_opt openb any_identifier_list closeb
   {
     $$ = &DDL{Action: AlterStr}
-  }
-| INSERT_METHOD equal_opt NO
-  {
-    $$ = &DDL{Action: AlterStr}
-  }
-| INSERT_METHOD equal_opt FIRST
-  {
-    $$ = &DDL{Action: AlterStr}
-  }
-| INSERT_METHOD equal_opt LAST
-  {
-    $$ = &DDL{Action: AlterStr}
-  }
-| AUTO_INCREMENT equal_opt expression
-  {
-    $$ = &DDL{Action: AlterStr, AutoIncSpec: &AutoIncSpec{Value: $3}}
-  }
-| partition_operation
-  {
-    $$ = &DDL{Action: AlterStr, PartitionSpec: $1}
   }
 
 with_or_without:
@@ -5149,10 +5281,118 @@ column_opt:
 | COLUMN
   { }
 
-partition_operation:
-  REORGANIZE PARTITION sql_id INTO openb partition_definitions closeb
+partition_operation_list_opt:
   {
-    $$ = &PartitionSpec{Action: ReorganizeStr, Name: $3, Definitions: $6}
+    $$ = nil
+  }
+| partition_operation_list
+  {
+    $$ = $1
+  }
+
+partition_operation_list:
+  partition_operation
+  {
+    $$ = []*PartitionSpec{$1}
+  }
+| partition_operation_list partition_operation
+  {
+    $$ = append($1, $2)
+  }
+
+partition_operation:
+  ADD PARTITION openb partition_definitions closeb
+  {
+    $$ = &PartitionSpec{Action: AddStr, Definitions: $4}
+  }
+| DROP PARTITION partition_list
+  {
+    $$ = &PartitionSpec{Action: DropStr, Names: $3}
+  }
+| DISCARD PARTITION partition_list TABLESPACE
+  {
+    $$ = &PartitionSpec{Action: DiscardStr, Names: $3}
+  }
+| DISCARD PARTITION ALL TABLESPACE
+  {
+    $$ = &PartitionSpec{Action: DiscardStr, IsAll: true}
+  }
+| IMPORT PARTITION partition_list TABLESPACE
+  {
+    $$ = &PartitionSpec{Action: ImportStr, Names: $3}
+  }
+| IMPORT PARTITION ALL TABLESPACE
+  {
+    $$ = &PartitionSpec{Action: ImportStr, IsAll: true}
+  }
+| TRUNCATE PARTITION partition_list TABLESPACE
+  {
+    $$ = &PartitionSpec{Action: TruncateStr, Names: $3}
+  }
+| TRUNCATE PARTITION ALL TABLESPACE
+  {
+    $$ = &PartitionSpec{Action: TruncateStr, IsAll: true}
+  }
+| COALESCE PARTITION INTEGRAL
+  {
+    $$ = &PartitionSpec{Action: CoalesceStr, Number: NewIntVal($3)}
+  }
+| REORGANIZE PARTITION partition_list INTO openb partition_definitions closeb
+  {
+    $$ = &PartitionSpec{Action: ReorganizeStr, Names: $3, Definitions: $6}
+  }
+| EXCHANGE PARTITION sql_id WITH TABLE table_name
+  {
+    $$ = &PartitionSpec{Action: ExchangeStr, Names: Partitions{$3}, TableName: $6}
+  }
+| EXCHANGE PARTITION sql_id WITH TABLE table_name with_or_without VALIDATION
+  {
+    $$ = &PartitionSpec{Action: ExchangeStr, Names: Partitions{$3}, TableName: $6, WithValidation: $7}
+  }
+| ANALYZE PARTITION partition_list
+  {
+    $$ = &PartitionSpec{Action: AnalyzeStr, Names: $3}
+  }
+| ANALYZE PARTITION ALL
+  {
+    $$ = &PartitionSpec{Action: AnalyzeStr, IsAll: true}
+  }
+// The parser confuses CHECK with column_definitions
+//| CHECK PARTITION partition_list
+//  {
+//    $$ = &PartitionSpec{Action: CheckStr, Names: $3}
+//  }
+//| CHECK PARTITION ALL
+//  {
+//    $$ = &PartitionSpec{Action: CheckStr, IsAll: true}
+//  }
+| OPTIMIZE PARTITION partition_list
+  {
+    $$ = &PartitionSpec{Action: OptimizeStr, Names: $3}
+  }
+| OPTIMIZE PARTITION ALL
+  {
+    $$ = &PartitionSpec{Action: OptimizeStr, IsAll: true}
+  }
+| REBUILD PARTITION partition_list
+  {
+    $$ = &PartitionSpec{Action: RebuildStr, Names: $3}
+  }
+| REBUILD PARTITION ALL
+  {
+    $$ = &PartitionSpec{Action: RebuildStr, IsAll: true}
+  }
+| REPAIR PARTITION partition_list
+  {
+    $$ = &PartitionSpec{Action: RepairStr, Names: $3}
+  }
+| REPAIR PARTITION ALL
+  {
+    $$ = &PartitionSpec{Action: RepairStr, IsAll: true}
+  }
+| REMOVE PARTITIONING
+  {
+    $$ = &PartitionSpec{Action: RemoveStr}
   }
 
 partition_definitions_opt:
@@ -8478,11 +8718,6 @@ to_or_as:
 | AS
   { $$ = struct{}{} }
 
-//to_opt:
-//  { $$ = struct{}{} }
-//| TO
-//  { $$ = struct{}{} }
-
 as_opt:
   { $$ = struct{}{} }
 | AS
@@ -9286,6 +9521,7 @@ non_reserved_keyword:
 | ARRAY
 | AT
 | AUTHENTICATION
+| AUTOEXTEND_SIZE
 | AUTO_INCREMENT
 | AVG_ROW_LENGTH
 | BEGIN
@@ -9305,6 +9541,7 @@ non_reserved_keyword:
 | CLIENT
 | CLONE
 | CLOSE
+| COALESCE
 | COLLATION
 | COLUMNS
 | COLUMN_NAME
@@ -9352,6 +9589,7 @@ non_reserved_keyword:
 | ERRORS
 | EVENTS
 | EVERY
+| EXCHANGE
 | EXCLUDE
 | EXPANSION
 | EXPIRE
@@ -9408,6 +9646,7 @@ non_reserved_keyword:
 | MAX_ROWS
 | MAX_UPDATES_PER_HOUR
 | MAX_USER_CONNECTIONS
+| MEMORY
 | MERGE
 | MESSAGE_TEXT
 | MICROSECOND
@@ -9441,6 +9680,7 @@ non_reserved_keyword:
 | ORGANIZATION
 | OTHERS
 | PACK_KEYS
+| PARTITIONING
 | PARTITIONS
 | PATH
 | PERSIST
@@ -9459,9 +9699,11 @@ non_reserved_keyword:
 | QUARTER
 | QUERY
 | RANDOM
+| REBUILD
 | REDUNDANT
 | REFERENCE
 | RELAY
+| REMOVE
 | REORGANIZE
 | REPAIR
 | REPEATABLE
