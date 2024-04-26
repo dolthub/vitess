@@ -162,7 +162,8 @@ func parseTokenizer(sql string, tokenizer *Tokenizer) (Statement, error) {
 	return tokenizer.ParseTree, nil
 }
 
-// For select statements, capture the verbatim select expressions from the original query text
+// For select statements, capture the verbatim select expressions from the original query text.
+// It searches select expressions in walkable nodes.
 func captureSelectExpressions(sql string, tokenizer *Tokenizer) {
 	if s, isSelect := tokenizer.ParseTree.(SelectStatement); isSelect {
 		walkSelectExpressions(s, sql)
@@ -176,6 +177,9 @@ func captureSelectExpressions(sql string, tokenizer *Tokenizer) {
 	}
 }
 
+// walkSelectExpressions fills in `InputExpression` of `AliasedExpr` if it's not a column name.
+// This is used to display the result as defined original query text. This function gets called
+// by captureSelectExpressions.
 func walkSelectExpressions(s SelectStatement, sql string) {
 	s.walkSubtree(func(node SQLNode) (bool, error) {
 		if node, ok := node.(*AliasedExpr); ok && node.EndParsePos > node.StartParsePos {
