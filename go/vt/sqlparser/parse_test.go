@@ -1625,12 +1625,6 @@ var (
 		{
 			input:  "alter table a analyze partition all",
 		},
-		//{
-		//	input:  "alter table a check partition p",
-		//},
-		//{
-		//	input:  "alter table a check partition all",
-		//},
 		{
 			input:  "alter table a optimize partition p",
 		},
@@ -3853,10 +3847,6 @@ var (
 			output: "alter table t",
 		},
 		{
-			input:  "alter table t start transaction",
-			output: "alter table t",
-		},
-		{
 			input:  "alter table t secondary_engine=rapid",
 			output: "alter table t",
 		},
@@ -5956,8 +5946,10 @@ func TestFunctionCalls(t *testing.T) {
 			input: `select SELECT 17 MEMBER OF('[23, "abc", 17, "ab", 10]'); from dual`,
 		},
 		{
-			// not implemented
-			input: "select JSON_TABLE('') from dual",
+			input:  "alter table a check partition p",
+		},
+		{
+			input:  "alter table a check partition all",
 		},
 	}
 

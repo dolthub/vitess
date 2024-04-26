@@ -5178,10 +5178,6 @@ alter_table_options:
   {
     $$ = &DDL{Action: AlterStr}
   }
-| START TRANSACTION
-  {
-    $$ = &DDL{Action: AlterStr}
-  }
 | SECONDARY_ENGINE equal_opt ID
   {
     $$ = &DDL{Action: AlterStr}
