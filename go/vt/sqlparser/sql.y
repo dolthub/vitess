@@ -6567,14 +6567,19 @@ values_statement:
   }
 
 row_list:
-  ROW row_tuple
+  row_opt row_tuple
   {
     $$ = Values{$2}
   }
-| row_list ',' ROW row_tuple
+| row_list ',' row_opt row_tuple
   {
     $$ = append($$, $4)
   }
+
+row_opt:
+  {}
+| ROW
+  {}
 
 aliased_table_name:
   table_name aliased_table_options
