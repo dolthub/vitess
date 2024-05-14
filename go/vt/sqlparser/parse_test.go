@@ -1232,6 +1232,14 @@ var (
 			output: "insert into xy values (1, 1), (2, 2)",
 		},
 		{
+			input:  "insert into xy values (1, 1), row (2, 2)",
+			output: "insert into xy values (1, 1), (2, 2)",
+		},
+		{
+			input:  "insert into xy values row (1, 1), (2, 2)",
+			output: "insert into xy values (1, 1), (2, 2)",
+		},
+		{
 			input:  "insert into xy ((( values row (1, 1), row (2, 2) )))",
 			output: "insert into xy values (1, 1), (2, 2)",
 		},
