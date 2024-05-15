@@ -8058,6 +8058,14 @@ convert_type:
   {
     $$ = &ConvertType{Type: string($1)}
   }
+| DOUBLE PRECISION
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| REAL
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
 | FLOAT_TYPE
   {
     $$ = &ConvertType{Type: string($1)}
