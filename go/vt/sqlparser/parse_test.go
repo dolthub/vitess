@@ -4022,6 +4022,20 @@ var (
 				"\ti int\n" +
 				") insert_method last",
 		},
+
+		// Date, Time, and Timestamp literals
+		{
+			input:  "select date '2020-10-01'",
+			output: "select '2020-10-01'",
+		},
+		{
+			input:  "select time '2020-10-01'",
+			output: "select '2020-10-01'",
+		},
+		{
+			input:  "select timestamp '2020-10-01'",
+			output: "select '2020-10-01'",
+		},
 	}
 
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
