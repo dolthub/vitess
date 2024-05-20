@@ -101,6 +101,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
   sqlVal        *SQLVal
   colTuple      ColTuple
   values        Values
+  aliasedvalues AliasedValues
   valTuple      ValTuple
   whens         []*When
   when          *When
@@ -140,11 +141,17 @@ func yySpecialCommentMode(yylex interface{}) bool {
   indexColumns  []*IndexColumn
   constraintDefinition *ConstraintDefinition
   constraintInfo ConstraintInfo
+  tableOption   *TableOption
+  tableOptions  []*TableOption
+  partOption    *PartitionOption
+  subpart       *SubPartition
   ReferenceAction ReferenceAction
   partDefs      []*PartitionDefinition
   partDef       *PartitionDefinition
   partSpec      *PartitionSpec
+  partSpecs     []*PartitionSpec
   viewSpec      *ViewSpec
+  viewCheckOption ViewCheckOption
   showFilter    *ShowFilter
   frame         *Frame
   frameExtent   *FrameExtent
@@ -202,6 +209,20 @@ func yySpecialCommentMode(yylex interface{}) bool {
   srsAttr *SrsAttribute
 }
 
+// These precedence rules are there to handle shift-reduce conflicts.
+
+// STRING_TYPE_PREFIX_NON_KEYWORD is used to resolve shift-reduce conflicts occuring due to column_name symbol and
+// being able to use keywords like DATE and TIME as prefixes to strings to denote their type. The shift-reduce conflict occurrs because
+// after seeing one of these non-reserved keywords, if we see a STRING, then we can either shift to use the STRING typed rule in literal or
+// reduce the non-reserved keyword into column_name and eventually use a rule from simple_expr.
+// The way to fix this conflict is to give shifting higher precedence than reducing.
+// Adding no precedence also works, since shifting is the default, but it reports some conflicts
+// Precedence is also assined to shifting on STRING.
+// We also need to add a lower precedence to reducing the grammar symbol to non-reserved keywords.
+// In order to ensure lower precedence of reduction, this rule has to come before the precedence declaration of STRING.
+// This precedence should not be used anywhere else other than with non-reserved-keywords that are also used for type-casting a STRING.
+%nonassoc <str> STRING_TYPE_PREFIX_NON_KEYWORD
+
 %token LEX_ERROR
 
 // Special tokens
@@ -211,7 +232,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %left <bytes> EXCEPT
 %left <bytes> UNION
 %left <bytes> INTERSECT
-%token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL 
+%token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL
 %token <bytes> ALL ANY SOME DISTINCT AS EXISTS ASC DESC DUPLICATE DEFAULT SET LOCK UNLOCK KEYS OF
 %token <bytes> OUTFILE DUMPFILE DATA LOAD LINES TERMINATED ESCAPED ENCLOSED OPTIONALLY STARTING
 %right <bytes> UNIQUE KEY
@@ -222,7 +243,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %left <bytes> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <bytes> ON USING
 %token <empty> '(' ',' ')' '@' ':'
-%token <bytes> ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
+%nonassoc <bytes> STRING
+%token <bytes> ID HEX INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
 %token <bytes> NULL TRUE FALSE OFF
 %right <bytes> INTO
 
@@ -272,7 +294,12 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> SEQUENCE ENABLE DISABLE
 %token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES DEFINER INVOKER
 %token <bytes> INOUT OUT DETERMINISTIC CONTAINS READS MODIFIES SQL SECURITY TEMPORARY ALGORITHM MERGE TEMPTABLE UNDEFINED
-%token <bytes> EVENT EVENTS SCHEDULE EVERY STARTS ENDS COMPLETION PRESERVE
+%token <bytes> EVENT EVENTS SCHEDULE EVERY STARTS ENDS COMPLETION PRESERVE CASCADED
+%token <bytes> INSTANT INPLACE COPY
+%token <bytes> DISCARD IMPORT
+%token <bytes> SHARED EXCLUSIVE
+%token <bytes> WITHOUT VALIDATION
+%token <bytes> COALESCE EXCHANGE REBUILD REMOVE PARTITIONING
 
 // SIGNAL Tokens
 %token <bytes> CLASS_ORIGIN SUBCLASS_ORIGIN MESSAGE_TEXT MYSQL_ERRNO CONSTRAINT_CATALOG CONSTRAINT_SCHEMA
@@ -301,8 +328,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> TABLE_ENCRYPTION_ADMIN TP_CONNECTION_ADMIN VERSION_TOKEN_ADMIN XA_RECOVER_ADMIN
 
 // Replication Tokens
-%token <bytes> REPLICA SOURCE STOP RESET FILTER
-%token <bytes> SOURCE_HOST SOURCE_USER SOURCE_PASSWORD SOURCE_PORT SOURCE_CONNECT_RETRY SOURCE_RETRY_COUNT
+%token <bytes> REPLICA REPLICAS SOURCE STOP RESET FILTER LOG MASTER
+%token <bytes> SOURCE_HOST SOURCE_USER SOURCE_PASSWORD SOURCE_PORT SOURCE_CONNECT_RETRY SOURCE_RETRY_COUNT SOURCE_AUTO_POSITION
 %token <bytes> REPLICATE_DO_TABLE REPLICATE_IGNORE_TABLE
 
 // Transaction Tokens
@@ -335,7 +362,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> CURRENT_TIME LOCALTIME LOCALTIMESTAMP
 %token <bytes> UTC_DATE UTC_TIME UTC_TIMESTAMP
 %token <bytes> REPLACE
-%token <bytes> CONVERT CAST
+%token <bytes> CONVERT CAST POSITION
 %token <bytes> SUBSTR SUBSTRING
 %token <bytes> TRIM LEADING TRAILING BOTH
 %token <bytes> GROUP_CONCAT SEPARATOR
@@ -389,7 +416,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> SENSITIVE SPECIFIC SQL_BIG_RESULT SQL_SMALL_RESULT
 
 %token <bytes> UNUSED DESCRIPTION LATERAL MEMBER RECURSIVE
-%token <bytes> BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
+%token <bytes> BUCKETS CLONE COMPONENT DEFINITION ENFORCED NOT_ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
 %token <bytes> INACTIVE INVISIBLE MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
 %token <bytes> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD ORDINALITY ORGANIZATION OTHERS PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
 %token <bytes> REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN SECONDARY SECONDARY_LOAD SECONDARY_UNLOAD
@@ -427,14 +454,16 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <declareHandlerConditions> declare_handler_condition_list
 %type <declareHandlerAction> declare_handler_action
 %type <bytes> signal_condition_value
+%type <bytes> char_or_character
 %type <str> trigger_time trigger_event
-%type <statement> alter_statement alter_table_statement alter_database_statement alter_event_statement
-%type <ddl> create_table_prefix rename_list alter_table_statement_part
+%type <boolean> with_or_without
+%type <statement> alter_statement alter_table_statement alter_database_statement alter_event_statement alter_user_statement
+%type <ddl> create_table_prefix rename_list alter_table_statement_part alter_table_options
 %type <ddls> alter_table_statement_list
 %type <statement> analyze_statement analyze_opt show_statement use_statement prepare_statement execute_statement deallocate_statement
 %type <statement> describe_statement explain_statement explainable_statement
 %type <statement> begin_statement commit_statement rollback_statement start_transaction_statement load_statement
-%type <bytes> work_opt no_opt chain_opt release_opt index_name_opt
+%type <bytes> work_opt no_opt chain_opt release_opt index_name_opt no_first_last
 %type <bytes2> comment_opt comment_list
 %type <str> distinct_opt union_op intersect_op except_op insert_or_replace
 %type <str> match_option format_opt
@@ -463,15 +492,16 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <boolVal> boolean_value
 %type <boolean> all_opt enforced_opt
 %type <str> compare
-%type <ins> insert_data
-%type <expr> value value_expression num_val as_of_opt integral_or_value_arg integral_or_interval_expr timestamp_value
+%type <ins> insert_data insert_data_alias insert_data_select insert_data_values
+%type <expr> value value_expression num_val as_of_opt limit_val integral_or_interval_expr timestamp_value
 %type <bytes> time_unit non_microsecond_time_unit
 %type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
-%type <expr> func_datetime_precision function_call_window function_call_aggregate_with_window
+%type <expr> func_datetime_prec_opt function_call_window function_call_aggregate_with_window function_call_on_update
 %type <str> is_suffix
 %type <colTuple> col_tuple
 %type <exprs> expression_list group_by_list partition_by_opt
 %type <values> tuple_list row_list
+
 %type <valTuple> row_tuple tuple_or_empty
 %type <expr> tuple_expression
 %type <colName> column_name
@@ -518,10 +548,11 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <queryOpts> query_opts
 %type <str> key_type key_type_opt
 %type <str> flush_type flush_type_opt
-%type <empty> to_opt to_or_as as_opt column_opt
-%type <str> algorithm_opt definer_opt security_opt
+%type <empty> to_or_as_opt to_or_as /*to_opt*/ as_opt column_opt
+%type <str> algorithm_view_opt algorithm_part_opt definer_opt security_opt
 %type <viewSpec> view_opts
-%type <bytes> reserved_keyword qualified_column_name_safe_reserved_keyword non_reserved_keyword column_name_safe_keyword non_reserved_keyword2 non_reserved_keyword3 all_non_reserved
+%type <viewCheckOption> opt_with_check_option
+%type <bytes> reserved_keyword qualified_column_name_safe_reserved_keyword non_reserved_keyword column_name_safe_keyword function_call_keywords non_reserved_keyword2 non_reserved_keyword3 all_non_reserved id_or_non_reserved
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt existing_window_name_opt
 %type <colIdents> reserved_sql_id_list
 %type <expr> charset_value
@@ -551,21 +582,29 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> name_opt
 %type <str> equal_opt assignment_op
 %type <TableSpec> table_spec table_column_list
-%type <str> table_option_list table_option table_opt_value row_fmt_opt
-%type <str> partition_options partition_option linear_partition_opt linear_opt partition_num_opt subpartition_opt subpartition_num_opt
+%type <str> table_opt_value row_fmt_opt
+%type <partOption> partition_option_opt partition_option linear_partition_opt
+%type <subpart> subpartition_opt
+%type <boolean> linear_opt
+%type <str> range_or_list
+%type <sqlVal> partition_num_opt subpartition_num_opt
 %type <indexInfo> index_info
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
 %type <indexOption> index_option
 %type <indexOptions> index_option_list index_option_list_opt
+%type <tableOption> table_option
+%type <tableOptions> table_option_list
 %type <flushOption> flush_option
+%type <boolean> flush_tables_read_lock_opt
 %type <replicationOptions> replication_option_list replication_filter_option_list
 %type <replicationOption> replication_option replication_filter_option
 %type <str> relay_logs_attribute
 %type <constraintInfo> foreign_key_details check_constraint_info
-%type <partDefs> partition_definitions
+%type <partDefs> partition_definitions partition_definitions_opt
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
+%type <partSpecs> partition_operation_list_opt partition_operation_list
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update drop_statement_action
 %type <str> pk_name_opt constraint_symbol_opt infile_opt ignore_or_replace_opt
 %type <exprs> call_param_list_opt
@@ -763,7 +802,6 @@ intersect_stmt:
     $$ = &SetOp{Type: $2, Left: $1, Right: $3}
   }
 
-// TODO: add (VALUES ROW(...), ROW(...), ...) support
 // base_select is either a simple SELECT or a SELECT wrapped in parentheses
 base_select:
   base_select_no_cte
@@ -868,13 +906,13 @@ into_opt:
   {
     $$ = &Into{Variables: $2}
   }
-| INTO OUTFILE STRING
-  {
-    $$ = &Into{Outfile: string($3)}
-  }
 | INTO DUMPFILE STRING
   {
     $$ = &Into{Dumpfile: string($3)}
+  }
+| INTO OUTFILE STRING charset_opt fields_opt lines_opt
+  {
+    $$ = &Into{Outfile: string($3), Charset: $4, Fields: $5, Lines: $6}
   }
 
 variable_list:
@@ -913,7 +951,20 @@ common_table_expression:
   }
 
 insert_statement:
-  with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data on_dup_opt
+  with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data_alias on_dup_opt
+  {
+    // insert_data returns a *Insert pre-filled with Columns & Values
+    ins := $7
+    ins.Action = $2
+    ins.Comments = $3
+    ins.Ignore = $4
+    ins.Table = $5
+    ins.Partitions = $6
+    ins.OnDup = OnDup($8)
+    ins.With = $1
+    $$ = ins
+  }
+| with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data_select on_dup_opt
   {
     // insert_data returns a *Insert pre-filled with Columns & Values
     ins := $7
@@ -934,7 +985,7 @@ insert_statement:
       cols = append(cols, updateList.Name.Name)
       vals = append(vals, updateList.Expr)
     }
-    $$ = &Insert{Action: $2, Comments: Comments($3), Ignore: $4, Table: $5, Partitions: $6, Columns: cols, Rows: Values{vals}, OnDup: OnDup($9), With: $1}
+    $$ = &Insert{Action: $2, Comments: Comments($3), Ignore: $4, Table: $5, Partitions: $6, Columns: cols, Rows: &AliasedValues{Values: Values{vals}}, OnDup: OnDup($9), With: $1}
   }
 
 insert_or_replace:
@@ -1126,18 +1177,21 @@ create_statement:
     ddl := &DDL{Action: AlterStr, Table: $7, IndexSpec: &IndexSpec{Action: CreateStr, ToName: $4, Using: $5, Type: $2, Columns: $9, Options: $11}}
     $$ = &AlterTable{Table: $7, Statements: []*DDL{ddl}}
   }
-| CREATE view_opts VIEW table_name ins_column_list_opt AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position
+| CREATE view_opts VIEW table_name ins_column_list_opt AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position opt_with_check_option
   {
     $2.ViewName = $4.ToViewName()
     $2.ViewExpr = $9
     $2.Columns = $5
+    $2.CheckOption = $11
     $$ = &DDL{Action: CreateStr, ViewSpec: $2, SpecialCommentMode: $8, SubStatementPositionStart: $7, SubStatementPositionEnd: $10 - 1}
   }
-| CREATE OR REPLACE view_opts VIEW table_name AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position
+| CREATE OR REPLACE view_opts VIEW table_name ins_column_list_opt AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position opt_with_check_option
   {
     $4.ViewName = $6.ToViewName()
-    $4.ViewExpr = $10
-    $$ = &DDL{Action: CreateStr, ViewSpec: $4,  SpecialCommentMode: $9, SubStatementPositionStart: $8, SubStatementPositionEnd: $11 - 1, OrReplace: true}
+    $4.ViewExpr = $11
+    $4.Columns = $7
+    $4.CheckOption = $13
+    $$ = &DDL{Action: CreateStr, ViewSpec: $4,  SpecialCommentMode: $10, SubStatementPositionStart: $9, SubStatementPositionEnd: $12 - 1, OrReplace: true}
   }
 | CREATE DATABASE not_exists_opt ID creation_option_opt
   {
@@ -1145,7 +1199,7 @@ create_statement:
     if $3 != 0 {
       ne = true
     }
-    $$ = &DBDDL{Action: CreateStr, DBName: string($4), IfNotExists: ne, CharsetCollate: $5}
+    $$ = &DBDDL{Action: CreateStr, SchemaOrDatabase: "database", DBName: string($4), IfNotExists: ne, CharsetCollate: $5}
   }
 | CREATE SCHEMA not_exists_opt ID creation_option_opt
   {
@@ -1153,7 +1207,7 @@ create_statement:
     if $3 != 0 {
       ne = true
     }
-    $$ = &DBDDL{Action: CreateStr, DBName: string($4), IfNotExists: ne, CharsetCollate: $5}
+    $$ = &DBDDL{Action: CreateStr, SchemaOrDatabase: "schema", DBName: string($4), IfNotExists: ne, CharsetCollate: $5}
   }
 | CREATE definer_opt TRIGGER trigger_name trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt lexer_position special_comment_mode trigger_body lexer_position
   {
@@ -1257,6 +1311,24 @@ srs_attribute:
     }
     $1.Description = string($3)
     $$ = $1
+  }
+
+opt_with_check_option:
+  /* EMPTY */
+  {
+    $$ = ViewCheckOptionUnspecified
+  }
+| WITH CHECK OPTION
+  {
+    $$ = ViewCheckOptionCascaded
+  }
+| WITH CASCADED CHECK OPTION
+  {
+    $$ = ViewCheckOptionCascaded
+  }
+| WITH LOCAL CHECK OPTION
+  {
+    $$ = ViewCheckOptionLocal
   }
 
 default_role_opt:
@@ -1948,12 +2020,12 @@ view_opts:
   {
     $$ = &ViewSpec{Algorithm: "", Definer: $1, Security: $2}
   }
-| algorithm_opt definer_opt security_opt
+| algorithm_view_opt definer_opt security_opt
   {
     $$ = &ViewSpec{Algorithm: $1, Definer: $2, Security: $3}
   }
 
-algorithm_opt:
+algorithm_view_opt:
   ALGORITHM '=' UNDEFINED
   {
     $$ = string($3)
@@ -2287,6 +2359,10 @@ trigger_begin_end_block:
   BEGIN statement_list ';' END
   {
     $$ = &BeginEndBlock{Statements: $2}
+  }
+| BEGIN END
+  {
+    $$ = &BeginEndBlock{}
   }
 
 case_statement:
@@ -2784,10 +2860,13 @@ create_table_prefix:
   }
 
 table_spec:
-  '(' table_column_list ')' table_option_list partition_options
+  '(' table_column_list ')' table_option_list partition_option_opt
   {
     $$ = $2
-    $$.Options = $4 + $5
+    for _, opt := range $4 {
+      $$.AddTableOption(opt)
+    }
+    $$.PartitionOpt = $5
   }
 
 table_column_list:
@@ -2801,20 +2880,9 @@ table_column_list:
     $$ = &TableSpec{}
     $$.AddConstraint($1)
   }
-| column_definition_for_create check_constraint_definition
-  {
-    $$ = &TableSpec{}
-    $$.AddColumn($1)
-    $$.AddConstraint($2)
-  }
 | table_column_list ',' column_definition_for_create
   {
     $$.AddColumn($3)
-  }
-| table_column_list ',' column_definition_for_create check_constraint_definition
-  {
-    $$.AddColumn($3)
-    $$.AddConstraint($4)
   }
 | table_column_list ',' index_definition
   {
@@ -2881,6 +2949,14 @@ column_definition_for_create:
     $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
   }
 | ESCAPE column_type column_type_options
+  {
+    if err := $2.merge($3); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+  }
+| function_call_keywords column_type column_type_options
   {
     if err := $2.merge($3); err != nil {
       yylex.Error(err.Error())
@@ -3031,6 +3107,15 @@ column_type_options:
   // TODO: This still needs support for "ON DELETE" and "ON UPDATE"
   {
     opt := ColumnType{ForeignKeyDef: &ForeignKeyDefinition{ReferencedTable: $3, ReferencedColumns: $5}}
+    if err := $1.merge(opt); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = $1
+  }
+| column_type_options check_constraint_definition
+  {
+    opt := ColumnType{Constraint: $2}
     if err := $1.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
@@ -3195,19 +3280,11 @@ time_type:
   }
 
 char_type:
-  CHAR char_length_opt
+  char_or_character char_length_opt
   {
     $$ = ColumnType{Type: string($1), Length: $2}
   }
-| CHARACTER char_length_opt
-  {
-    $$ = ColumnType{Type: string($1), Length: $2}
-  }
-| NATIONAL CHAR char_length_opt
-  {
-    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
-  }
-| NATIONAL CHARACTER char_length_opt
+| NATIONAL char_or_character char_length_opt
   {
     $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
   }
@@ -3243,11 +3320,7 @@ char_type:
   {
     $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3}
   }
-| NATIONAL CHAR VARYING char_length_opt
-  {
-    $$ = ColumnType{Type: string($1) + " " + string($2) + " " + string($3), Length: $4}
-  }
-| NATIONAL CHARACTER VARYING char_length_opt
+| NATIONAL char_or_character VARYING char_length_opt
   {
     $$ = ColumnType{Type: string($1) + " " + string($2) + " " + string($3), Length: $4}
   }
@@ -3459,37 +3532,9 @@ column_default:
   {
     $$ = $2
   }
-| DEFAULT CURRENT_TIMESTAMP func_parens_opt
+| DEFAULT function_call_nonkeyword
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($2))}
-  }
-| DEFAULT CURRENT_TIMESTAMP openb argument_expression_list closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($2)), Exprs: $4}
-  }
-| DEFAULT LOCALTIME func_parens_opt
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($2))}
-  }
-| DEFAULT LOCALTIME openb argument_expression_list closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($2)), Exprs: $4}
-  }
-| DEFAULT LOCALTIMESTAMP func_parens_opt
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($2))}
-  }
-| DEFAULT LOCALTIMESTAMP openb argument_expression_list closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($2)), Exprs: $4}
-  }
-| DEFAULT NOW openb closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($2))}
-  }
-| DEFAULT NOW openb argument_expression_list closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($2)), Exprs: $4}
+    $$ = $2
   }
 | DEFAULT openb value_expression closeb
   {
@@ -3497,7 +3542,7 @@ column_default:
   }
 
 on_update:
-  ON UPDATE function_call_nonkeyword
+  ON UPDATE function_call_on_update
   {
     $$ = $3
   }
@@ -3526,6 +3571,15 @@ character_set:
   {
     $$ = string($3)
   }
+| CHARSET ID
+  {
+    $$ = string($2)
+  }
+| CHARSET BINARY
+  {
+    $$ = string($2)
+  }
+
 
 collate_opt:
   {
@@ -3542,6 +3596,10 @@ collate:
     $$ = string($2)
   }
 | COLLATE STRING
+  {
+    $$ = string($2)
+  }
+| COLLATE BINARY
   {
     $$ = string($2)
   }
@@ -3719,6 +3777,19 @@ flush_option:
   {
     $$ = &FlushOption{Name: string($1)}
   }
+| TABLE table_name_list flush_tables_read_lock_opt
+  {
+    $$ = &FlushOption{Name: string($1), Tables: $2, ReadLock: $3}
+  }
+| TABLES table_name_list flush_tables_read_lock_opt
+  {
+    $$ = &FlushOption{Name: string($1), Tables: $2, ReadLock: $3}
+  }
+
+flush_tables_read_lock_opt:
+  {$$ = false}
+| WITH READ LOCK
+  {$$ = true}
 
 relay_logs_attribute:
   { $$ = "" }
@@ -3796,6 +3867,10 @@ replication_option:
     $$ = &ReplicationOption{Name: string($1), Value: mustAtoi(yylex, string($3))}
   }
 | SOURCE_RETRY_COUNT '=' INTEGRAL
+  {
+    $$ = &ReplicationOption{Name: string($1), Value: mustAtoi(yylex, string($3))}
+  }
+| SOURCE_AUTO_POSITION '=' INTEGRAL
   {
     $$ = &ReplicationOption{Name: string($1), Value: mustAtoi(yylex, string($3))}
   }
@@ -3907,9 +3982,9 @@ index_info:
   {
     $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
   }
-| CONSTRAINT ID PRIMARY KEY name_opt
+| CONSTRAINT name_opt PRIMARY KEY name_opt
   {
-    $$ = &IndexInfo{Type: string($3) + " " + string($4), Name: NewColIdent(string($2)), Primary: true, Unique: true}
+    $$ = &IndexInfo{Type: string($3) + " " + string($4), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
   }
 | SPATIAL index_or_key name_opt
   {
@@ -4006,17 +4081,13 @@ index_column:
   {
       $$ = &IndexColumn{Column: NewColIdent(string($1)), Length: $2, Order: $3}
   }
-  
+
 foreign_key_definition:
-  CONSTRAINT ID foreign_key_details
+  CONSTRAINT id_or_non_reserved foreign_key_details
   {
     $$ = &ConstraintDefinition{Name: string($2), Details: $3}
   }
-|  CONSTRAINT column_name_safe_keyword foreign_key_details
-   {
-     $$ = &ConstraintDefinition{Name: string($2), Details: $3}
-   }
-|  foreign_key_details
+| foreign_key_details
   {
     $$ = &ConstraintDefinition{Details: $1}
   }
@@ -4047,25 +4118,16 @@ index_name_opt:
   {
     $$ = nil
   }
-| ID   
+| id_or_non_reserved
   {
     $$ = $1
   }
 
 check_constraint_definition:
-  CONSTRAINT ID check_constraint_info
+  CONSTRAINT id_or_non_reserved check_constraint_info
   {
     $$ = &ConstraintDefinition{Name: string($2), Details: $3}
   }
-  // TODO: should be possible to use non_reserved_keyword
-| CONSTRAINT STATUS check_constraint_info
-    {
-      $$ = &ConstraintDefinition{Name: string($2), Details: $3}
-    }
-| CONSTRAINT column_name_safe_keyword check_constraint_info
-    {
-      $$ = &ConstraintDefinition{Name: string($2), Details: $3}
-    }
 | CONSTRAINT check_constraint_info
   {
     $$ = &ConstraintDefinition{Details: $2}
@@ -4146,200 +4208,194 @@ enforced_opt:
   {
     $$ = true
   }
-| NOT ENFORCED
+| NOT_ENFORCED
   {
     $$ = false
   }
 
 table_option_list:
   {
-    $$ = ""
+    $$ = nil
   }
 | table_option_list table_option
   {
-    $$ = $1 + " " + string($2)
+    $$ = append($1, $2)
   }
 | table_option_list ',' table_option
   {
-    $$ = string($1) + ", " + string($3)
+    $$ = append($1, $3)
   }
 
 table_option:
   AUTOEXTEND_SIZE equal_opt table_opt_value
   {
-    $$ = string($1) + " " + $3
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
 | AUTO_INCREMENT equal_opt table_opt_value
   {
-    $$ = string($1) + " " + $3
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
 | AVG_ROW_LENGTH equal_opt table_opt_value
   {
-    $$ = string($1) + " " + $3
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
-| CHARSET equal_opt charset
+| default_keyword_opt CHARSET equal_opt charset
   {
-    $$ = string($1) + " " + string($3) + " "
+    $$ = &TableOption{Name: "CHARACTER SET", Value: $4}
   }
-| DEFAULT CHARSET equal_opt charset
+| default_keyword_opt CHARACTER SET equal_opt charset
   {
-    $$ = string($1) + " " + string($2) + " " + $4
-  }
-| CHARACTER SET equal_opt charset
-  {
-    $$ = string($1) + " " + string($2) + " " + $4
-  }
-| DEFAULT CHARACTER SET equal_opt charset
-  {
-    $$ = string($1) + " "  + string($2) + " "  + string($3) + " " + $5
+    $$ = &TableOption{Name: string($2) + " " + string($3), Value: $5}
   }
 | CHECKSUM equal_opt coericble_to_integral
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | TABLE_CHECKSUM equal_opt coericble_to_integral
   {
-    $$ = "CHECKSUM" + " " + string($3)
+    $$ = &TableOption{Name: "CHECKSUM", Value: string($3)}
   }
-| COLLATE equal_opt table_option_collate
+| default_keyword_opt COLLATE equal_opt table_option_collate
   {
-    $$ = string($1) + " " + $3
-  }
-| DEFAULT COLLATE equal_opt table_option_collate
-  {
-    $$ = string($1) + " "  + string($2) + " " + $4
+    $$ = &TableOption{Name: string($2), Value: $4}
   }
 | COMMENT_KEYWORD equal_opt STRING
   {
-    $$ = string($1) + " " + "'" + string($3) + "'"
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | COMPRESSION equal_opt STRING
   {
-    $$ = string($1) + " " + "'" + string($3) + "'"
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | CONNECTION equal_opt STRING
   {
-    $$ = string($1) + " " + "'" + string($3) + "'"
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | DATA DIRECTORY equal_opt STRING
   {
-    $$ = string($1) + " "  + string($2) + " " + "'" + string($4) + "'"
+    $$ = &TableOption{Name: string($1) + " "  + string($2), Value: string($4)}
   }
 | INDEX DIRECTORY equal_opt STRING
   {
-    $$ = string($1) + " "  + string($2) + " " + "'" + string($4) + "'"
+    $$ = &TableOption{Name: string($1) + " "  + string($2), Value: string($4)}
   }
 | DELAY_KEY_WRITE equal_opt coericble_to_integral
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | ENCRYPTION equal_opt STRING
   {
-    $$ = string($1) + " " + "'" + string($3) + "'"
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | ENGINE equal_opt any_identifier
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $$ = string($1) + " " + "'" + string($3) + "'"
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
-| INSERT_METHOD equal_opt NO
+| INSERT_METHOD equal_opt no_first_last
   {
-    $$ = string($1) + " " + string($3)
-  }
-| INSERT_METHOD equal_opt FIRST
-  {
-    $$ = string($1) + " " + string($3)
-  }
-| INSERT_METHOD equal_opt LAST
-  {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | KEY_BLOCK_SIZE equal_opt table_opt_value
   {
-    $$ = string($1) + " " + $3
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
 | MAX_ROWS equal_opt table_opt_value
   {
-    $$ = string($1) + " " + $3
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
 | MIN_ROWS equal_opt table_opt_value
   {
-    $$ = string($1) + " " + $3
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
 | PACK_KEYS equal_opt coericble_to_integral
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | PASSWORD equal_opt STRING
   {
-    $$ = string($1) + " " + "'" + string($3) + "'"
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | ROW_FORMAT equal_opt row_fmt_opt
   {
-    $$ = string($1) + " " + $3
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
 | START TRANSACTION
   {
-    $$ = string($1) + " "  + string($2)
+    $$ = &TableOption{Name: string($1) + string($2)}
   }
 | SECONDARY_ENGINE equal_opt ID
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | SECONDARY_ENGINE equal_opt NULL
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | SECONDARY_ENGINE equal_opt STRING
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
   {
-    $$ = string($1) + " " + "'" + string($3) + "'"
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | STATS_AUTO_RECALC equal_opt DEFAULT
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
-| STATS_AUTO_RECALC equal_opt INTEGRAL
+| STATS_AUTO_RECALC equal_opt coericble_to_integral
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | STATS_PERSISTENT equal_opt DEFAULT
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | STATS_PERSISTENT equal_opt coericble_to_integral
   {
-    $$ = string($1) + " " + string($3)
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 | STATS_SAMPLE_PAGES equal_opt table_opt_value
   {
-    $$ = string($1) + " " + $3
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
 | TABLESPACE table_opt_value
   {
-    $$ = string($1) + $2
+    $$ = &TableOption{Name: string($1), Value: $2}
   }
 | TABLESPACE any_identifier
-    {
-      $$ = string($1) + " "  + string($2)
-    }
+  {
+    $$ = &TableOption{Name: string($1), Value: string($2)}
+  }
 | TABLESPACE any_identifier STORAGE DISK
   {
-    $$ = string($1) + " "  + string($2) + " "  + string($3) + " "  + string($4)
+    $$ = &TableOption{Name: string($1), Value: string($2) + " "  + string($3) + " "  + string($4)}
   }
 | TABLESPACE any_identifier STORAGE MEMORY
   {
-    $$ = string($1) + " "  + string($2) + " "  + string($3) + " "  + string($4)
+    $$ = &TableOption{Name: string($1), Value: string($2) + " "  + string($3) + " "  + string($4)}
   }
 | UNION equal_opt openb any_identifier_list closeb
   {
-    $$ = string($1) + " " + "(" + $4 + ")"
+    $$ = &TableOption{Name: string($1), Value: "(" + $4 + ")"}
+  }
+
+no_first_last:
+  NO
+  {
+    $$ = $1
+  }
+| FIRST
+  {
+    $$ = $1
+  }
+| LAST
+  {
+    $$ = $1
   }
 
 table_option_collate:
@@ -4431,17 +4487,16 @@ any_identifier:
 | reserved_keyword
 
 // TODO: partition options for table creation will parse, but do nothing for now
-partition_options:
+partition_option_opt:
   {
-    $$ = ""
+    $$ = nil
   }
-| PARTITION BY partition_option partition_num_opt subpartition_opt
+| PARTITION BY partition_option partition_num_opt subpartition_opt partition_definitions_opt
   {
-    $$ = string($1) + " " + string($2) + " " + $3 + $4 + $5
-  }
-| PARTITION BY partition_option partition_num_opt subpartition_opt openb partition_definitions closeb
-  {
-    $$ = string($1) + " " + string($2) + " " + $3 + $4 + $5 + "(partition_definitions)"
+    $3.Partitions = $4
+    $3.SubPartition = $5
+    $3.Definitions = $6
+    $$ = $3
   }
 
 partition_option:
@@ -4449,75 +4504,108 @@ partition_option:
   {
     $$ = $1
   }
-| RANGE openb any_identifier closeb
+| range_or_list openb value_expression closeb
   {
-    $$ = string($1) + " (" + string($3) + ")"
+    $$ = &PartitionOption {
+    	PartitionType: string($1),
+    	Expr: $3,
+    }
   }
-| RANGE COLUMNS openb column_list closeb
+| range_or_list COLUMNS openb column_list closeb
   {
-    $$ = string($1) + " " + string($2) + " (column_list)"
+    $$ = &PartitionOption {
+    	PartitionType: string($1),
+    	ColList: $4,
+    }
   }
-| LIST openb any_identifier closeb
-  {
-    $$ = string($1) + " (" + string($3) + ")"
-  }
-| LIST COLUMNS openb column_list closeb
- {
-   $$ = string($1) + " " + string($2) + " (column_list)"
- }
 
 linear_partition_opt:
-  linear_opt HASH openb value closeb
+  linear_opt HASH openb value_expression closeb
   {
-    $$ = $1 + string($2) + " (value)"
+    $$ = &PartitionOption {
+    	IsLinear: $1,
+    	PartitionType: string($2),
+    	Expr: $4,
+    }
   }
-| linear_opt HASH openb ID closeb
+| linear_opt KEY algorithm_part_opt openb column_list closeb
   {
-    $$ = $1 + string($2) + " (" + string($4) + ")"
-  }
-| linear_opt KEY openb column_list closeb
-  {
-    $$ = $1 + string($2) + " (column_list)"
-  }
-| linear_opt KEY ALGORITHM '=' INTEGRAL openb column_list closeb
-  {
-    $$ = $1 + string($2) + " " + string($3) + " " + string($5) + " (column_list)"
+    $$ = &PartitionOption {
+	IsLinear: $1,
+	PartitionType: string($2),
+	KeyAlgorithm: $3,
+	ColList: $5,
+    }
   }
 
 linear_opt:
   {
-    $$ = ""
+    $$ = false
   }
 | LINEAR
   {
-    $$ = string($1) + " "
+    $$ = true
+  }
+
+algorithm_part_opt:
+  {
+    $$ = ""
+  }
+| ALGORITHM '=' INTEGRAL
+  {
+    $$ = string($1) + " = " + string($3)
+  }
+
+range_or_list:
+  RANGE
+  {
+    $$ = string($1)
+  }
+| LIST
+  {
+    $$ = string($1)
   }
 
 partition_num_opt:
   {
-    $$ = ""
+    $$ = nil
   }
 | PARTITIONS INTEGRAL
   {
-    $$ = string($1) + " " + string($2) + " "
+    $$ = NewIntVal($2)
   }
 
 subpartition_opt:
   {
-    $$ = ""
+    $$ = nil
   }
-| SUBPARTITION BY linear_partition_opt subpartition_num_opt
+| SUBPARTITION BY linear_opt HASH openb value_expression closeb subpartition_num_opt
   {
-    $$ = string($1) + " " + string($2) + " " + $3 + " " + $4
+    $$ = &SubPartition{
+    	IsLinear: $3,
+    	PartitionType: string($4),
+    	Expr: $6,
+    	SubPartitions: $8,
+    }
+  }
+| SUBPARTITION BY linear_opt KEY algorithm_part_opt openb value_expression closeb subpartition_num_opt
+  {
+    $$ = &SubPartition{
+    	IsLinear: $3,
+    	PartitionType: string($4),
+    	KeyAlgorithm: $5,
+    	Expr: $7,
+    	SubPartitions: $9,
+    }
   }
 
 subpartition_num_opt:
   {
-    $$ = ""
+    $$ = nil
   }
 | SUBPARTITIONS INTEGRAL
   {
-    $$ = string($1) + " " + string($2) + " "
+    $$ = NewIntVal($2)
   }
 
 constraint_symbol_opt:
@@ -4546,28 +4634,33 @@ alter_statement:
   alter_database_statement
 | alter_table_statement
 | alter_event_statement
+| alter_user_statement
 
 alter_database_statement:
   ALTER DATABASE ID creation_option_opt
   {
-    $$ = &DBDDL{Action: AlterStr, DBName: string($3), CharsetCollate: $4}
+    $$ = &DBDDL{Action: AlterStr, SchemaOrDatabase: "database", DBName: string($3), CharsetCollate: $4}
   }
 | ALTER DATABASE creation_option_opt
   {
-    $$ = &DBDDL{Action: AlterStr, CharsetCollate: $3}
+    $$ = &DBDDL{Action: AlterStr, SchemaOrDatabase: "database", CharsetCollate: $3}
   }
 
 alter_table_statement:
-  ALTER ignore_opt TABLE table_name alter_table_statement_list
+  ALTER ignore_opt TABLE table_name alter_table_statement_list partition_operation_list_opt
   {
     for i := 0; i < len($5); i++ {
-      if $5[i].Action == RenameStr {
-        $5[i].FromTables = append(TableNames{$4}, $5[i].FromTables...)
-      } else {
-        $5[i].Table = $4
-      }
+    	if $5[i].Action == RenameStr {
+    		$5[i].FromTables = append(TableNames{$4}, $5[i].FromTables...)
+	} else {
+		$5[i].Table = $4
+	}
     }
-    $$ = &AlterTable{Table: $4, Statements: $5}
+    $$ = &AlterTable{Table: $4, Statements: $5, PartitionSpecs: $6}
+  }
+| ALTER ignore_opt TABLE table_name partition_operation_list
+  {
+    $$ = &AlterTable{Table: $4, PartitionSpecs: $5}
   }
 
 alter_table_statement_list:
@@ -4583,50 +4676,39 @@ alter_table_statement_list:
 alter_table_statement_part:
   ADD column_opt '(' column_definition ')'
   {
-    ddl := &DDL{Action: AlterStr, ColumnAction: AddStr, TableSpec: &TableSpec{}}
+    ddl := &DDL{
+    	Action: AlterStr,
+    	ColumnAction: AddStr,
+    	TableSpec: &TableSpec{},
+    }
     ddl.TableSpec.AddColumn($4)
     ddl.Column = $4.Name
     $$ = ddl
   }
 | ADD column_opt column_definition column_order_opt
   {
-    ddl := &DDL{Action: AlterStr, ColumnAction: AddStr, TableSpec: &TableSpec{}, ColumnOrder: $4}
+    ddl := &DDL{
+    	Action: AlterStr,
+	ColumnAction: AddStr,
+	TableSpec: &TableSpec{},
+	ColumnOrder: $4,
+    }
     ddl.TableSpec.AddColumn($3)
     ddl.Column = $3.Name
     $$ = ddl
   }
-| DROP column_opt ID
-  {
-    $$ = &DDL{Action: AlterStr, ColumnAction: DropStr, Column: NewColIdent(string($3))}
-  }
-| DROP column_opt all_non_reserved
-  {
-    $$ = &DDL{Action: AlterStr, ColumnAction: DropStr, Column: NewColIdent(string($3))}
-  }
-| RENAME COLUMN ID to_or_as ID
-  {
-    $$ = &DDL{Action: AlterStr, ColumnAction: RenameStr, Column: NewColIdent(string($3)), ToColumn: NewColIdent(string($5))}
-  }
-| RENAME COLUMN all_non_reserved to_or_as ID
-  {
-    $$ = &DDL{Action: AlterStr, ColumnAction: RenameStr, Column: NewColIdent(string($3)), ToColumn: NewColIdent(string($5))}
-  }
-| RENAME COLUMN ID to_or_as all_non_reserved
-  {
-    $$ = &DDL{Action: AlterStr, ColumnAction: RenameStr, Column: NewColIdent(string($3)), ToColumn: NewColIdent(string($5))}
-  }
-| RENAME COLUMN all_non_reserved to_or_as all_non_reserved
-  {
-    $$ = &DDL{Action: AlterStr, ColumnAction: RenameStr, Column: NewColIdent(string($3)), ToColumn: NewColIdent(string($5))}
-  }
-| RENAME to_opt table_name
-  {
-    // Change this to a rename statement
-    $$ = &DDL{Action: RenameStr, ToTables: TableNames{$3}}
-  }
 | ADD index_or_key name_opt using_opt '(' index_column_list ')' index_option_list_opt
   {
-    $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: CreateStr, ToName: NewColIdent($3),  Using: $4, Columns: $6, Options: $8}}
+    $$ = &DDL{
+    	Action: AlterStr,
+    	IndexSpec: &IndexSpec{
+    		Action: CreateStr,
+    		ToName: NewColIdent($3),
+    		Using: $4,
+    		Columns: $6,
+    		Options: $8,
+	},
+    }
   }
 | ADD constraint_symbol_opt key_type index_or_key_opt name_opt using_opt '(' index_column_list ')' index_option_list_opt
   {
@@ -4634,127 +4716,409 @@ alter_table_statement_part:
     if len(idxName) == 0 {
       idxName = $2
     }
-    $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: CreateStr, ToName: NewColIdent(idxName), Type: $3, Using: $6, Columns: $8, Options: $10}}
-  }
-| DROP CONSTRAINT ID
-  {
-    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
-        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
-  }
-| DROP CONSTRAINT all_non_reserved
-  {
-    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
-        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
-  }
-| DROP CHECK ID
-  {
-    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
-        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
-  }
-| DROP CHECK all_non_reserved
-  {
-    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
-        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
-  }
-| DROP index_or_key sql_id
-  {
-    $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: DropStr, ToName: $3}}
-  }
-| RENAME index_or_key sql_id TO sql_id
-  {
-    $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: RenameStr, FromName: $3, ToName: $5}}
-  }
-| MODIFY column_opt column_definition column_order_opt
-  {
-    ddl := &DDL{Action: AlterStr, ColumnAction: ModifyStr, TableSpec: &TableSpec{}, ColumnOrder: $4}
-    ddl.TableSpec.AddColumn($3)
-    ddl.Column = $3.Name
-    $$ = ddl
-  }
-| CHANGE column_opt ID column_definition column_order_opt
-  {
-    ddl := &DDL{Action: AlterStr, ColumnAction: ChangeStr, TableSpec: &TableSpec{}, Column: NewColIdent(string($3)), ColumnOrder: $5}
-    ddl.TableSpec.AddColumn($4)
-    $$ = ddl
-  }
-| partition_operation
-  {
-    $$ = &DDL{Action: AlterStr, PartitionSpec: $1}
-  }
-| ADD foreign_key_definition
-  {
-    ddl := &DDL{Action: AlterStr, ConstraintAction: AddStr, TableSpec: &TableSpec{}}
-    ddl.TableSpec.AddConstraint($2)
-    $$ = ddl
-  }
-| ADD check_constraint_definition
-  {
-    ddl := &DDL{Action: AlterStr, ConstraintAction: AddStr, TableSpec: &TableSpec{}}
-    ddl.TableSpec.AddConstraint($2)
-    $$ = ddl
-  }
-| DROP FOREIGN KEY ID
-  {
-    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
-        []*ConstraintDefinition{&ConstraintDefinition{Name: string($4), Details: &ForeignKeyDefinition{}}}}}
-  }
-| AUTO_INCREMENT equal_opt expression
-  {
-    $$ = &DDL{Action: AlterStr, AutoIncSpec: &AutoIncSpec{Value: $3}}
-  }
-| ALTER column_opt sql_id SET DEFAULT value_expression
-  {
-    $$ = &DDL{Action: AlterStr, DefaultSpec: &DefaultSpec{Action: SetStr, Column: $3, Value: $6}}
-  }
-| ALTER column_opt sql_id DROP DEFAULT
-  {
-    $$ = &DDL{Action: AlterStr, DefaultSpec: &DefaultSpec{Action: DropStr, Column: $3}}
-  }
-| DROP PRIMARY KEY
-  {
-    $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: DropStr, Type: PrimaryStr}}
+    $$ = &DDL{
+    	Action: AlterStr,
+    	IndexSpec: &IndexSpec{
+    		Action: CreateStr,
+    		ToName: NewColIdent(idxName),
+    		Type: $3,
+    		Using: $6,
+    		Columns: $8,
+    		Options: $10,
+	},
+    }
   }
 // A name may be specified for a primary key, but it is ignored since the primary
 // key is always named 'PRIMARY'
 | ADD pk_name_opt PRIMARY KEY name_opt '(' index_column_list ')' index_option_list_opt
   {
-    ddl := &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: CreateStr}}
-    ddl.IndexSpec = &IndexSpec{Action: CreateStr, Using: NewColIdent(""), ToName: NewColIdent($2), Type: PrimaryStr, Columns: $7, Options: $9}
+    ddl := &DDL{
+    	Action: AlterStr,
+    	IndexSpec: &IndexSpec{
+    		Action: CreateStr,
+	},
+    }
+    ddl.IndexSpec = &IndexSpec{
+    	Action: CreateStr,
+	Using: NewColIdent(""),
+	ToName: NewColIdent($2),
+	Type: PrimaryStr,
+	Columns: $7,
+	Options: $9,
+    }
     $$ = ddl
   }
-| DISABLE KEYS
+| ADD foreign_key_definition
   {
-    $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: string($1)}}
+    ddl := &DDL{
+    	Action: AlterStr,
+    	ConstraintAction: AddStr,
+    	TableSpec: &TableSpec{},
+    }
+    ddl.TableSpec.AddConstraint($2)
+    $$ = ddl
   }
-| ENABLE KEYS
+| ADD check_constraint_definition
   {
-    $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: string($1)}}
+    ddl := &DDL{
+	Action: AlterStr,
+	ConstraintAction: AddStr,
+	TableSpec: &TableSpec{},
+    }
+    ddl.TableSpec.AddConstraint($2)
+    $$ = ddl
+  }
+| DROP CONSTRAINT id_or_non_reserved
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+	ConstraintAction: DropStr,
+	TableSpec: &TableSpec{
+		Constraints: []*ConstraintDefinition{
+	    		&ConstraintDefinition{
+	    			Name: string($3),
+			},
+		},
+	},
+    }
+  }
+| DROP CHECK id_or_non_reserved
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+    	ConstraintAction: DropStr,
+    	TableSpec: &TableSpec{
+    		Constraints: []*ConstraintDefinition{
+    			&ConstraintDefinition{
+    				Name: string($3),
+    				Details: &CheckConstraintDefinition{},
+			},
+		},
+	},
+    }
+  }
+| ALTER CONSTRAINT id_or_non_reserved ENFORCED
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ALTER CHECK id_or_non_reserved ENFORCED
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ALTER CONSTRAINT id_or_non_reserved NOT_ENFORCED
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ALTER CHECK id_or_non_reserved NOT_ENFORCED
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ALGORITHM equal_opt DEFAULT
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ALGORITHM equal_opt INSTANT
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ALGORITHM equal_opt INPLACE
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ALGORITHM equal_opt COPY
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ALTER column_opt sql_id SET DEFAULT value_expression
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+	DefaultSpec: &DefaultSpec{
+		Action: SetStr,
+		Column: $3,
+		Value: $6,
+	},
+    }
+  }
+| ALTER column_opt sql_id DROP DEFAULT
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+    	DefaultSpec: &DefaultSpec{
+    		Action: DropStr,
+    		Column: $3,
+	},
+    }
+  }
+| ALTER INDEX id_or_non_reserved VISIBLE
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ALTER INDEX id_or_non_reserved INVISIBLE
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| CHANGE column_opt ID column_definition column_order_opt
+  {
+    ddl := &DDL{
+    	Action: AlterStr,
+    	ColumnAction: ChangeStr,
+    	TableSpec: &TableSpec{},
+    	Column: NewColIdent(string($3)),
+    	ColumnOrder: $5,
+    }
+    ddl.TableSpec.AddColumn($4)
+    $$ = ddl
   }
 | default_keyword_opt CHARACTER SET equal_opt charset
   {
-    $$ = &DDL{Action: AlterStr, AlterCollationSpec: &AlterCollationSpec{CharacterSet: $5, Collation: ""}}
+    $$ = &DDL{
+    	Action: AlterStr,
+    	AlterCollationSpec: &AlterCollationSpec{
+    		CharacterSet: $5,
+    		Collation: "",
+	},
+    }
   }
 | default_keyword_opt CHARACTER SET equal_opt charset COLLATE equal_opt charset
   {
-    $$ = &DDL{Action: AlterStr, AlterCollationSpec: &AlterCollationSpec{CharacterSet: $5, Collation: $8}}
+    $$ = &DDL{
+    	Action: AlterStr,
+    	AlterCollationSpec: &AlterCollationSpec{
+    		CharacterSet: $5,
+    		Collation: $8,
+	},
+    }
   }
 | default_keyword_opt COLLATE equal_opt charset
   {
-    $$ = &DDL{Action: AlterStr, AlterCollationSpec: &AlterCollationSpec{CharacterSet: "", Collation: $4}}
+    $$ = &DDL{
+    	Action: AlterStr,
+    	AlterCollationSpec: &AlterCollationSpec{
+    		CharacterSet: "",
+    		Collation: $4,
+	},
+    }
   }
-| SECONDARY_ENGINE equal_opt ID
+| CONVERT TO CHARACTER SET charset
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+    	AlterCollationSpec: &AlterCollationSpec{
+    		CharacterSet: $5,
+    		Collation: "",
+	},
+    }
+  }
+| CONVERT TO CHARACTER SET charset COLLATE charset
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+    	AlterCollationSpec: &AlterCollationSpec{
+    		CharacterSet: $5,
+    		Collation: $7,
+	},
+    }
+  }
+| DISABLE KEYS
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+    	IndexSpec: &IndexSpec{
+    		Action: string($1),
+	},
+    }
+  }
+| ENABLE KEYS
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+    	IndexSpec: &IndexSpec{
+    		Action: string($1),
+	},
+    }
+  }
+| DISCARD TABLESPACE
   {
     $$ = &DDL{Action: AlterStr}
   }
-| SECONDARY_ENGINE equal_opt STRING
+| IMPORT TABLESPACE
   {
     $$ = &DDL{Action: AlterStr}
   }
- | SECONDARY_ENGINE equal_opt NULL
-   {
-     $$ = &DDL{Action: AlterStr}
-   }
-| SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
+| DROP column_opt id_or_non_reserved
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+    	ColumnAction: DropStr,
+    	Column: NewColIdent(string($3)),
+    }
+  }
+| DROP index_or_key sql_id
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+    	IndexSpec: &IndexSpec{
+    		Action: DropStr,
+    		ToName: $3,
+	},
+    }
+  }
+| DROP PRIMARY KEY
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+	IndexSpec: &IndexSpec{
+		Action: DropStr,
+		Type: PrimaryStr,
+	},
+    }
+  }
+| DROP FOREIGN KEY id_or_non_reserved
+  {
+    ddl := &DDL{
+    	Action: AlterStr,
+	ConstraintAction: DropStr,
+	TableSpec: &TableSpec{},
+    }
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{
+    	Name: string($4),
+    	Details: &ForeignKeyDefinition{},
+    })
+    $$ = ddl
+  }
+| FORCE
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| LOCK equal_opt DEFAULT
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| LOCK equal_opt NONE
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| LOCK equal_opt SHARED
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| LOCK equal_opt EXCLUSIVE
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| MODIFY column_opt column_definition column_order_opt
+  {
+    ddl := &DDL{
+    	Action: AlterStr,
+    	ColumnAction: ModifyStr,
+    	TableSpec: &TableSpec{},
+    	ColumnOrder: $4,
+    }
+    ddl.TableSpec.AddColumn($3)
+    ddl.Column = $3.Name
+    $$ = ddl
+  }
+// | ORDER BY col_name [, col_name] ...
+| RENAME COLUMN id_or_non_reserved to_or_as id_or_non_reserved
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+    	ColumnAction: RenameStr,
+    	Column: NewColIdent(string($3)),
+    	ToColumn: NewColIdent(string($5)),
+    }
+  }
+| RENAME index_or_key sql_id TO sql_id
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+    	IndexSpec: &IndexSpec{
+    		Action: RenameStr,
+    		FromName: $3,
+    		ToName: $5,
+	},
+    }
+  }
+| RENAME to_or_as_opt table_name
+  {
+    // Change this to a rename statement
+    $$ = &DDL{
+    	Action: RenameStr,
+    	ToTables: TableNames{$3},
+    }
+  }
+| RENAME CONSTRAINT FOREIGN KEY id_or_non_reserved TO id_or_non_reserved
+  {
+    ddl := &DDL{
+    	Action: AlterStr,
+    	ConstraintAction: RenameStr,
+    	TableSpec: &TableSpec{},
+    }
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{
+    	Name: string($5),
+    	Details: &ForeignKeyDefinition{},
+    })
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{
+    	Name: string($7),
+    	Details: &ForeignKeyDefinition{},
+    })
+    $$ = ddl
+  }
+| RENAME CONSTRAINT CHECK id_or_non_reserved TO id_or_non_reserved
+  {
+    ddl := &DDL{
+    	Action: AlterStr,
+    	ConstraintAction: RenameStr,
+    	TableSpec: &TableSpec{},
+    }
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{
+    	Name: string($4),
+    	Details: &CheckConstraintDefinition{},
+    })
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{
+ 	Name: string($6),
+ 	Details: &CheckConstraintDefinition{},
+    })
+    $$ = ddl
+  }
+| RENAME CONSTRAINT id_or_non_reserved TO id_or_non_reserved
+  {
+    ddl := &DDL{
+    	Action: AlterStr,
+	ConstraintAction: RenameStr,
+	TableSpec: &TableSpec{},
+    }
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{
+    	Name: string($3),
+    })
+    ddl.TableSpec.AddConstraint(&ConstraintDefinition{
+    	Name: string($5),
+    })
+    $$ = ddl
+  }
+| with_or_without VALIDATION
+  {
+    $$ = &DDL{
+    	Action: AlterStr,
+    }
+  }
+| alter_table_options
+  {
+    $$ = $1
+  }
+
+// TODO: these are the same as table_option_list, but we need to have the return type be different
+alter_table_options:
+  AUTOEXTEND_SIZE equal_opt table_opt_value
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| AUTO_INCREMENT equal_opt expression
+  {
+    $$ = &DDL{Action: AlterStr, AutoIncSpec: &AutoIncSpec{Value: $3}}
+  }
+| AVG_ROW_LENGTH equal_opt table_opt_value
   {
     $$ = &DDL{Action: AlterStr}
   }
@@ -4766,21 +5130,149 @@ alter_table_statement_part:
   {
     $$ = &DDL{Action: AlterStr}
   }
+| COMMENT_KEYWORD equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| COMPRESSION equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| CONNECTION equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| DATA DIRECTORY equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| INDEX DIRECTORY equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| DELAY_KEY_WRITE equal_opt coericble_to_integral
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ENCRYPTION equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ENGINE equal_opt any_identifier
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| INSERT_METHOD equal_opt no_first_last
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| KEY_BLOCK_SIZE equal_opt table_opt_value
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| MAX_ROWS equal_opt table_opt_value
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| MIN_ROWS equal_opt table_opt_value
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| PACK_KEYS equal_opt coericble_to_integral
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| PASSWORD equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ROW_FORMAT equal_opt row_fmt_opt
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| SECONDARY_ENGINE equal_opt ID
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| SECONDARY_ENGINE equal_opt NULL
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| SECONDARY_ENGINE equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| STATS_AUTO_RECALC equal_opt DEFAULT
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| STATS_AUTO_RECALC equal_opt coericble_to_integral
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| STATS_PERSISTENT equal_opt DEFAULT
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| STATS_PERSISTENT equal_opt coericble_to_integral
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| STATS_SAMPLE_PAGES equal_opt table_opt_value
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| TABLESPACE table_opt_value
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| TABLESPACE any_identifier
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| TABLESPACE any_identifier STORAGE DISK
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| TABLESPACE any_identifier STORAGE MEMORY
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
 | UNION equal_opt openb any_identifier_list closeb
   {
     $$ = &DDL{Action: AlterStr}
   }
-| INSERT_METHOD equal_opt NO
+
+with_or_without:
+  WITH
   {
-    $$ = &DDL{Action: AlterStr}
+    $$ = true
   }
-| INSERT_METHOD equal_opt FIRST
+| WITHOUT
   {
-    $$ = &DDL{Action: AlterStr}
+    $$ = false
   }
-| INSERT_METHOD equal_opt LAST
+
+id_or_non_reserved:
+  ID
+| all_non_reserved
+
+alter_user_statement:
+  ALTER USER exists_opt account_name authentication
   {
-    $$ = &DDL{Action: AlterStr}
+    var ifExists bool
+    if $3 != 0 {
+      ifExists = true
+    }
+    $$ = &DDL{Action: AlterStr, User: $4, Authentication: $5, IfExists: ifExists}
   }
 
 column_order_opt:
@@ -4801,10 +5293,127 @@ column_opt:
 | COLUMN
   { }
 
-partition_operation:
-  REORGANIZE PARTITION sql_id INTO openb partition_definitions closeb
+partition_operation_list_opt:
   {
-    $$ = &PartitionSpec{Action: ReorganizeStr, Name: $3, Definitions: $6}
+    $$ = nil
+  }
+| partition_operation_list
+  {
+    $$ = $1
+  }
+
+partition_operation_list:
+  partition_operation
+  {
+    $$ = []*PartitionSpec{$1}
+  }
+| partition_operation_list partition_operation
+  {
+    $$ = append($1, $2)
+  }
+
+partition_operation:
+  ADD PARTITION openb partition_definitions closeb
+  {
+    $$ = &PartitionSpec{Action: AddStr, Definitions: $4}
+  }
+| DROP PARTITION partition_list
+  {
+    $$ = &PartitionSpec{Action: DropStr, Names: $3}
+  }
+| DISCARD PARTITION partition_list TABLESPACE
+  {
+    $$ = &PartitionSpec{Action: DiscardStr, Names: $3}
+  }
+| DISCARD PARTITION ALL TABLESPACE
+  {
+    $$ = &PartitionSpec{Action: DiscardStr, IsAll: true}
+  }
+| IMPORT PARTITION partition_list TABLESPACE
+  {
+    $$ = &PartitionSpec{Action: ImportStr, Names: $3}
+  }
+| IMPORT PARTITION ALL TABLESPACE
+  {
+    $$ = &PartitionSpec{Action: ImportStr, IsAll: true}
+  }
+| TRUNCATE PARTITION partition_list TABLESPACE
+  {
+    $$ = &PartitionSpec{Action: TruncateStr, Names: $3}
+  }
+| TRUNCATE PARTITION ALL TABLESPACE
+  {
+    $$ = &PartitionSpec{Action: TruncateStr, IsAll: true}
+  }
+| COALESCE PARTITION INTEGRAL
+  {
+    $$ = &PartitionSpec{Action: CoalesceStr, Number: NewIntVal($3)}
+  }
+| REORGANIZE PARTITION partition_list INTO openb partition_definitions closeb
+  {
+    $$ = &PartitionSpec{Action: ReorganizeStr, Names: $3, Definitions: $6}
+  }
+| EXCHANGE PARTITION sql_id WITH TABLE table_name
+  {
+    $$ = &PartitionSpec{Action: ExchangeStr, Names: Partitions{$3}, TableName: $6}
+  }
+| EXCHANGE PARTITION sql_id WITH TABLE table_name with_or_without VALIDATION
+  {
+    $$ = &PartitionSpec{Action: ExchangeStr, Names: Partitions{$3}, TableName: $6, WithValidation: $7}
+  }
+| ANALYZE PARTITION partition_list
+  {
+    $$ = &PartitionSpec{Action: AnalyzeStr, Names: $3}
+  }
+| ANALYZE PARTITION ALL
+  {
+    $$ = &PartitionSpec{Action: AnalyzeStr, IsAll: true}
+  }
+// The parser confuses CHECK with column_definitions
+//| CHECK PARTITION partition_list
+//  {
+//    $$ = &PartitionSpec{Action: CheckStr, Names: $3}
+//  }
+//| CHECK PARTITION ALL
+//  {
+//    $$ = &PartitionSpec{Action: CheckStr, IsAll: true}
+//  }
+| OPTIMIZE PARTITION partition_list
+  {
+    $$ = &PartitionSpec{Action: OptimizeStr, Names: $3}
+  }
+| OPTIMIZE PARTITION ALL
+  {
+    $$ = &PartitionSpec{Action: OptimizeStr, IsAll: true}
+  }
+| REBUILD PARTITION partition_list
+  {
+    $$ = &PartitionSpec{Action: RebuildStr, Names: $3}
+  }
+| REBUILD PARTITION ALL
+  {
+    $$ = &PartitionSpec{Action: RebuildStr, IsAll: true}
+  }
+| REPAIR PARTITION partition_list
+  {
+    $$ = &PartitionSpec{Action: RepairStr, Names: $3}
+  }
+| REPAIR PARTITION ALL
+  {
+    $$ = &PartitionSpec{Action: RepairStr, IsAll: true}
+  }
+| REMOVE PARTITIONING
+  {
+    $$ = &PartitionSpec{Action: RemoveStr}
+  }
+
+partition_definitions_opt:
+  {
+    $$ = nil
+  }
+| openb partition_definitions closeb
+  {
+    $$ = $2
   }
 
 partition_definitions:
@@ -4920,7 +5529,7 @@ drop_statement:
     if $3 != 0 {
       exists = true
     }
-    $$ = &DBDDL{Action: DropStr, DBName: string($4), IfExists: exists}
+    $$ = &DBDDL{Action: DropStr, SchemaOrDatabase: "database", DBName: string($4), IfExists: exists}
   }
 | DROP SCHEMA exists_opt ID
   {
@@ -4928,7 +5537,7 @@ drop_statement:
     if $3 != 0 {
       exists = true
     }
-    $$ = &DBDDL{Action: DropStr, DBName: string($4), IfExists: exists}
+    $$ = &DBDDL{Action: DropStr, SchemaOrDatabase: "schema", DBName: string($4), IfExists: exists}
   }
 | DROP TRIGGER exists_opt trigger_name
   {
@@ -5255,6 +5864,22 @@ show_statement:
 | SHOW EVENTS from_database_opt like_or_where_opt
   {
     $$ = &Show{Type: string($2), ShowTablesOpt: &ShowTablesOpt{DbName: $3, Filter: $4}}
+  }
+| SHOW REPLICAS
+  {
+    $$ = &Show{Type: string($2)}
+  }
+| SHOW BINARY LOG STATUS
+  {
+    $$ = &Show{Type: string($2) + " " + string($3) + " " + string($4)}
+  }
+| SHOW MASTER STATUS
+  {
+    $$ = &Show{Type: "BINARY LOG STATUS"}
+  }
+| SHOW BINARY LOGS
+  {
+    $$ = &Show{Type: string($2) + " " + string($3)}
   }
 
 naked_like:
@@ -5657,7 +6282,7 @@ argument_expression:
   }
 | table_id '.' reserved_table_id '.' '*'
   {
-    $$ = &StarExpr{TableName: TableName{Qualifier: $1, Name: $3}}
+    $$ = &StarExpr{TableName: TableName{DbQualifier: $1, Name: $3}}
   }
 
 select_expression:
@@ -5675,7 +6300,7 @@ select_expression:
   }
 | table_id '.' reserved_table_id '.' '*'
   {
-    $$ = &StarExpr{TableName: TableName{Qualifier: $1, Name: $3}}
+    $$ = &StarExpr{TableName: TableName{DbQualifier: $1, Name: $3}}
   }
 
 over:
@@ -5950,7 +6575,6 @@ table_factor:
 | table_function
 | json_table
 
-
 values_statement:
   VALUES row_list
   {
@@ -5958,14 +6582,19 @@ values_statement:
   }
 
 row_list:
-  ROW row_tuple
+  row_opt row_tuple
   {
     $$ = Values{$2}
   }
-| row_list ',' ROW row_tuple
+| row_list ',' row_opt row_tuple
   {
     $$ = append($$, $4)
   }
+
+row_opt:
+  {}
+| ROW
+  {}
 
 aliased_table_name:
   table_name aliased_table_options
@@ -6021,7 +6650,7 @@ as_of_clause:
   {
     $$ = $1
   }
-  
+
 between_times:
   FOR_SYSTEM_TIME BETWEEN value_expression AND value_expression
   {
@@ -6193,11 +6822,6 @@ on_expression_opt:
   { $$ = JoinCondition{} }
 | ON expression
   { $$ = JoinCondition{On: $2} }
-
-as_opt:
-  { $$ = struct{}{} }
-| AS
-  { $$ = struct{}{} }
 
 table_alias:
   table_id
@@ -6399,13 +7023,17 @@ table_name:
   }
 | table_id '.' reserved_table_id
   {
-    $$ = TableName{Qualifier: $1, Name: $3}
+    $$ = TableName{DbQualifier: $1, Name: $3}
   }
 | column_name_safe_keyword
   {
     $$ = TableName{Name: NewTableIdent(string($1))}
   }
 | non_reserved_keyword2
+  {
+    $$ = TableName{Name: NewTableIdent(string($1))}
+  }
+| function_call_keywords
   {
     $$ = TableName{Name: NewTableIdent(string($1))}
   }
@@ -6776,7 +7404,7 @@ value_expression:
   }
 | value_expression COLLATE charset
   {
-    $$ = &CollateExpr{Expr: $1, Charset: $3}
+    $$ = &CollateExpr{Expr: $1, Collation: $3}
   }
 | BINARY value_expression %prec UNARY
   {
@@ -7004,15 +7632,19 @@ function_call_keyword:
   }
 | CHAR openb argument_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
+    $$ = &CharExpr{Exprs: $3}
   }
 | CHAR openb argument_expression_list USING charset closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
+    $$ = &CharExpr{Exprs: $3, Type: $5}
   }
 | CONVERT openb expression USING charset closeb
   {
     $$ = &ConvertUsingExpr{Expr: $3, Type: $5}
+  }
+| POSITION openb value_expression IN value_expression closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent("LOCATE"), Exprs: []SelectExpr{&AliasedExpr{Expr: $3}, &AliasedExpr{Expr: $5}}}
   }
 | INSERT openb argument_expression_list closeb
   {
@@ -7083,10 +7715,6 @@ function_call_keyword:
   {
     $$ = &ValuesFuncExpr{Name: NewColName(string($3))}
   }
-| VERSION openb closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1))}
-  }
 | REPEAT openb argument_expression_list closeb
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
@@ -7097,75 +7725,35 @@ function_call_keyword:
   Dedicated grammar rules are needed because of the special syntax
 */
 function_call_nonkeyword:
-  CURRENT_TIMESTAMP func_parens_opt
+// functions that do not support fractional second precision (fsp)
+  CURRENT_DATE func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent(string($1))}
-  }
-| UTC_TIMESTAMP func_parens_opt
-  {
-    $$ = &FuncExpr{Name:NewColIdent(string($1))}
-  }
-| UTC_TIME func_parens_opt
-  {
-    $$ = &FuncExpr{Name:NewColIdent(string($1))}
-  }
-/* doesn't support fsp */
-| UTC_DATE func_parens_opt
-  {
-    $$ = &FuncExpr{Name:NewColIdent(string($1))}
-  }
-  // now
-| LOCALTIME func_parens_opt
-  {
-    $$ = &FuncExpr{Name:NewColIdent(string($1))}
-  }
-  // now
-| LOCALTIMESTAMP func_parens_opt
-  {
-    $$ = &FuncExpr{Name:NewColIdent(string($1))}
-  }
-  // curdate
-/* doesn't support fsp */
-| CURRENT_DATE func_parens_opt
-  {
-    $$ = &FuncExpr{Name:NewColIdent(string($1))}
-  }
-  // curtime
-| CURRENT_TIME func_parens_opt
-  {
-    $$ = &FuncExpr{Name:NewColIdent(string($1))}
+    $$ = &FuncExpr{Name: NewColIdent(string($1))}
   }
 | CURRENT_USER func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent(string($1))}
+    $$ = &FuncExpr{Name: NewColIdent(string($1))}
   }
-// these functions can also be called with an optional argument
-| CURRENT_TIMESTAMP func_datetime_precision
+| UTC_DATE func_parens_opt
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
+    $$ = &FuncExpr{Name: NewColIdent(string($1))}
   }
-| UTC_TIMESTAMP func_datetime_precision
+// functions that can be called with optional second argument
+| function_call_on_update
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
+    $$ = $1
   }
-| UTC_TIME func_datetime_precision
+| CURRENT_TIME func_datetime_prec_opt
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2}}}
   }
-  // now
-| LOCALTIME func_datetime_precision
+| UTC_TIME func_datetime_prec_opt
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2}}}
   }
-  // now
-| LOCALTIMESTAMP func_datetime_precision
+| UTC_TIMESTAMP func_datetime_prec_opt
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
-  }
-  // curtime
-| CURRENT_TIME func_datetime_precision
-  {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2}}}
   }
 | TIMESTAMPADD openb time_unit ',' value_expression ',' value_expression closeb
   {
@@ -7180,15 +7768,45 @@ function_call_nonkeyword:
     $$ = &ExtractFuncExpr{Name: string($1), Unit: string($3), Expr: $5}
   }
 
+// functions that can be used with the ON UPDATE clause
+function_call_on_update:
+  // NOW is special; it can't be called without parentheses
+  NOW openb closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1))}
+  }
+| NOW openb INTEGRAL closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: NewIntVal($3)}}}
+  }
+| CURRENT_TIMESTAMP func_datetime_prec_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2}}}
+  }
+| LOCALTIME func_datetime_prec_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2}}}
+  }
+| LOCALTIMESTAMP func_datetime_prec_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: $2}}}
+  }
+
 // Optional parens for certain keyword functions that don't require them.
 func_parens_opt:
   /* empty */
 | openb closeb
 
-func_datetime_precision:
-  openb value_expression closeb
+// Optional datetime precision for certain functions.
+func_datetime_prec_opt:
+  // no arg is the same as 0
+  func_parens_opt
   {
-    $$ = $2
+    $$ = NewIntVal([]byte("0"))
+  }
+| openb INTEGRAL closeb
+  {
+    $$ = NewIntVal($2)
   }
 
 /*
@@ -7249,6 +7867,10 @@ charset:
     $$ = string($1)
 }
 | STRING
+{
+    $$ = string($1)
+}
+| BINARY
 {
     $$ = string($1)
 }
@@ -7436,6 +8058,14 @@ convert_type:
   {
     $$ = &ConvertType{Type: string($1), Length: $2, Charset: string($3)}
   }
+| CHARACTER length_opt charset_opt
+  {
+    $$ = &ConvertType{Type: "CHAR", Length: $2, Charset: $3, Operator: CharacterSetStr}
+  }
+| CHARACTER length_opt ID
+  {
+    $$ = &ConvertType{Type: "CHAR", Length: $2, Charset: string($3)}
+  }
 | DATE
   {
     $$ = &ConvertType{Type: string($1)}
@@ -7449,6 +8079,22 @@ convert_type:
     $$ = &ConvertType{Type: string($1)}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
+  }
+| DOUBLE
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| DOUBLE PRECISION
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| REAL
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| FLOAT_TYPE
+  {
+    $$ = &ConvertType{Type: string($1)}
   }
 | JSON
   {
@@ -7478,13 +8124,19 @@ convert_type:
   {
     $$ = &ConvertType{Type: string($1)}
   }
-| DOUBLE
+| YEAR
   {
     $$ = &ConvertType{Type: string($1)}
   }
-| FLOAT_TYPE
+
+char_or_character:
+  CHAR
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = $1
+  }
+| CHARACTER
+  {
+    $$ = $1
   }
 
 expression_opt:
@@ -7583,15 +8235,31 @@ column_name:
   {
     $$ = &ColName{Qualifier: TableName{Name: NewTableIdent(string($1))}, Name: $3}
   }
+| function_call_keywords
+  {
+    $$ = &ColName{Name: NewColIdent(string($1))}
+  }
 | table_id '.' reserved_table_id '.' reserved_sql_id
   {
-    $$ = &ColName{Qualifier: TableName{Qualifier: $1, Name: $3}, Name: $5}
+    $$ = &ColName{Qualifier: TableName{DbQualifier: $1, Name: $3}, Name: $5}
   }
 
 value:
   STRING
   {
     $$ = NewStrVal($1)
+  }
+| DATE STRING
+  {
+    $$ = NewStrVal($2)
+  }
+| TIME STRING
+  {
+    $$ = NewStrVal($2)
+  }
+| TIMESTAMP STRING
+  {
+    $$ = NewStrVal($2)
   }
 | HEX
   {
@@ -7718,20 +8386,20 @@ limit_opt:
   {
     $$ = nil
   }
-| LIMIT integral_or_value_arg
+| LIMIT limit_val
   {
     $$ = &Limit{Rowcount: $2}
   }
-| LIMIT integral_or_value_arg ',' integral_or_value_arg
+| LIMIT limit_val ',' limit_val
   {
     $$ = &Limit{Offset: $2, Rowcount: $4}
   }
-| LIMIT integral_or_value_arg OFFSET integral_or_value_arg
+| LIMIT limit_val OFFSET limit_val
   {
     $$ = &Limit{Offset: $4, Rowcount: $2}
   }
 
-integral_or_value_arg:
+limit_val:
 INTEGRAL
   {
     $$ = NewIntVal($1)
@@ -7739,6 +8407,10 @@ INTEGRAL
 | VALUE_ARG
   {
     $$ = NewValArg($1)
+  }
+| column_name
+  {
+    $$ = $1
   }
 
 lock_opt:
@@ -7758,6 +8430,23 @@ lock_opt:
     $$ = ShareModeStr
   }
 
+insert_data_alias:
+  insert_data
+  {
+    $$ = $1
+  }
+| insert_data as_opt table_alias column_list_opt
+  {
+    $$ = $1
+    // Rows is guarenteed to be an *AliasedValues here.
+    rows := $$.Rows.(*AliasedValues)
+    rows.As = $3
+    if $4 != nil {
+        rows.Columns = $4
+    }
+    $$.Rows = rows
+  }
+
 // insert_data expands all combinations into a single rule.
 // This avoids a shift/reduce conflict while encountering the
 // following two possible constructs:
@@ -7766,35 +8455,49 @@ lock_opt:
 // Because the rules are together, the parser can keep shifting
 // the tokens until it disambiguates a as sql_id and select as keyword.
 insert_data:
-  value_or_values tuple_list
+  insert_data_values
   {
-    $$ = &Insert{Rows: $2}
+    $$ = $1
   }
-| openb closeb value_or_values tuple_list
+| openb closeb insert_data_values
   {
-    $$ = &Insert{Columns: []ColIdent{}, Rows: $4}
+    $3.Columns = []ColIdent{}
+    $$ = $3
   }
-| select_statement_with_no_trailing_into
+| openb ins_column_list closeb insert_data_values
+  {
+    $4.Columns = $2
+    $$ = $4
+  }
+
+insert_data_select:
+  select_statement_with_no_trailing_into
   {
     $$ = &Insert{Rows: $1}
+  }
+| openb ins_column_list closeb select_statement_with_no_trailing_into
+  {
+    $$ = &Insert{Columns: $2, Rows: $4}
   }
 | openb select_statement_with_no_trailing_into closeb
   {
     // Drop the redundant parenthesis.
     $$ = &Insert{Rows: $2}
   }
-| openb ins_column_list closeb value_or_values tuple_list
-  {
-    $$ = &Insert{Columns: $2, Rows: $5}
-  }
-| openb ins_column_list closeb select_statement_with_no_trailing_into
-  {
-    $$ = &Insert{Columns: $2, Rows: $4}
-  }
 | openb ins_column_list closeb openb select_statement_with_no_trailing_into closeb
   {
     // Drop the redundant parenthesis.
     $$ = &Insert{Columns: $2, Rows: $5}
+  }
+
+insert_data_values:
+  value_or_values tuple_list
+  {
+    $$ = &Insert{Rows: &AliasedValues{Values: $2}}
+  }
+| openb insert_data_values closeb
+  {
+    $$ = $2
   }
 
 value_or_values:
@@ -7866,11 +8569,11 @@ tuple_list:
   }
 
 tuple_or_empty:
-  row_tuple
+  row_opt row_tuple
   {
-    $$ = $1
+    $$ = $2
   }
-| openb closeb
+| row_opt openb closeb
   {
     $$ = ValTuple{}
   }
@@ -7931,7 +8634,7 @@ set_list:
 set_expression:
   set_expression_assignment
   {
-    colName, scope, err := VarScopeForColName($1.Name)
+    colName, scope, _, err := VarScopeForColName($1.Name)
     if err != nil {
       yylex.Error(err.Error())
       return 1
@@ -7942,7 +8645,7 @@ set_expression:
   }
 | set_scope_primary set_expression_assignment
   {
-    _, scope, err := VarScopeForColName($2.Name)
+    _, scope, _, err := VarScopeForColName($2.Name)
     if err != nil {
       yylex.Error(err.Error())
       return 1
@@ -7955,7 +8658,7 @@ set_expression:
   }
 | set_scope_secondary set_expression_assignment
   {
-    _, scope, err := VarScopeForColName($2.Name)
+    _, scope, _, err := VarScopeForColName($2.Name)
     if err != nil {
       yylex.Error(err.Error())
       return 1
@@ -8071,15 +8774,18 @@ ignore_number_opt:
 | IGNORE INTEGRAL ROWS
   { $$ = NewIntVal($2) }
 
+to_or_as_opt:
+  { $$ = struct{}{} }
+| to_or_as
+  { $$ = struct{}{} }
+
 to_or_as:
   TO
   { $$ = struct{}{} }
 | AS
   { $$ = struct{}{} }
 
-to_opt:
-  { $$ = struct{}{} }
-| TO
+as_opt:
   { $$ = struct{}{} }
 | AS
   { $$ = struct{}{} }
@@ -8145,6 +8851,14 @@ reserved_table_id:
   {
     $$ = NewTableIdent(string($1))
   }
+| non_reserved_keyword2
+  {
+    $$ = NewTableIdent(string($1))
+  }
+| non_reserved_keyword3
+  {
+    $$ = NewTableIdent(string($1))
+  }
 
 infile_opt:
   { $$ = string("") }
@@ -8199,6 +8913,9 @@ escaped_by_opt:
     $$ = NewStrVal($3)
   }
 
+// TODO: support any number of enclosed_by_opt
+// TODO: support any number of escaped_by_opt
+// TODO: escaped_by_opt and enclosed_by_opt can appear in any order
 fields_opt:
   {
     $$ = nil
@@ -8871,6 +9588,7 @@ non_reserved_keyword:
 | ARRAY
 | AT
 | AUTHENTICATION
+| AUTOEXTEND_SIZE
 | AUTO_INCREMENT
 | AVG_ROW_LENGTH
 | BEGIN
@@ -8879,6 +9597,7 @@ non_reserved_keyword:
 | BOOL
 | BOOLEAN
 | BUCKETS
+| CASCADED
 | CATALOG_NAME
 | CHAIN
 | CHANNEL
@@ -8889,6 +9608,7 @@ non_reserved_keyword:
 | CLIENT
 | CLONE
 | CLOSE
+| COALESCE
 | COLLATION
 | COLUMNS
 | COLUMN_NAME
@@ -8907,7 +9627,7 @@ non_reserved_keyword:
 | CURRENT
 | CURSOR_NAME
 | DATA
-| DATE
+| DATE %prec STRING_TYPE_PREFIX_NON_KEYWORD
 | DATETIME
 | DAY
 | DEALLOCATE
@@ -8917,6 +9637,7 @@ non_reserved_keyword:
 | DESCRIPTION
 | DIRECTORY
 | DISABLE
+| DISCARD
 | DISK
 | DO
 | DUMPFILE
@@ -8935,6 +9656,7 @@ non_reserved_keyword:
 | ERRORS
 | EVENTS
 | EVERY
+| EXCHANGE
 | EXCLUDE
 | EXPANSION
 | EXPIRE
@@ -8959,6 +9681,7 @@ non_reserved_keyword:
 | HISTORY
 | HOSTS
 | HOUR
+| IMPORT
 | INACTIVE
 | INDEXES
 | INITIAL
@@ -8978,7 +9701,9 @@ non_reserved_keyword:
 | LIST
 | LOCAL
 | LOCKED
+| LOG
 | LOGS
+| MASTER
 | MASTER_COMPRESSION_ALGORITHMS
 | MASTER_PUBLIC_KEY_PATH
 | MASTER_TLS_CIPHERSUITES
@@ -8988,6 +9713,7 @@ non_reserved_keyword:
 | MAX_ROWS
 | MAX_UPDATES_PER_HOUR
 | MAX_USER_CONNECTIONS
+| MEMORY
 | MERGE
 | MESSAGE_TEXT
 | MICROSECOND
@@ -9008,7 +9734,6 @@ non_reserved_keyword:
 | NETWORK_NAMESPACE
 | NEVER
 | NO
-| NOW
 | NOWAIT
 | NULLS
 | NVARCHAR
@@ -9022,6 +9747,7 @@ non_reserved_keyword:
 | ORGANIZATION
 | OTHERS
 | PACK_KEYS
+| PARTITIONING
 | PARTITIONS
 | PATH
 | PERSIST
@@ -9040,13 +9766,16 @@ non_reserved_keyword:
 | QUARTER
 | QUERY
 | RANDOM
+| REBUILD
 | REDUNDANT
 | REFERENCE
 | RELAY
+| REMOVE
 | REORGANIZE
 | REPAIR
 | REPEATABLE
 | REPLICA
+| REPLICAS
 | REPLICATE_DO_TABLE
 | REPLICATE_IGNORE_TABLE
 | REPLICATION
@@ -9084,6 +9813,7 @@ non_reserved_keyword:
 | SOURCE_HOST
 | SOURCE_PASSWORD
 | SOURCE_PORT
+| SOURCE_AUTO_POSITION
 | SOURCE_RETRY_COUNT
 | SOURCE_USER
 | SRID
@@ -9110,8 +9840,8 @@ non_reserved_keyword:
 | THAN
 | THREAD_PRIORITY
 | TIES
-| TIME
-| TIMESTAMP
+| TIME %prec STRING_TYPE_PREFIX_NON_KEYWORD
+| TIMESTAMP %prec STRING_TYPE_PREFIX_NON_KEYWORD
 | TRANSACTION
 | TRIGGERS
 | TRUNCATE
@@ -9121,13 +9851,16 @@ non_reserved_keyword:
 | UNUSED
 | USER
 | USER_RESOURCES
+| VALIDATION
 | VALUE
 | VARIABLES
+| VERSION
 | VCPU
 | VISIBLE
 | UNDEFINED
 | WARNINGS
 | WEEK
+| WITHOUT
 | WORK
 | X509
 | YEAR
@@ -9153,7 +9886,6 @@ non_reserved_keyword2:
 | SUPER
 | TIMESTAMPADD
 | TIMESTAMPDIFF
-| VERSION
 | VERSIONS
 | VIEW
 
@@ -9174,6 +9906,12 @@ column_name_safe_keyword:
 | MAX
 | MIN
 | SUM
+
+// Names of functions that require special grammar support. These aren't reserved or non-reserved in MySQL's docs, but are labeled as keywords in our grammar because of their custom syntax.
+function_call_keywords:
+  CAST
+| POSITION
+| TRIM
 
 openb:
   '('

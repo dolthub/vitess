@@ -90,7 +90,7 @@ type Handler interface {
 	// ConnectionClosed is called when a connection is closed.
 	ConnectionClosed(c *Conn)
 
-	// InitDB is called once at the beginning to set db name,
+	// ComInitDB is called once at the beginning to set db name,
 	// and subsequently for every ComInitDB event.
 	ComInitDB(c *Conn, schemaName string) error
 
@@ -98,20 +98,13 @@ type Handler interface {
 	// Note the contents of the query slice may change after
 	// the first call to callback. So the Handler should not
 	// hang on to the byte slice.
-	ComQuery(c *Conn, query string, callback func(res *sqltypes.Result, more bool) error) error
-
-	// ComParsedQuery is called when a connection receives a
-	// query that has already been parsed. Note the contents
-	// of the query slice may change after the first call to
-	// callback. So the Handler should not hang on to the byte
-	// slice.
-	ComParsedQuery(c *Conn, query string, parsed sqlparser.Statement, callback func(res *sqltypes.Result, more bool) error) error
-
+	ComQuery(c *Conn, query string, callback ResultSpoolFn) error
+	
 	// ComMultiQuery is called when a connection receives a query and the
 	// client supports MULTI_STATEMENT. It should process the first
 	// statement in |query| and return the remainder. It will be called
 	// multiple times until the remainder is |""|.
-	ComMultiQuery(c *Conn, query string, callback func(res *sqltypes.Result, more bool) error) (string, error)
+	ComMultiQuery(c *Conn, query string, callback ResultSpoolFn) (string, error)
 
 	// ComPrepare is called when a connection receives a prepared
 	// statement query.
@@ -128,7 +121,12 @@ type Handler interface {
 	// or after the last ComQuery call completes.
 	WarningCount(c *Conn) uint16
 
-	ComResetConnection(c *Conn)
+	// ComResetConnection is called when a connection receives a COM_RESET_CONNECTION signal.
+	// This is used to reset the session state (e.g. clearing user vars, resetting session vars, releasing
+	// locks, releasing cached prepared statements, etc). One of the primary use cases for COM_RESET_CONNECTION
+	// is to reset a pooled connection's session state so that it can be safely returned to the connection pool
+	// and given to another application process to reuse.
+	ComResetConnection(c *Conn) error
 
 	// ParserOptionsForConnection returns any parser options that should be used for the given connection. For
 	// example, if the connection has enabled ANSI_QUOTES or ANSI SQL_MODE, then the parser needs to know that
@@ -137,6 +135,44 @@ type Handler interface {
 	// packets can be sent.
 	ParserOptionsForConnection(c *Conn) (sqlparser.ParserOptions, error)
 }
+
+// BinlogReplicaHandler is an extension to the Handler interface, to add support for binlog replication server commands.
+type BinlogReplicaHandler interface {
+	// ComRegisterReplica is called when a connection receives a ComRegisterReplica request
+	ComRegisterReplica(c *Conn, replicaHost string, replicaPort uint16, replicaUser string, replicaPassword string) error
+
+	// ComBinlogDumpGTID is called when a connection receives a ComBinlogDumpGTID request
+	ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet GTIDSet) error
+}
+
+// ResultSpoolFn is the callback function used by ComQuery and related functions to handle rows returned by a query
+type ResultSpoolFn func(res *sqltypes.Result, more bool) error
+
+// ExtendedHandler is an extension to Handler to support additional protocols on top of MySQL.
+type ExtendedHandler interface {
+	// ComParsedQuery is called when a connection receives a query that has already been parsed. Note the contents 
+	// of the query slice may change after the first call to callback. So the Handler should not hang on to the byte 
+	// slice.
+	ComParsedQuery(c *Conn, query string, parsed sqlparser.Statement, callback ResultSpoolFn) error
+
+	// ComPrepareParsed is called when a connection receives a prepared statement query that has already been parsed.
+	ComPrepareParsed(c *Conn, query string, parsed sqlparser.Statement, prepare *PrepareData) (ParsedQuery, []*querypb.Field, error)
+
+	// ComBind is called when a connection receives a request to bind a prepared statement to a set of values.
+	ComBind(c *Conn, query string, parsedQuery ParsedQuery, prepare *PrepareData) (BoundQuery, []*querypb.Field, error)
+
+	// ComExecuteBound is called when a connection receives a request to execute a prepared statement that has already
+	// bound to a set of values.
+	ComExecuteBound(c *Conn, query string, boundQuery BoundQuery, callback ResultSpoolFn) error
+}
+
+// ParsedQuery is a marker type for communication between the ExtendedHandler interface and integrators, representing a
+// query plan that can be examined or executed
+type ParsedQuery any
+
+// BoundQuery is a marker type for communication between the ExtendedHandler interface and integrators, representing a
+// query plan that has been bound to a set of values
+type BoundQuery any
 
 // Listener is the MySQL server protocol listener.
 type Listener struct {
