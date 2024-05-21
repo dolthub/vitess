@@ -7149,11 +7149,11 @@ condition:
   }
 | value_expression compare ANY subquery
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $4}
+    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: &AnyExpr{Subquery: $4}}
   }
 | value_expression compare SOME subquery
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $4}
+    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: &SomeExpr{Subquery: $4}}
   }
 | value_expression IN col_tuple
   {

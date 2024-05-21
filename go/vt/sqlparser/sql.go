@@ -20757,13 +20757,13 @@ yydefault:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:7151
 		{
-			yyVAL.expr = &ComparisonExpr{Left: yyDollar[1].expr, Operator: yyDollar[2].str, Right: yyDollar[4].subquery}
+			yyVAL.expr = &ComparisonExpr{Left: yyDollar[1].expr, Operator: yyDollar[2].str, Right: &AnyExpr{Subquery: yyDollar[4].subquery}}
 		}
 	case 1393:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:7155
 		{
-			yyVAL.expr = &ComparisonExpr{Left: yyDollar[1].expr, Operator: yyDollar[2].str, Right: yyDollar[4].subquery}
+			yyVAL.expr = &ComparisonExpr{Left: yyDollar[1].expr, Operator: yyDollar[2].str, Right: &SomeExpr{Subquery: yyDollar[4].subquery}}
 		}
 	case 1394:
 		yyDollar = yyS[yypt-3 : yypt+1]
