@@ -7143,9 +7143,13 @@ condition:
   {
     $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
   }
-| value_expression compare ALL subquery
+//| value_expression compare ALL openb subquery closeb
+//  {
+//    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: &AllExpr{Subquery: $5}}
+//  }
+| ALL openb subquery closeb compare ALL openb subquery closeb
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: &AllExpr{Subquery: $4}}
+    $$ = &ComparisonExpr{Left: &AllExpr{Subquery: $3}, Operator: $5, Right: &AllExpr{Subquery: $8}}
   }
 | value_expression compare ANY subquery
   {
