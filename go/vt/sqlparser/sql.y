@@ -7147,9 +7147,9 @@ condition:
   {
     $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
   }
-| value_expression compare ALL openb subquery closeb
+| value_expression compare ALL subquery
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: &AllExpr{Subquery: $5}}
+    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: &AllExpr{Subquery: $4}}
   }
 | value_expression compare ANY subquery
   {
@@ -7158,6 +7158,18 @@ condition:
 | value_expression compare SOME subquery
   {
     $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: &SomeExpr{Subquery: $4}}
+  }
+//| ALL subquery compare value_expression
+//  {
+//    $$ = &ComparisonExpr{Left: $4, Operator: $3, Right: &AllExpr{Subquery: $2}}
+//  }
+| ANY subquery compare value_expression
+  {
+    $$ = &ComparisonExpr{Left: $4, Operator: $3, Right: &AnyExpr{Subquery: $2}}
+  }
+| SOME subquery compare value_expression
+  {
+    $$ = &ComparisonExpr{Left: $4, Operator: $3, Right: &SomeExpr{Subquery: $2}}
   }
 | value_expression IN col_tuple
   {
