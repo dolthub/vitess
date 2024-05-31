@@ -233,7 +233,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %left <bytes> UNION
 %left <bytes> INTERSECT
 %token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL
-%token <bytes> ALL DISTINCT AS EXISTS ASC DESC DUPLICATE DEFAULT SET LOCK UNLOCK KEYS OF
+%token <bytes> ALL ANY SOME DISTINCT AS EXISTS ASC DESC DUPLICATE DEFAULT SET LOCK UNLOCK KEYS OF
 %token <bytes> OUTFILE DUMPFILE DATA LOAD LINES TERMINATED ESCAPED ENCLOSED OPTIONALLY STARTING
 %right <bytes> UNIQUE KEY
 %token <bytes> SYSTEM_TIME CONTAINED VERSION VERSIONS
@@ -423,7 +423,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> THREAD_PRIORITY TIES VCPU VISIBLE INFILE
 
 // MySQL unreserved keywords that are currently unused
-%token <bytes> ACTIVE AGGREGATE ANY ARRAY ASCII AT AUTOEXTEND_SIZE
+%token <bytes> ACTIVE AGGREGATE ARRAY ASCII AT AUTOEXTEND_SIZE
 
 // Generated Columns
 %token <bytes> GENERATED ALWAYS STORED VIRTUAL
@@ -7147,6 +7147,30 @@ condition:
   {
     $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
   }
+| value_expression compare ALL subquery
+  {
+    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: &AllExpr{Subquery: $4}}
+  }
+| value_expression compare ANY subquery
+  {
+    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: &AnyExpr{Subquery: $4}}
+  }
+| value_expression compare SOME subquery
+  {
+    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: &SomeExpr{Subquery: $4}}
+  }
+//| ALL subquery compare value_expression
+//  {
+//    $$ = &ComparisonExpr{Left: $4, Operator: $3, Right: &AllExpr{Subquery: $2}}
+//  }
+| ANY subquery compare value_expression
+  {
+    $$ = &ComparisonExpr{Left: $4, Operator: $3, Right: &AnyExpr{Subquery: $2}}
+  }
+| SOME subquery compare value_expression
+  {
+    $$ = &ComparisonExpr{Left: $4, Operator: $3, Right: &SomeExpr{Subquery: $2}}
+  }
 | value_expression IN col_tuple
   {
     $$ = &ComparisonExpr{Left: $1, Operator: InStr, Right: $3}
@@ -9015,7 +9039,7 @@ kill_statement:
 reserved_keyword:
   ACCESSIBLE
 | ADD
-| ALL
+//| ALL
 | ALTER
 | ANALYZE
 | AND

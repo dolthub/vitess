@@ -5005,6 +5005,9 @@ func (BoolVal) iExpr()            {}
 func (*ColName) iExpr()           {}
 func (ValTuple) iExpr()           {}
 func (*Subquery) iExpr()          {}
+func (*AllExpr) iExpr()           {}
+func (*AnyExpr) iExpr()           {}
+func (*SomeExpr) iExpr()          {}
 func (ListArg) iExpr()            {}
 func (*BinaryExpr) iExpr()        {}
 func (*UnaryExpr) iExpr()         {}
@@ -5364,6 +5367,80 @@ func (node *ExistsExpr) walkSubtree(visit Visit) error {
 }
 
 func (node *ExistsExpr) replace(from, to Expr) bool {
+	return false
+}
+
+// TODO: combine ALL, ANY, SOME into one kind of expression?
+
+// AllExpr represents an ALL expression.
+type AllExpr struct {
+	Subquery *Subquery
+}
+
+// Format formats the node.
+func (node *AllExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("all %v", node.Subquery)
+}
+
+func (node *AllExpr) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Subquery,
+	)
+}
+
+func (node *AllExpr) replace(from, to Expr) bool {
+	return false
+}
+
+// AnyExpr represents an ANY expression.
+type AnyExpr struct {
+	Subquery *Subquery
+}
+
+// Format formats the node.
+func (node *AnyExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("any %v", node.Subquery)
+}
+
+func (node *AnyExpr) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Subquery,
+	)
+}
+
+func (node *AnyExpr) replace(from, to Expr) bool {
+	return false
+}
+
+// SomeExpr represents a SOME expression.
+type SomeExpr struct {
+	Subquery *Subquery
+}
+
+// Format formats the node.
+func (node *SomeExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("some %v", node.Subquery)
+}
+
+func (node *SomeExpr) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Subquery,
+	)
+}
+
+func (node *SomeExpr) replace(from, to Expr) bool {
 	return false
 }
 
