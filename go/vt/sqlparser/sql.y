@@ -2186,6 +2186,10 @@ authentication:
   {
     $$ = &Authentication{Plugin: string($3), Identity: string($5)}
   }
+| IDENTIFIED WITH STRING AS STRING
+  {
+    $$ = &Authentication{Plugin: string($3), Identity: string($5)}
+  }
 
 authentication_initial:
   IDENTIFIED BY RANDOM PASSWORD
@@ -7143,13 +7147,9 @@ condition:
   {
     $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
   }
-//| value_expression compare ALL openb subquery closeb
-//  {
-//    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: &AllExpr{Subquery: $5}}
-//  }
-| ALL openb subquery closeb compare ALL openb subquery closeb
+| value_expression compare ALL openb subquery closeb
   {
-    $$ = &ComparisonExpr{Left: &AllExpr{Subquery: $3}, Operator: $5, Right: &AllExpr{Subquery: $8}}
+    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: &AllExpr{Subquery: $5}}
   }
 | value_expression compare ANY subquery
   {
