@@ -146,6 +146,13 @@ func NewFormatDescriptionEvent(f BinlogFormat, m BinlogEventMetadata) BinlogEven
 	return NewMysql56BinlogEvent(ev)
 }
 
+// NewPreviousGTIDsEvent creates a new PreviousGTIDsEvent based on the provided |gtidSet|.
+func NewPreviousGTIDsEvent(f BinlogFormat, m BinlogEventMetadata, gtidSet Mysql56GTIDSet) BinlogEvent {
+	data := gtidSet.SIDBlock()
+	ev := packetize(f, ePreviousGTIDsEvent, 0, data, m)
+	return NewMysql56BinlogEvent(ev)
+}
+
 // NewInvalidFormatDescriptionEvent returns an invalid FormatDescriptionEvent.
 // The binlog version is set to 3. It IsValid() though.
 func NewInvalidFormatDescriptionEvent(f BinlogFormat, m BinlogEventMetadata) BinlogEvent {
