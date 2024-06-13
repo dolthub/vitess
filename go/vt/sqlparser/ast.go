@@ -7225,8 +7225,13 @@ func formatID(buf *TrackedBuffer, original, lowered string) {
 		isDbSystemVariable = true
 	}
 
+	isUserVariable := false
+	if !isDbSystemVariable && len(original) > 0 && original[:1] == "@" {
+		isUserVariable = true
+	}
+
 	for i, c := range original {
-		if !(isLetter(uint16(c)) || c == '@') && (!isDbSystemVariable || !isCarat(uint16(c))) {
+		if !(isLetter(uint16(c)) || c == '@') && (!isDbSystemVariable || !isCarat(uint16(c))) && !isUserVariable {
 			if i == 0 || !isDigit(uint16(c)) {
 				goto mustEscape
 			}

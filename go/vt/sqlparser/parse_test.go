@@ -1507,7 +1507,7 @@ var (
 		},
 		{
 			input:  "select @`user var`",
-			output: "select `@``user var```",
+			output: "select @`user var`",
 		},
 		{
 			input:  "set @user.`var` = 1",
@@ -1523,7 +1523,7 @@ var (
 		},
 		{
 			input:  "select @`user`.`var`",
-			output: "select `@``user```.var",
+			output: "select @`user`.var",
 		},
 		{
 			input:  "set @abc.def.`ghi` = 300",
@@ -4470,6 +4470,20 @@ end`,
 		},
 	}
 )
+
+// TestSingleSQL is a helper function to test a single SQL statement.
+func TestSingleSQL(t *testing.T) {
+	t.Skip()
+	tests := []parseTest{
+		{
+			input:  "select @`user var`",
+			output: "select @`user var`",
+		},
+	}
+	for _, tcase := range tests {
+		runParseTestCase(t, tcase)
+	}
+}
 
 func TestValid(t *testing.T) {
 	validSQL = append(validSQL, validMultiStatementSql...)
