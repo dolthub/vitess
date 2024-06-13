@@ -428,7 +428,7 @@ func (tkn *Tokenizer) scanIdentifier(firstByte byte, isDbSystemVariable bool) (i
 		buffer.WriteByte(byte(tkn.lastChar))
 		tkn.next()
 	}
-	for isLetter(tkn.lastChar) || isDigit(tkn.lastChar) || (isDbSystemVariable && isCarat(tkn.lastChar)) /*|| (firstByte == '@' && isCarat(tkn.lastChar))*/ {
+	for isLetter(tkn.lastChar) || isDigit(tkn.lastChar) || (isDbSystemVariable && isCarat(tkn.lastChar)) {
 		buffer.WriteByte(byte(tkn.lastChar))
 		tkn.next()
 	}
