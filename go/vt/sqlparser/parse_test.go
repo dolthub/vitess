@@ -438,6 +438,10 @@ var (
 			output: "select * from (values row(1, 3), row(2, 2), row(3, 1)) order by 2 asc limit 2",
 		},
 		{
+			input:  "(((values (1, 3), (2, 2), (3, 1) order by 2 limit 2)))",
+			output: "select * from (values row(1, 3), row(2, 2), row(3, 1)) order by 2 asc limit 2",
+		},
+		{
 			input: "select a from t1, lateral (select b from t2) as sq",
 		},
 		{
