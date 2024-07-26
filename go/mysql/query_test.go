@@ -128,7 +128,8 @@ func TestComStmtPrepare(t *testing.T) {
 		cConn.Close()
 	}()
 
-	sql := "select * from test_table where id = ?"
+	sql := "select ?; select ?"
+	//sql := "select * from test_table where id = ?"
 	mockData := MockQueryPackets(t, sql)
 
 	if err := cConn.writePacket(mockData); err != nil {
@@ -1113,4 +1114,69 @@ func TestExecuteQueries(t *testing.T) {
 			})
 		}
 	})
+}
+
+func MockPrepareData2(t *testing.T) (*PrepareData, *sqltypes.Result) {
+	sql := "select ?"
+
+	result := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Name: "id",
+				Type: querypb.Type_INT32,
+			},
+		},
+		Rows: [][]sqltypes.Value{
+			{
+				sqltypes.MakeTrusted(querypb.Type_INT32, []byte("1")),
+			},
+		},
+		RowsAffected: 1,
+	}
+
+	prepare := &PrepareData{
+		StatementID: 18,
+		PrepareStmt: sql,
+		ParamsCount: 1,
+		ParamsType:  []int32{263},
+		ColumnNames: []string{"id"},
+		BindVars: map[string]*querypb.BindVariable{
+			"v1": sqltypes.Int32BindVariable(10),
+		},
+	}
+
+	return prepare, result
+}
+
+func TestComPrepareMultiple(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	sql := "select ?;\n"
+	data := MockQueryPackets(t, sql)
+	if err := cConn.writePacket(data); err != nil {
+		t.Fatalf("writePacket failed: %v", err)
+	}
+
+	prepare, result := MockPrepareData(t)
+	sConn.PrepareData = make(map[uint32]*PrepareData)
+	sConn.PrepareData[prepare.StatementID] = prepare
+
+	sConn.Capabilities |= CapabilityClientMultiStatements
+	handler := &testHandler{
+		result: result,
+	}
+	err := sConn.handleNextCommand(context.Background(), handler)
+	if err != nil {
+		t.Fatalf("handleNextCommand failed: %v", err)
+	}
+
+	if err := cConn.ExecuteStreamFetch(sql); err != nil {
+		t.Fatalf("ExecuteStreamFetch(%v) failed: %v", sql, err)
+		return
+	}
 }
