@@ -1125,7 +1125,7 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 				}
 			}
 			if len(queries) != 1 {
-				err := fmt.Errorf("can not prepare multiple statements")
+				err := fmt.Errorf("cannot prepare multiple statements")
 				if werr := c.writeErrorPacketFromError(err); werr != nil {
 					// If we can't even write the error, we're done.
 					log.Errorf("Error writing query error to %s: %v", c, werr)
