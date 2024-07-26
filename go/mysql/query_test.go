@@ -1116,38 +1116,6 @@ func TestExecuteQueries(t *testing.T) {
 	})
 }
 
-func MockPrepareData2(t *testing.T) (*PrepareData, *sqltypes.Result) {
-	sql := "select ?"
-
-	result := &sqltypes.Result{
-		Fields: []*querypb.Field{
-			{
-				Name: "id",
-				Type: querypb.Type_INT32,
-			},
-		},
-		Rows: [][]sqltypes.Value{
-			{
-				sqltypes.MakeTrusted(querypb.Type_INT32, []byte("1")),
-			},
-		},
-		RowsAffected: 1,
-	}
-
-	prepare := &PrepareData{
-		StatementID: 18,
-		PrepareStmt: sql,
-		ParamsCount: 1,
-		ParamsType:  []int32{263},
-		ColumnNames: []string{"id"},
-		BindVars: map[string]*querypb.BindVariable{
-			"v1": sqltypes.Int32BindVariable(10),
-		},
-	}
-
-	return prepare, result
-}
-
 func TestComPrepareMultiple(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
 	defer func() {
