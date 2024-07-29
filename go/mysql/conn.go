@@ -1123,6 +1123,7 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 					log.Errorf("Error writing query error to %s: %v", c, werr)
 					return werr
 				}
+				return nil
 			}
 			if len(queries) != 1 {
 				err := fmt.Errorf("cannot prepare multiple statements")
@@ -1131,6 +1132,7 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 					log.Errorf("Error writing query error to %s: %v", c, werr)
 					return werr
 				}
+				return nil
 			}
 		} else {
 			queries = []string{query}
