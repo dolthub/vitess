@@ -71,16 +71,6 @@ func (p *pgen) gen() (string, error) {
 	b := strings.Builder{}
 	fmt.Fprintf(&b, "package sqlparser\n\n")
 
-	//l, ok := p.nextLine()
-	//if !ok {
-	//	return "", fmt.Errorf("function id invalid")
-	//}
-	//fid := strings.Split(l, ":")
-	//if len(fid) < 1 {
-	//	return "", fmt.Errorf("function id invalid")
-	//}
-	//fmt.Fprintf(&b, "func (p *parser) %s() (Expr, bool) {\n", camelize(fid[0]))
-	//fmt.Fprintf(&b, "  id, tok := p.peek()\n")
 	topIfElse := "  if"
 	currentFname := ""
 	for {
@@ -136,10 +126,12 @@ func (p *pgen) gen() (string, error) {
 			if i == 0 {
 				if cmp != "" {
 					fmt.Fprintf(&b, "%s id == %s {\n", topIfElse, cmp)
+					fmt.Fprintf(&b, "    // %s\n", def)
 					fmt.Fprintf(&b, "    var1, _ := p.next()\n")
 				} else {
 					fname := camelize(p)
 					fmt.Fprintf(&b, "%s var1, ok := p.%s(); ok {\n", topIfElse, fname)
+					fmt.Fprintf(&b, "    // %s\n", def)
 				}
 				topIfElse = " else if"
 				continue
