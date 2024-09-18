@@ -2,6 +2,8 @@ package rd
 
 import (
 	"github.com/stretchr/testify/require"
+	"io"
+	"os"
 	"strings"
 	"testing"
 )
@@ -100,9 +102,27 @@ select_statement:
 
 `
 
+type emptyWriter struct{}
+
+var _ io.Writer = (*emptyWriter)(nil)
+
+func (e emptyWriter) Write(p []byte) (n int, err error) {
+	return 0, nil
+}
+
 func TestGen(t *testing.T) {
-	inp := strings.NewReader(testY)
-	cmp, err := split(inp)
+	inp, err := os.Open("../../sql.y")
+	require.NoError(t, err)
+	//inp := strings.NewReader(testY)
+	g := newRecursiveGen(inp, emptyWriter{})
+	err = g.init()
+	require.NoError(t, err)
+	err = g.gen()
+	require.NoError(t, err)
+	outfile, err := os.OpenFile("sql.gen.go", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	require.NoError(t, err)
+	_, err = io.Copy(outfile, strings.NewReader(g.b.String()))
+	require.NoError(t, err)
 }
 
 func TestSplit(t *testing.T) {

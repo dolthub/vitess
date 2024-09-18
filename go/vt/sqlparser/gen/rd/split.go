@@ -101,6 +101,9 @@ func split(infile io.Reader) (*yaccFileContents, error) {
 		}
 
 		if acc {
+			if line[len(line)-1] == '{' {
+				nesting++
+			}
 			buf = append(buf, line)
 		}
 
@@ -174,14 +177,14 @@ func parseYaccType(in string) ([]yaccType, error) {
 	if parts[0] != "%type" || len(parts) < 3 {
 		return nil, fmt.Errorf("invalid yacc type: %s", in)
 	}
-	name := parts[1]
-	if name[0] != '<' || name[len(name)-1] != '>' {
+	typ := parts[1]
+	if typ[0] != '<' || typ[len(typ)-1] != '>' {
 		return nil, fmt.Errorf("invalid yacc type: %s", in)
 	}
-	name = name[1 : len(name)-1]
+	typ = typ[1 : len(typ)-1]
 	var ret []yaccType
 	for _, p := range parts[2:] {
-		ret = append(ret, yaccType{name: name, typ: p})
+		ret = append(ret, yaccType{name: p, typ: typ})
 	}
 	return ret, nil
 }
