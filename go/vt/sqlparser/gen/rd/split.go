@@ -83,6 +83,8 @@ func split(infile io.Reader) (*yaccFileContents, error) {
 		case "%union {":
 			acc = true
 			continue
+		case "},", "})":
+			nesting--
 		case "}":
 			if nesting > 0 {
 				nesting--
@@ -132,6 +134,8 @@ func split(infile io.Reader) (*yaccFileContents, error) {
 		} else if strings.HasPrefix(line, "|") && r != nil {
 			d.rules = append(d.rules, r)
 			r = nil
+		} else if strings.HasPrefix(line, "} else") && r != nil {
+			nesting--
 		}
 
 		if line[len(line)-1] == ':' {

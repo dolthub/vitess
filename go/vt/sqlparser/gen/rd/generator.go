@@ -271,7 +271,7 @@ func normalizeBodyLine(r string) (string, int64, error) {
 	}
 
 	r = strings.ReplaceAll(r, "NewIntVal(var", "NewIntVal(tok")
-	r = strings.ReplaceAll(r, "NewStringVal(var", "NewStringVal(tok")
+	r = strings.ReplaceAll(r, "NewStrVal(var", "NewStrVal(tok")
 
 	//r = strings.ReplaceAll(r, "$1", "var1")
 	//r = strings.ReplaceAll(r, "$2", "var2")

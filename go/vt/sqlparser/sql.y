@@ -3832,25 +3832,41 @@ flush_option:
   }
 
 flush_tables_read_lock_opt:
-  {$$ = false}
+  {
+  $$ = false
+  }
 | WITH READ LOCK
-  {$$ = true}
+  {
+  $$ = true
+  }
 
 relay_logs_attribute:
-  { $$ = "" }
+  {
+  $$ = ""
+  }
 | FOR CHANNEL STRING
-  { $$ = string($3) }
+  {
+  $$ = string($3)
+  }
 
 flush_type:
   NO_WRITE_TO_BINLOG
-  { $$ = string($1) }
+  {
+   $$ = string($1)
+  }
 | LOCAL
-  { $$ = string($1) }
+  {
+   $$ = string($1)
+  }
 
 flush_type_opt:
-  { $$ = "" }
+  {
+  $$ = ""
+  }
 | flush_type
-  { $$ = $1 }
+  {
+  $$ = $1
+  }
 
 replication_statement:
   CHANGE REPLICATION SOURCE TO replication_option_list
@@ -3875,9 +3891,13 @@ replication_statement:
   }
 
 all_opt:
-  { $$ = false }
+  {
+  $$ = false
+  }
 | ALL
-  { $$ = true }
+  {
+  $$ = true
+  }
 
 
 replication_option_list:
@@ -3970,7 +3990,8 @@ index_option_list:
   }
 
 index_option:
-  USING any_identifier // TODO: should be restricted
+// TODO: should be restricted
+  USING any_identifier
   {
     $$ = &IndexOption{Name: string($1), Using: string($2)}
   }
@@ -5754,11 +5775,12 @@ deallocate_statement:
   }
 
 show_statement:
-  SHOW BINARY ID /* SHOW BINARY LOGS */
+// SHOW BINARY LOGS
+  SHOW BINARY ID
   {
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
-/* SHOW CHARACTER SET and SHOW CHARSET are equivalent */
+// SHOW CHARACTER SET and SHOW CHARSET are equivalent
 | SHOW CHARACTER SET like_or_where_opt
   {
     $$ = &Show{Type: CharsetStr, Filter: $4}
@@ -7514,10 +7536,8 @@ function_call_generic:
     $$ = &FuncExpr{Qualifier: $1, Name: $3, Exprs: $5}
   }
 
-/*
-   Special aggregate function calls that can't be treated like a normal function call, because they have an optional
-   OVER clause (not legal on any other non-window, non-aggregate function)
- */
+//   Special aggregate function calls that can't be treated like a normal function call, because they have an optional
+//   OVER clause (not legal on any other non-window, non-aggregate function)
 function_call_aggregate_with_window:
  MAX openb distinct_opt argument_expression_list closeb over_opt
   {
@@ -7588,9 +7608,7 @@ function_call_aggregate_with_window:
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
 
-/*
-  Function calls with an OVER expression, only valid for certain aggregate and window functions
-*/
+// Function calls with an OVER expression, only valid for certain aggregate and window functions
 function_call_window:
   CUME_DIST openb closeb over
   {
@@ -7637,11 +7655,9 @@ function_call_window:
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Over: $4}
   }
 
-/*
-  Function calls using reserved keywords, with dedicated grammar rules
-  as a result
-  TODO: some of these change the case or even the name of the function expression. Should be preserved.
-*/
+  // Function calls using reserved keywords, with dedicated grammar rules
+  // as a result
+  // TODO: some of these change the case or even the name of the function expression. Should be preserved.
 function_call_keyword:
   LEFT openb argument_expression_list closeb
   {
@@ -7761,10 +7777,8 @@ function_call_keyword:
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
 
-/*
-  Function calls using non reserved keywords but with special syntax forms.
-  Dedicated grammar rules are needed because of the special syntax
-*/
+//  Function calls using non reserved keywords but with special syntax forms.
+// Dedicated grammar rules are needed because of the special syntax
 function_call_nonkeyword:
 // functions that do not support fractional second precision (fsp)
   CURRENT_DATE func_parens_opt
@@ -7854,10 +7868,8 @@ func_datetime_prec_opt:
     $$ = NewIntVal($2)
   }
 
-/*
-  Function calls using non reserved keywords with *normal* syntax forms. Because
-  the names are non-reserved, they need a dedicated rule so as not to conflict
-*/
+//  Function calls using non reserved keywords with *normal* syntax forms. Because
+//  the names are non-reserved, they need a dedicated rule so as not to conflict
 function_call_conflict:
   IF openb argument_expression_list closeb
   {
@@ -9052,19 +9064,17 @@ kill_statement:
     $$ = &Kill{Connection: true, ConnID: NewIntVal($3)}
   }
 
-/*
-  Reserved keywords are keywords that MUST be backtick quoted to be used as an identifier. They cannot
-  parse correctly as an identifier otherwise. These are not all necessarily reserved keywords in MySQL, but some are.
-  These are reserved because they may cause parse conflicts in our grammar.
-
-  TODO: Would be helpful to annotate which are NOT reserved in MySQL. Each of those non-reserved keywords that
-        we require to be backtick quoted is a potential customer issue since there's a compatibility issue with MySQL.
-
-  If you want to move one that is not reserved in MySQL (i.e. ESCAPE) to the
-  non_reserved_keywords, you'll need to deal with any conflicts.
-
-  Sorted alphabetically
-*/
+//  Reserved keywords are keywords that MUST be backtick quoted to be used as an identifier. They cannot
+// parse correctly as an identifier otherwise. These are not all necessarily reserved keywords in MySQL, but some are.
+//  These are reserved because they may cause parse conflicts in our grammar.
+//
+//  TODO: Would be helpful to annotate which are NOT reserved in MySQL. Each of those non-reserved keywords that
+//        we require to be backtick quoted is a potential customer issue since there's a compatibility issue with MySQL.
+//
+//  If you want to move one that is not reserved in MySQL (i.e. ESCAPE) to the
+//  non_reserved_keywords, you'll need to deal with any conflicts.
+//
+//  Sorted alphabetically
 reserved_keyword:
   ACCESSIBLE
 | ADD
@@ -9615,13 +9625,11 @@ qualified_column_name_safe_reserved_keyword:
 | YEAR_MONTH
 | ZEROFILL
 
-/*
-  These are non-reserved keywords for Vitess – they don't cause conflicts in the grammar when used as identifiers.
-  They can be safely used as unquoted identifiers in queries. Some may be reserved in MySQL, so we backtick quote
-  them when we rewrite the query, to prevent any issues.
-
-  Sorted alphabetically
-*/
+//  These are non-reserved keywords for Vitess – they don't cause conflicts in the grammar when used as identifiers.
+//  They can be safely used as unquoted identifiers in queries. Some may be reserved in MySQL, so we backtick quote
+//  them when we rewrite the query, to prevent any issues.
+//
+//  Sorted alphabetically
 non_reserved_keyword:
   ACTION
 | ACTIVE

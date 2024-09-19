@@ -32,7 +32,7 @@ func (p *parser) parse(ctx context.Context, s string, options ParserOptions) (re
 		p.tok = NewStringTokenizerForAnsiQuotes(s)
 	}
 
-	if prePlan, ok := p.statement(ctx); ok {
+	if prePlan, ok := p.any_command(p.tok); ok {
 		return prePlan, nil
 	}
 
