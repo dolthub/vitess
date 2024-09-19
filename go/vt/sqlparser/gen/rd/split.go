@@ -61,6 +61,9 @@ func split(infile io.Reader) (*yaccFileContents, error) {
 		if len(line) == 0 {
 			continue
 		}
+
+		line = strings.ReplaceAll(line, "%prec", "")
+
 		switch line {
 		case "{":
 			if r == nil {
@@ -132,6 +135,10 @@ func split(infile io.Reader) (*yaccFileContents, error) {
 		}
 
 		if line[len(line)-1] == ':' {
+			if r != nil {
+				d.rules = append(d.rules, r)
+				r = nil
+			}
 			if d != nil {
 				yc.defs = append(yc.defs, d)
 			}

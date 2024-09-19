@@ -122,6 +122,7 @@ func (g *recursiveGen) genFunc(d *def) error {
 		if strings.Contains(r.name, "/*empty*/") {
 			continue
 		}
+
 		// preprocess body
 		bb := strings.Builder{}
 		var usedVars int64
@@ -143,6 +144,10 @@ func (g *recursiveGen) genFunc(d *def) error {
 
 		var okDefined bool
 		for j, p := range parts {
+			//if strings.Contains(p, "%prec") {
+			//	continue
+			//}
+
 			var cmp string
 			if p == "openb" {
 				cmp = "'('"
@@ -165,8 +170,8 @@ func (g *recursiveGen) genFunc(d *def) error {
 				}
 				if len(parts) == 1 && len(r.body) == 0 {
 					if cmp != "" {
-						fmt.Fprintf(g.b, "id, tok := p.peek(); id == %s {\n", cmp)
-						fmt.Fprintf(g.b, "    ret = tok\n")
+						fmt.Fprintf(g.b, "id, tok1 := p.peek(); id == %s {\n", cmp)
+						fmt.Fprintf(g.b, "    ret = tok1\n")
 					} else {
 						fmt.Fprintf(g.b, "ret, ok := p.%s(yylex); ok {\n", p)
 					}
@@ -189,9 +194,9 @@ func (g *recursiveGen) genFunc(d *def) error {
 				continue
 			}
 			if cmp != "" {
-				fmt.Fprintf(g.b, "    var%d, tok := p.next()\n", j+1)
+				fmt.Fprintf(g.b, "    var%d, tok%d := p.next()\n", j+1, j+1)
 				fmt.Fprintf(g.b, "    if var%d != %s {\n", j+1, cmp)
-				fmt.Fprintf(g.b, "      p.fail(\"expected: '%s: %s <%s>', found: '\" + string(tok) + \"'\")\n", p, strings.Join(parts[:j], " "), cmp)
+				fmt.Fprintf(g.b, "      p.fail(\"expected: '%s: %s <%s>', found: '\" + string(tok%d) + \"'\")\n", p, strings.Join(parts[:j], " "), cmp, j+1)
 				fmt.Fprintf(g.b, "    }\n")
 			} else if _, ok := g.funcExprs[p]; ok {
 				if setIncludes(usedVars, j+1) {
@@ -204,7 +209,7 @@ func (g *recursiveGen) genFunc(d *def) error {
 					okDefined = true
 				}
 				fmt.Fprintf(g.b, "    if !ok {\n")
-				fmt.Fprintf(g.b, "      p.fail(\"expected: '%s: %s <%s>', found: 'string(tok)'\")\n", p, strings.Join(parts[:j], " "), p)
+				fmt.Fprintf(g.b, "      p.fail(\"expected: '%s: %s <%s>', found: 'string(tok%d)'\")\n", p, strings.Join(parts[:j], " "), p, j+1)
 				fmt.Fprintf(g.b, "    }\n")
 			}
 		}
@@ -224,7 +229,19 @@ func (g *recursiveGen) genFunc(d *def) error {
 		fmt.Fprint(g.b, emptyRule)
 		fmt.Fprintf(g.b, "  return ret, true\n}\n\n")
 	} else {
-		fmt.Fprintf(g.b, "  return nil, false\n}\n\n")
+		fmt.Fprintf(g.b, "  return ret, false\n}\n\n")
+
+		//defRet := "nil"
+		//if typ == "string" {
+		//	defRet = "\"\""
+		//} else if typ == "int" {
+		//	defRet = "0"
+		//} else if strings.HasPrefix(typ, "*") {
+		//} else if typ == "Expr" {
+		//} else {
+		//	defRet = typ + "{}"
+		//}
+		//fmt.Fprintf(g.b, "  return %s, false\n}\n\n", defRet)
 	}
 	return nil
 }
@@ -233,7 +250,7 @@ var variableRe = regexp.MustCompile("\\$([1-6]+[0-9]*|[1-9])")
 
 func normalizeBodyLine(r string) (string, int64, error) {
 	r = strings.ReplaceAll(r, "$$ =", "ret =")
-	r = strings.ReplaceAll(r, "return 1", "return nil, false")
+	r = strings.ReplaceAll(r, "return 1", "return ret, false")
 
 	var variables int64
 	r = strings.ReplaceAll(r, "$$", "ret")
@@ -252,6 +269,9 @@ func normalizeBodyLine(r string) (string, int64, error) {
 		r = r[:m[0]] + "var" + r[m[0]+1:]
 		match = variableRe.FindAllStringSubmatchIndex(r, 1)
 	}
+
+	r = strings.ReplaceAll(r, "NewIntVal(var", "NewIntVal(tok")
+	r = strings.ReplaceAll(r, "NewStringVal(var", "NewStringVal(tok")
 
 	//r = strings.ReplaceAll(r, "$1", "var1")
 	//r = strings.ReplaceAll(r, "$2", "var2")

@@ -1345,7 +1345,7 @@ srs_attribute:
   }
 
 opt_with_check_option:
-  /* EMPTY */
+  /*empty*/
   {
     $$ = ViewCheckOptionUnspecified
   }
@@ -4001,7 +4001,7 @@ index_option:
   }
 
 equal_opt:
-  /* empty */
+  /*empty*/
   {
     $$ = ""
   }
@@ -5938,7 +5938,7 @@ LIKE value_expression like_escape_opt
   }
 
 full_opt:
-  /* empty */
+  /*empty*/
   {
     $$ = false
   }
@@ -5958,7 +5958,7 @@ columns_or_fields:
   }
 
 from_database_opt:
-  /* empty */
+  /*empty*/
   {
     $$ = ""
   }
@@ -5972,7 +5972,7 @@ from_database_opt:
   }
 
 like_or_where_opt:
-  /* empty */
+  /*empty*/
   {
     $$ = nil
   }
@@ -5990,7 +5990,7 @@ like_or_where_opt:
   }
 
 show_session_or_global:
-  /* empty */
+  /*empty*/
   {
     $$ = ""
   }
@@ -7174,7 +7174,7 @@ expression:
   }
 
 default_opt:
-  /* empty */
+  /*empty*/
   {
     $$ = ""
   }
@@ -7839,7 +7839,7 @@ function_call_on_update:
 
 // Optional parens for certain keyword functions that don't require them.
 func_parens_opt:
-  /* empty */
+  /*empty*/
 | openb closeb
 
 // Optional datetime precision for certain functions.

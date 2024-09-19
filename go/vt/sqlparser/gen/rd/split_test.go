@@ -81,6 +81,7 @@ load_statement:
 from_or_using:
   FROM {}
 | USING {}
+| OTHER
 
 select_statement:
   with_select order_by_opt limit_opt lock_opt into_opt
@@ -229,6 +230,10 @@ func TestSplit(t *testing.T) {
 					},
 					{
 						name:  "USING",
+						start: false,
+					},
+					{
+						name:  "OTHER",
 						start: false,
 					},
 				},
