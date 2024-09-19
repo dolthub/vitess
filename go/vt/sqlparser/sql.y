@@ -464,8 +464,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <ddls> alter_table_statement_list
 %type <statement> analyze_statement analyze_opt show_statement use_statement prepare_statement execute_statement deallocate_statement
 %type <statement> describe_statement explain_statement explainable_statement
-%type <statement> begin_statement commit_statement rollback_statement start_transaction_statement load_statement
-%type <bytes> work_opt no_opt chain_opt release_opt index_name_opt no_first_last
+%type <statement> begin_statement commit_statement rollback_statement start_transaction_statement load_statement any_command
+%type <bytes> work_opt no_opt chain_opt release_opt index_name_opt no_first_last from_or_using fetch_next_from_opt
 %type <bytes2> comment_opt comment_list
 %type <str> distinct_opt union_op intersect_op except_op insert_or_replace
 %type <str> match_option format_opt
@@ -2577,7 +2577,6 @@ fetch_next_from_opt:
   {}
 | FROM
 | NEXT FROM
-  {}
 
 fetch_variable_list:
   ID
@@ -7503,10 +7502,8 @@ value_expression:
 | function_call_window
 | function_call_aggregate_with_window
 
-/*
-  Regular function calls without special token or syntax, guaranteed to not
-  introduce side effects due to being a simple identifier
-*/
+//  Regular function calls without special token or syntax, guaranteed to not
+//  introduce side effects due to being a simple identifier
 function_call_generic:
   sql_id openb distinct_opt argument_expression_list_opt closeb
   {

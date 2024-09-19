@@ -78,6 +78,10 @@ load_statement:
     $$ = &Load{Local: $3, Infile: $4, IgnoreOrReplace: $5, Table: $6, Partition: $7, Charset: $8, Fields: $9, Lines: $10, IgnoreNum: $11, Columns: $12, SetExprs: $13}
   }
 
+from_or_using:
+  FROM {}
+| USING {}
+
 select_statement:
   with_select order_by_opt limit_opt lock_opt into_opt
   {
@@ -119,7 +123,7 @@ func TestGen(t *testing.T) {
 	require.NoError(t, err)
 	err = g.gen()
 	require.NoError(t, err)
-	outfile, err := os.OpenFile("sql.gen.go", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	outfile, err := os.OpenFile("../../sql.gen.go", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	require.NoError(t, err)
 	_, err = io.Copy(outfile, strings.NewReader(g.b.String()))
 	require.NoError(t, err)
@@ -142,9 +146,9 @@ func TestSplit(t *testing.T) {
 			{name: "ddl", typ: "*DDL"},
 		},
 		yaccTypes: []yaccType{
-			{name: "valTuple", typ: "row_tuple"},
-			{name: "valTuple", typ: "tuple_or_empty"},
-			{name: "expr", typ: "tuple_expression"},
+			{name: "row_tuple", typ: "valTuple"},
+			{name: "tuple_or_empty", typ: "valTuple"},
+			{name: "tuple_expression", typ: "expr"},
 		},
 		tokens: nil,
 		start:  "any_command",
@@ -213,6 +217,19 @@ func TestSplit(t *testing.T) {
 						start: true,
 						body: []string{
 							"$$ = &Load{Local: $3, Infile: $4, IgnoreOrReplace: $5, Table: $6, Partition: $7, Charset: $8, Fields: $9, Lines: $10, IgnoreNum: $11, Columns: $12, SetExprs: $13}"},
+					},
+				},
+			},
+			{
+				name: "from_or_using",
+				rules: []*rule{
+					{
+						name:  "FROM",
+						start: false,
+					},
+					{
+						name:  "USING",
+						start: false,
 					},
 				},
 			},

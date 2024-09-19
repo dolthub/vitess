@@ -98,6 +98,8 @@ func split(infile io.Reader) (*yaccFileContents, error) {
 			}
 		case "%%":
 			continue
+		case "{}":
+			continue
 		}
 
 		if acc {
@@ -120,6 +122,8 @@ func split(infile io.Reader) (*yaccFileContents, error) {
 		} else if strings.HasPrefix(line, "%right") {
 
 		} else if strings.HasPrefix(line, "%nonassoc") {
+		} else if strings.HasPrefix(line, "//") {
+			continue
 		} else if strings.HasPrefix(line, "%start") {
 			yc.start = strings.Split(line, " ")[1]
 		} else if strings.HasPrefix(line, "|") && r != nil {
@@ -142,6 +146,13 @@ func split(infile io.Reader) (*yaccFileContents, error) {
 			r.body = append(r.body, line)
 		} else if d != nil {
 			r = new(rule)
+			if strings.HasSuffix(line, "{}") {
+				line = line[:len(line)-2]
+				r.name = parseRuleName(line)
+				d.rules = append(d.rules, r)
+				r = nil
+				continue
+			}
 			r.name = parseRuleName(line)
 		}
 	}
