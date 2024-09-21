@@ -8581,7 +8581,8 @@ ins_column_list:
   }
 
 ins_column:
- reserved_sql_id '.' reserved_sql_id // TODO: This throws away the qualifier, not a huge deal for insert into, but is incorrect
+// TODO: This throws away the qualifier, not a huge deal for insert into, but is incorrect
+ reserved_sql_id '.' reserved_sql_id
   {
     $$ = $3
   }

@@ -36,7 +36,7 @@ func TestParser(t *testing.T) {
 		t.Run(tt.q, func(t *testing.T) {
 			p := new(parser)
 			p.tok = NewStringTokenizer(tt.q)
-			res, ok := p.anyCommand(p.tok)
+			res, ok := p.any_command(p.tok)
 			require.Equal(t, tt.ok, ok)
 			require.Equal(t, tt.exp, res)
 		})

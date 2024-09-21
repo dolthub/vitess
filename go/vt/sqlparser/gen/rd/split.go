@@ -36,8 +36,9 @@ type yaccToken struct {
 }
 
 type def struct {
-	name  string
-	rules []*rule
+	name    string
+	rules   []*rule
+	selfRec []*rule
 }
 
 type rule struct {
@@ -60,6 +61,10 @@ func split(infile io.Reader) (*yaccFileContents, error) {
 		line = strings.TrimSpace(line)
 		if len(line) == 0 {
 			continue
+		}
+
+		if line == "/*empty*/" {
+			print()
 		}
 
 		line = strings.ReplaceAll(line, "%prec", "")
@@ -107,6 +112,16 @@ func split(infile io.Reader) (*yaccFileContents, error) {
 			continue
 		}
 
+		if line[0] == '{' && line[len(line)-1] == '}' {
+			if r == nil {
+				r = new(rule)
+			}
+			r.body = append(r.body, strings.TrimSpace(line[1:len(line)-1]))
+			d.rules = append(d.rules, r)
+			r = nil
+			continue
+		}
+
 		if acc {
 			if line[len(line)-1] == '{' {
 				nesting++
@@ -138,7 +153,7 @@ func split(infile io.Reader) (*yaccFileContents, error) {
 			nesting--
 		}
 
-		if line[len(line)-1] == ':' {
+		if line[len(line)-1] == ':' && !strings.HasPrefix(line, "case ") {
 			if r != nil {
 				d.rules = append(d.rules, r)
 				r = nil
@@ -167,10 +182,32 @@ func split(infile io.Reader) (*yaccFileContents, error) {
 			r.name = parseRuleName(line)
 		}
 	}
+	if r != nil {
+		d.rules = append(d.rules, r)
+	}
 	if d != nil {
+		d.segmentLeftRecursion()
 		yc.defs = append(yc.defs, d)
 	}
 	return yc, nil
+}
+
+func (d *def) segmentLeftRecursion() {
+	i := 0
+	j := len(d.rules) - 1
+	for j > 0 && strings.HasPrefix(d.rules[j].name, d.name) {
+		j--
+	}
+	for i <= j {
+		if strings.HasPrefix(d.rules[i].name, d.name) {
+			d.rules[i], d.rules[j] = d.rules[j], d.rules[i]
+			j--
+		} else {
+			i++
+		}
+	}
+	d.selfRec = d.rules[i:]
+	d.rules = d.rules[:i]
 }
 
 func parseRuleName(s string) string {

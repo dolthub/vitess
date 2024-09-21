@@ -49,11 +49,11 @@ func (p *parser) fail(s string) {
 
 func (p *parser) next() (int, []byte) {
 	if p.peekOk {
-		p.peekOk = false
 		p.curId, p.cur = p.peekId, p._peek
 	}
 	p.curOk = true
-	p.curId, p.cur = p.tok.Scan()
+	p.peekOk = true
+	p.peekId, p._peek = p.tok.Scan()
 	return p.curId, p.cur
 }
 

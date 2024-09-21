@@ -1,6 +1,7 @@
 package rd
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/require"
 	"io"
 	"os"
@@ -105,6 +106,16 @@ select_statement:
     }
   }
 
+join_condition:
+  { $$ = JoinCondition{On: $2} }
+  ON expression
+  { $$ = JoinCondition{On: $2} }
+| USING '(' column_list ')'
+  { $$ = JoinCondition{Using: $3} }
+
+func_parens_opt:
+  /*empty*/
+| openb closeb
 `
 
 type emptyWriter struct{}
@@ -128,6 +139,39 @@ func TestGen(t *testing.T) {
 	require.NoError(t, err)
 	_, err = io.Copy(outfile, strings.NewReader(g.b.String()))
 	require.NoError(t, err)
+}
+
+func TestLeftRecursion(t *testing.T) {
+	y := `
+comment_opt:
+  {
+    setAllowComments(yylex, true)
+  }
+  comment_list
+  {
+    $$ = $2
+    setAllowComments(yylex, false)
+  }
+
+comment_list:
+  {
+    $$ = nil
+  }
+| comment_list COMMENT
+  {
+    $$ = append($1, $2)
+  }
+| comment_list ',' COMMENT
+  {
+    $$ = append($1, $3)
+  }
+`
+	inp := strings.NewReader(y)
+	g := newRecursiveGen(inp, emptyWriter{})
+	err := g.init()
+	require.NoError(t, err)
+	err = g.gen()
+	fmt.Println(g.b.String())
 }
 
 func TestSplit(t *testing.T) {
@@ -266,6 +310,39 @@ func TestSplit(t *testing.T) {
 							"From: TableExprs{&AliasedTableExpr{Expr: $7}},",
 							"}",
 						},
+					},
+				},
+			},
+			{
+				name: "join_condition",
+				rules: []*rule{
+					{
+						name:  "",
+						start: false,
+						body:  []string{"$$ = JoinCondition{On: $2}"},
+					},
+					{
+						name:  "ON expression",
+						start: false,
+						body:  []string{"$$ = JoinCondition{On: $2}"},
+					},
+					{
+						name:  "USING '(' column_list ')'",
+						start: false,
+						body:  []string{"$$ = JoinCondition{Using: $3}"},
+					},
+				},
+			},
+			{
+				name: "func_parens_opt",
+				rules: []*rule{
+					{
+						name:  "/*empty*/",
+						start: false,
+					},
+					{
+						name:  "openb closeb",
+						start: false,
 					},
 				},
 			},
