@@ -143,27 +143,40 @@ func TestGen(t *testing.T) {
 
 func TestLeftRecursion(t *testing.T) {
 	y := `
-comment_opt:
-  {
-    setAllowComments(yylex, true)
-  }
-  comment_list
-  {
-    $$ = $2
-    setAllowComments(yylex, false)
-  }
+%union {
+  expr     Expr
+}
 
-comment_list:
+%token <bytes> OR AND NOT
+%token <expr> value_expr
+
+value_expr:
   {
     $$ = nil
   }
-| comment_list COMMENT
+|  value_expr OR value_expr 
   {
-    $$ = append($1, $2)
+    $$ = &Or{$1, $3}
   }
-| comment_list ',' COMMENT
+|  value_expr AND value_expr 
   {
-    $$ = append($1, $3)
+    $$ = &And{$1, $3}
+  }
+|  NOT value_expr
+  {
+    $$ = &Not{$1}
+  }
+|  value_expr NOT AND value_expr 
+  {
+    $$ = &Or{&Not{$1|, &Not{$4}}
+  }
+|  value_expr NOT OR value_expr 
+  {
+    $$ = &And{&Not{$1}, &Not{$4}}
+  }
+|  NOT EXISTS value_expr
+  {
+    $$ = &Not{&Exists{$1}}
   }
 `
 	inp := strings.NewReader(y)
@@ -200,149 +213,173 @@ func TestSplit(t *testing.T) {
 		defs: []*def{
 			{
 				name: "any_command",
-				rules: []*rule{
-					{
-						name:  "command",
-						start: true,
-						body:  []string{"setParseTree(yylex, $1)"},
-					},
-					{
-						name:  "command ';'",
-						start: true,
-						body:  []string{"setParseTree(yylex, $1)", "statementSeen(yylex)"},
+				rules: &rulePrefix{
+					prefix: "",
+					term: []*rule{
+						{
+							name:  "command",
+							start: true,
+							body:  []string{"setParseTree(yylex, $1)"},
+						},
+						{
+							name:  "command ';'",
+							start: true,
+							body:  []string{"setParseTree(yylex, $1)", "statementSeen(yylex)"},
+						},
 					},
 				},
 			},
 			{
 				name: "command",
-				rules: []*rule{
-					{
-						name:  "select_statement",
-						start: true,
-						body:  []string{"$$ = $1"},
-					},
-					{
-						name:  "values_select_statement",
-						start: true,
-						body:  []string{"$$ = $1"},
-					},
-					{
-						name: "stream_statement",
-					},
-					{
-						name: "insert_statement",
-					},
-					{
-						name:  "/*empty*/",
-						start: true,
-						body:  []string{"setParseTree(yylex, nil)"},
+				rules: &rulePrefix{
+					prefix: "",
+					term: []*rule{
+						{
+							name:  "select_statement",
+							start: true,
+							body:  []string{"$$ = $1"},
+						},
+						{
+							name:  "values_select_statement",
+							start: true,
+							body:  []string{"$$ = $1"},
+						},
+						{
+							name: "stream_statement",
+						},
+						{
+							name: "insert_statement",
+						},
+						{
+							name:  "/*empty*/",
+							start: true,
+							body:  []string{"setParseTree(yylex, nil)"},
+						},
 					},
 				},
 			},
 			{
 				name: "set_opt",
-				rules: []*rule{
-					{
-						name:  "",
-						start: true,
-						body:  []string{"$$ = nil"},
-					},
-					{
-						name:  "SET assignment_list",
-						start: true,
-						body:  []string{"$$ = $2"},
+				rules: &rulePrefix{
+					prefix: "",
+					term: []*rule{
+						{
+							name:  "",
+							start: true,
+							body:  []string{"$$ = nil"},
+						},
+						{
+							name:  "SET assignment_list",
+							start: true,
+							body:  []string{"$$ = $2"},
+						},
 					},
 				},
 			},
 			{
 				name: "load_statement",
-				rules: []*rule{
-					{
-						name:  "LOAD DATA local_opt infile_opt ignore_or_replace_opt load_into_table_name opt_partition_clause charset_opt fields_opt lines_opt ignore_number_opt column_list_opt set_opt",
-						start: true,
-						body: []string{
-							"$$ = &Load{Local: $3, Infile: $4, IgnoreOrReplace: $5, Table: $6, Partition: $7, Charset: $8, Fields: $9, Lines: $10, IgnoreNum: $11, Columns: $12, SetExprs: $13}"},
+				rules: &rulePrefix{
+					prefix: "",
+					term: []*rule{
+						{
+							name:  "LOAD DATA local_opt infile_opt ignore_or_replace_opt load_into_table_name opt_partition_clause charset_opt fields_opt lines_opt ignore_number_opt column_list_opt set_opt",
+							start: true,
+							body: []string{
+								"$$ = &Load{Local: $3, Infile: $4, IgnoreOrReplace: $5, Table: $6, Partition: $7, Charset: $8, Fields: $9, Lines: $10, IgnoreNum: $11, Columns: $12, SetExprs: $13}"},
+						},
 					},
 				},
 			},
 			{
 				name: "from_or_using",
-				rules: []*rule{
-					{
-						name:  "FROM",
-						start: false,
-					},
-					{
-						name:  "USING",
-						start: false,
-					},
-					{
-						name:  "OTHER",
-						start: false,
+				rules: &rulePrefix{
+					prefix: "",
+					term: []*rule{
+						{
+							name:  "FROM",
+							start: false,
+						},
+						{
+							name:  "USING",
+							start: false,
+						},
+						{
+							name:  "OTHER",
+							start: false,
+						},
 					},
 				},
 			},
 			{
 				name: "select_statement",
-				rules: []*rule{
-					{
-						name:  "with_select order_by_opt limit_opt lock_opt into_opt",
-						start: true,
-						body: []string{
-							"$1.SetOrderBy($2)",
-							"$1.SetLimit($3)",
-							"$1.SetLock($4)",
-							"if err := $1.SetInto($5); err != nil {",
-							"yylex.Error(err.Error())",
-							"return 1",
-							"}",
-							"$$ = $1",
+				rules: &rulePrefix{
+					prefix: "",
+					term: []*rule{
+						{
+							name:  "with_select order_by_opt limit_opt lock_opt into_opt",
+							start: true,
+							body: []string{
+								"$1.SetOrderBy($2)",
+								"$1.SetLimit($3)",
+								"$1.SetLock($4)",
+								"if err := $1.SetInto($5); err != nil {",
+								"yylex.Error(err.Error())",
+								"return 1",
+								"}",
+								"$$ = $1",
+							},
 						},
-					},
-					{
-						name:  "SELECT comment_opt query_opts NEXT num_val for_from table_name",
-						start: true,
-						body: []string{
-							"$$ = &Select{",
-							"Comments: Comments($2),",
-							"QueryOpts: $3,",
-							"SelectExprs: SelectExprs{Nextval{Expr: $5}},",
-							"From: TableExprs{&AliasedTableExpr{Expr: $7}},",
-							"}",
+						{
+							name:  "SELECT comment_opt query_opts NEXT num_val for_from table_name",
+							start: true,
+							body: []string{
+								"$$ = &Select{",
+								"Comments: Comments($2),",
+								"QueryOpts: $3,",
+								"SelectExprs: SelectExprs{Nextval{Expr: $5}},",
+								"From: TableExprs{&AliasedTableExpr{Expr: $7}},",
+								"}",
+							},
 						},
 					},
 				},
 			},
 			{
 				name: "join_condition",
-				rules: []*rule{
-					{
-						name:  "",
-						start: false,
-						body:  []string{"$$ = JoinCondition{On: $2}"},
-					},
-					{
-						name:  "ON expression",
-						start: false,
-						body:  []string{"$$ = JoinCondition{On: $2}"},
-					},
-					{
-						name:  "USING '(' column_list ')'",
-						start: false,
-						body:  []string{"$$ = JoinCondition{Using: $3}"},
+				rules: &rulePrefix{
+					prefix: "",
+					term: []*rule{
+						{
+							name:  "",
+							start: false,
+							body:  []string{"$$ = JoinCondition{On: $2}"},
+						},
+						{
+							name:  "ON expression",
+							start: false,
+							body:  []string{"$$ = JoinCondition{On: $2}"},
+						},
+						{
+							name:  "USING '(' column_list ')'",
+							start: false,
+							body:  []string{"$$ = JoinCondition{Using: $3}"},
+						},
 					},
 				},
 			},
 			{
 				name: "func_parens_opt",
-				rules: []*rule{
-					{
-						name:  "/*empty*/",
-						start: false,
-					},
-					{
-						name:  "openb closeb",
-						start: false,
+				rules: &rulePrefix{
+					prefix: "",
+					term: []*rule{
+						{
+							name:  "/*empty*/",
+							start: false,
+						},
+						{
+							name:  "openb closeb",
+							start: false,
+						},
 					},
 				},
 			},

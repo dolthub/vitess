@@ -113,161 +113,335 @@ func (g *recursiveGen) genFunc(d *def) error {
 		typ = "[]byte"
 		g.funcExprs[d.name] = "[]byte"
 	}
-	//switch d.name {
-	//case "lexer_old_position", "lexer_position", "special_comment_mode":
-	//	return nil
-	//}
-	if d.name == "func_parens_opt" {
-		print()
-	}
+
 	fmt.Fprintf(g.b, "func (p *parser) %s(yylex *Tokenizer) (%s, bool) {\n", d.name, typ)
 	fmt.Fprintf(g.b, "  var ret %s\n", typ)
-	var emptyRule string
-	firstRule := true
-	for _, r := range d.rules {
-		emptyRule, err := g.genRule(r, firstRule, emptyRule)
-		if empty != "" {
-			emptyRule = empty
-		}
-	}
-	if emptyRule != "" && len(d.rules) == 1 {
-		fmt.Fprint(g.b, emptyRule)
-		fmt.Fprintf(g.b, "}\n\n")
+	fmt.Fprintf(g.b, "  var matched bool\n")
 
-		return nil
-	}
-	if len(d.selfRec) > 0 {
-		fmt.Fprintf(g.b, "    if ret == nil {\n")
-		fmt.Fprintf(g.b, "    	return ret, false\n")
-		fmt.Fprintf(g.b, "    }\n")
-		fmt.Fprintf(g.b, "    var1 := ret\n")
+	g.dfsRuleGen(d.rules, 1, true, "  ")
 
-	}
+	//var emptyRule string
+	//firstRule := true
+	// recursive can have empty rule
+	// recursive structure:
+	//  - leaf rules
+	//  - if leaf rule nil return nil
+	//  - if leaf not nil try to match next characters
 
-	fmt.Fprintf(g.b, "  }\n")
+	//dfsRuleGen(d.rules, true, "  ")
 
-	if emptyRule != "" {
-		fmt.Fprint(g.b, emptyRule)
-		fmt.Fprintf(g.b, "  return ret, true\n}\n\n")
-	} else {
-		fmt.Fprintf(g.b, "  return ret, false\n}\n\n")
+	//if emptyRule != "" && len(d.rules) == 1 {
+	//	fmt.Fprint(g.b, emptyRule)
+	//	fmt.Fprintf(g.b, "}\n\n")
+	//
+	//	return nil
+	//}
+	//if len(d.selfRec) > 0 {
+	//	fmt.Fprintf(g.b, "    if ret == nil {\n")
+	//	fmt.Fprintf(g.b, "    	return ret, false\n")
+	//	fmt.Fprintf(g.b, "    }\n")
+	//	fmt.Fprintf(g.b, "    var1 := ret\n")
+	//
+	//}
 
-		//defRet := "nil"
-		//if typ == "string" {
-		//	defRet = "\"\""
-		//} else if typ == "int" {
-		//	defRet = "0"
-		//} else if strings.HasPrefix(typ, "*") {
-		//} else if typ == "Expr" {
-		//} else {
-		//	defRet = typ + "{}"
-		//}
-		//fmt.Fprintf(g.b, "  return %s, false\n}\n\n", defRet)
-	}
+	//fmt.Fprintf(g.b, "  }\n")
+	//
+	//if emptyRule != "" {
+	//	fmt.Fprint(g.b, emptyRule)
+	//	fmt.Fprintf(g.b, "  return ret, true\n}\n\n")
+	//} else {
+	//	fmt.Fprintf(g.b, "  return ret, false\n}\n\n")
+
+	//defRet := "nil"
+	//if typ == "string" {
+	//	defRet = "\"\""
+	//} else if typ == "int" {
+	//	defRet = "0"
+	//} else if strings.HasPrefix(typ, "*") {
+	//} else if typ == "Expr" {
+	//} else {
+	//	defRet = typ + "{}"
+	//}
+	//fmt.Fprintf(g.b, "  return %s, false\n}\n\n", defRet)
+	//}
 	return nil
 }
 
-func (g *recursiveGen) genRule(r *rule, indent string) error {
-	if strings.Contains(r.name, "/*empty*/") {
-		return nil
-	}
-
-	// preprocess body
-	bb := strings.Builder{}
-	var usedVars int64
-	for _, line := range r.body {
-		line, vars, err := normalizeBodyLine(line)
+func (g *recursiveGen) dfsRuleGen(r *rulePrefix, fid int, first bool, indent string) error {
+	var nesting int
+	if r.prefix != "" {
+		match, err := g.nestMatch(r.prefix, fid, first, r.usedVars, indent)
 		if err != nil {
 			return err
 		}
-		usedVars |= vars
-		fmt.Fprintf(&bb, "    %s%s\n", indent, line)
+		indent += " "
+		fid++
+		first = true
+		nesting++
+		fmt.Fprintf(g.b, match)
 	}
-	fmt.Fprintf(&bb, "    return ret, true\n")
-
-	parts := strings.Fields(r.name)
-	if len(parts) == 0 {
-		emptyRule = bb.String()
-		continue
+	// try to match terminal rules, easiest to distinguish
+	for _, r := range r.term {
+		// match terminal rule
+		match, err := g.termRuleMatch(r, fid, first, r.usedVars, indent)
+		if err != nil {
+			return err
+		}
+		first = false
+		fmt.Fprintf(g.b, match)
 	}
 
-	var okDefined bool
-	for j, p := range parts {
-		var cmp string
-		if p == "openb" {
-			cmp = "'('"
-		} else if p == "closeb" {
-			cmp = "')'"
-		} else if p == "}" {
-			cmp = "'}'"
-		} else if p == "{" {
-			cmp = "'{'"
-		} else if _, ok := g.funcExprs[p]; ok {
-		} else if p == "explain_verb" {
+	// nested rule clusters
+	for _, r := range r.pref {
+		err := g.dfsRuleGen(r, fid, first, indent)
+		if err != nil {
+			return err
+		}
+	}
+
+	if r.empty != nil {
+		// returns before recursive
+		if first {
+			// no other rules in block
+			fmt.Fprintf(g.b, "%sreturn ret, true\n", indent)
 		} else {
-			cmp = p
-		}
-
-		if j == 0 {
-			if firstRule {
-				fmt.Fprintf(g.b, "  if ")
-				firstRule = false
-			} else {
-				fmt.Fprintf(g.b, "  } else if ")
-			}
-			if len(parts) == 1 && len(r.body) == 0 {
-				if cmp != "" {
-					fmt.Fprintf(g.b, "id, var1 := p.peek(); id == %s {\n", cmp)
-					fmt.Fprintf(g.b, "    ret = var1\n")
-				} else {
-					fmt.Fprintf(g.b, "ret, ok := p.%s(yylex); ok {\n", p)
-				}
-			} else if cmp != "" {
-				fmt.Fprintf(g.b, "id, _ := p.peek(); id == %s {\n", cmp)
-				fmt.Fprintf(g.b, "    // %s\n", r.name)
-				if setIncludes(usedVars, 1) {
-					//if isLit(cmp) {
-					fmt.Fprintf(g.b, "    _, var1 := p.next()\n")
-					//} else {
-					//	fmt.Fprintf(g.b, "    var1, _ := p.next()\n")
-					//}
-				} else {
-					fmt.Fprintf(g.b, "    p.next()\n")
-				}
-			} else {
-				if setIncludes(usedVars, 1) {
-					fmt.Fprintf(g.b, "var1, ok := p.%s(yylex); ok {\n", p)
-				} else {
-					fmt.Fprintf(g.b, "_, ok := p.%s(yylex); ok {\n", p)
-				}
-				fmt.Fprintf(g.b, "    // %s\n", r.name)
-			}
-			continue
-		}
-		if cmp != "" {
-			fmt.Fprintf(g.b, "    id%d, var%d := p.next()\n", j+1, j+1)
-			fmt.Fprintf(g.b, "    if id%d != %s {\n", j+1, cmp)
-			fmt.Fprintf(g.b, "      p.fail(\"expected: '%s: %s <%s>', found: '\" + string(var%d) + \"'\")\n", p, strings.Join(parts[:j], " "), cmp, j+1)
-			fmt.Fprintf(g.b, "    }\n")
-		} else if _, ok := g.funcExprs[p]; ok {
-			fmt.Fprintf(g.b, "    _, tok%d := p.peek()\n", j+1)
-			if setIncludes(usedVars, j+1) {
-				fmt.Fprintf(g.b, "    var%d, ok := p.%s(yylex)\n", j+1, p)
-				okDefined = true
-			} else if okDefined {
-				fmt.Fprintf(g.b, "    _, ok = p.%s(yylex)\n", p)
-			} else {
-				fmt.Fprintf(g.b, "    _, ok := p.%s(yylex)\n", p)
-				okDefined = true
-			}
-			fmt.Fprintf(g.b, "    if !ok {\n")
-			fmt.Fprintf(g.b, "      p.fail(\"expected: '%s: %s <%s>', found: '\"+string(tok%d)+\"'\")\n", p, strings.Join(parts[:j], " "), p, j+1)
-			fmt.Fprintf(g.b, "    }\n")
+			fmt.Fprintf(g.b, "%s} else {\n", indent)
+			fmt.Fprintf(g.b, "%s  return ret, true\n", indent)
+			fmt.Fprintf(g.b, "%s}\n", indent)
 		}
 	}
-	//success, return
-	fmt.Fprint(g.b, bb.String())
+
+	// recursive is special
+	// field match is different, because it's whether we've matched current scope
+	if r.rec != nil {
+		// if no match, we don't recurse
+		fmt.Fprintf(g.b, "%sif !matched {\n", indent)
+		fmt.Fprintf(g.b, "%s  return ret, false\n", indent)
+		fmt.Fprintf(g.b, "%s}\n", indent)
+		// otherwise |ret| becomes |var1| for the left recursion
+		// rule body
+		fmt.Fprintf(g.b, "%svar1 = ret\n", indent)
+
+		r.rec.prefix = ""
+		err := g.dfsRuleGen(r, fid, first, indent)
+		if err != nil {
+			return err
+		}
+	}
+
+	for i := 0; i < nesting; i++ {
+		fmt.Fprintf(g.b, "%s}\n", indent)
+		indent = indent[2:]
+	}
+	fmt.Fprintf(g.b, "%sreturn ret, matched\n", indent)
+	return nil
 }
+
+func (g *recursiveGen) termRuleMatch(r *rule, fid int, first bool, usedVars int64, indent string) (string, error) {
+	var b strings.Builder
+
+	// nest the first token
+	match, err := g.nestMatch(r.fields[0], fid, first, r.usedVars, indent)
+	if err != nil {
+		return "", err
+	}
+	fid++
+	indent += " "
+
+	// rest of tokens have to match
+	var okDefined bool
+	for i, f := range r.fields[1:] {
+		match, okDefined, err = g.termMatch(f, r.fields[:i], fid, first, okDefined, r.usedVars, indent)
+		if err != nil {
+			return "", err
+		}
+		fid++
+		fmt.Fprintf(&b, match)
+	}
+	// if all tokens match, set |matched| var
+	fmt.Fprintf(&b, "%smatched = true\n", indent)
+
+	return b.String(), nil
+}
+
+func (g *recursiveGen) nestMatch(f string, fid int, first bool, usedVars int64, indent string) (string, error) {
+	var b strings.Builder
+	var cmp string
+	if f == "openb" {
+		cmp = "'('"
+	} else if f == "closeb" {
+		cmp = "')'"
+	} else if f == "}" {
+		cmp = "'}'"
+	} else if f == "{" {
+		cmp = "'{'"
+	} else if _, ok := g.funcExprs[f]; ok {
+	} else {
+		cmp = f
+	}
+
+	if first {
+		fmt.Fprintf(&b, "%sif ", indent)
+	} else {
+		fmt.Fprintf(&b, "%selse if ", indent)
+	}
+
+	if cmp != "" {
+		fmt.Fprintf(&b, "%sid, _ := p.peek(); id == %s {\n", indent, cmp)
+		if setIncludes(usedVars, fid) {
+			fmt.Fprintf(&b, "%s  _, var%d := p.next()\n", indent, fid)
+		} else {
+			fmt.Fprintf(&b, "%s  p.next()\n", indent)
+		}
+	} else {
+		if setIncludes(usedVars, fid) {
+			fmt.Fprintf(&b, "%svar%d, ok := p.%s(yylex); ok {\n", indent, fid, f)
+		} else {
+			fmt.Fprintf(&b, "%s_, ok := p.%s(yylex); ok {\n", indent, f)
+		}
+	}
+	return b.String(), nil
+}
+
+func (g *recursiveGen) termMatch(f string, priorFields []string, fid int, first, okDefined bool, usedVars int64, indent string) (string, bool, error) {
+	var b strings.Builder
+	var cmp string
+	if f == "openb" {
+		cmp = "'('"
+	} else if f == "closeb" {
+		cmp = "')'"
+	} else if f == "}" {
+		cmp = "'}'"
+	} else if f == "{" {
+		cmp = "'{'"
+	} else if _, ok := g.funcExprs[f]; ok {
+	} else {
+		cmp = f
+	}
+
+	if cmp != "" {
+		fmt.Fprintf(&b, "    id%d, var%d := p.next()\n", fid, fid)
+		fmt.Fprintf(&b, "    if id%d != %s {\n", fid, cmp)
+		fmt.Fprintf(&b, "      p.fail(\"expected: '%s: %s <%s>', found: '\" + string(var%d) + \"'\")\n", f, strings.Join(priorFields, " "), cmp, fid)
+		fmt.Fprintf(&b, "    }\n")
+	} else if _, ok := g.funcExprs[f]; ok {
+		fmt.Fprintf(&b, "    _, tok%d := p.peek()\n", fid)
+		if setIncludes(usedVars, fid) {
+			fmt.Fprintf(&b, "    var%d, ok := p.%s(yylex)\n", fid, f)
+			okDefined = true
+		} else if okDefined {
+			fmt.Fprintf(&b, "    _, ok = p.%s(yylex)\n", f)
+		} else {
+			fmt.Fprintf(&b, "    _, ok := p.%s(yylex)\n", f)
+			okDefined = true
+		}
+		fmt.Fprintf(&b, "    if !ok&{\n")
+		fmt.Fprintf(&b, "      p.fail(\"expected: '%s: %s <%s>', found: '\"+string(tok%d)+\"'\")\n", f, strings.Join(priorFields, " "), f, fid)
+		fmt.Fprintf(&b, "    }\n")
+	}
+	return b.String(), okDefined, nil
+}
+
+//func (g *recursiveGen) genRule(r *rule, indent string) error {
+//	if strings.Contains(r.name, "/*empty*/") {
+//		return nil
+//	}
+//
+//	// preprocess body
+//	bb := strings.Builder{}
+//	var usedVars int64
+//	for _, line := range r.body {
+//		line, vars, err := normalizeBodyLine(line)
+//		if err != nil {
+//			return err
+//		}
+//		usedVars |= vars
+//		fmt.Fprintf(&bb, "    %s%s\n", indent, line)
+//	}
+//	fmt.Fprintf(&bb, "    return ret, true\n")
+//
+//	parts := strings.Fields(r.name)
+//	if len(parts) == 0 {
+//		emptyRule = bb.String()
+//		continue
+//	}
+//
+//	var okDefined bool
+//	for j, p := range parts {
+//		var cmp string
+//		if p == "openb" {
+//			cmp = "'('"
+//		} else if p == "closeb" {
+//			cmp = "')'"
+//		} else if p == "}" {
+//			cmp = "'}'"
+//		} else if p == "{" {
+//			cmp = "'{'"
+//		} else if _, ok := g.funcExprs[p]; ok {
+//		} else {
+//			cmp = p
+//		}
+//
+//		if j == 0 {
+//			if firstRule {
+//				fmt.Fprintf(g.b, "  if ")
+//				firstRule = false
+//			} else {
+//				fmt.Fprintf(g.b, "  } else if ")
+//			}
+//			if len(parts) == 1 && len(r.body) == 0 {
+//				if cmp != "" {
+//					fmt.Fprintf(g.b, "id, var1 := p.peek(); id == %s {\n", cmp)
+//					fmt.Fprintf(g.b, "    ret = var1\n")
+//				} else {
+//					fmt.Fprintf(g.b, "ret, ok := p.%s(yylex); ok {\n", p)
+//				}
+//			} else if cmp != "" {
+//				fmt.Fprintf(g.b, "id, _ := p.peek(); id == %s {\n", cmp)
+//				fmt.Fprintf(g.b, "    // %s\n", r.name)
+//				if setIncludes(usedVars, 1) {
+//					//if isLit(cmp) {
+//					fmt.Fprintf(g.b, "    _, var1 := p.next()\n")
+//					//} else {
+//					//	fmt.Fprintf(g.b, "    var1, _ := p.next()\n")
+//					//}
+//				} else {
+//					fmt.Fprintf(g.b, "    p.next()\n")
+//				}
+//			} else {
+//				if setIncludes(usedVars, 1) {
+//					fmt.Fprintf(g.b, "var1, ok := p.%s(yylex); ok {\n", p)
+//				} else {
+//					fmt.Fprintf(g.b, "_, ok := p.%s(yylex); ok {\n", p)
+//				}
+//				fmt.Fprintf(g.b, "    // %s\n", r.name)
+//			}
+//			continue
+//		}
+//		if cmp != "" {
+//			fmt.Fprintf(g.b, "    id%d, var%d := p.next()\n", j+1, j+1)
+//			fmt.Fprintf(g.b, "    if id%d != %s {\n", j+1, cmp)
+//			fmt.Fprintf(g.b, "      p.fail(\"expected: '%s: %s <%s>', found: '\" + string(var%d) + \"'\")\n", p, strings.Join(parts[:j], " "), cmp, j+1)
+//			fmt.Fprintf(g.b, "    }\n")
+//		} else if _, ok := g.funcExprs[p]; ok {
+//			fmt.Fprintf(g.b, "    _, tok%d := p.peek()\n", j+1)
+//			if setIncludes(usedVars, j+1) {
+//				fmt.Fprintf(g.b, "    var%d, ok := p.%s(yylex)\n", j+1, p)
+//				okDefined = true
+//			} else if okDefined {
+//				fmt.Fprintf(g.b, "    _, ok = p.%s(yylex)\n", p)
+//			} else {
+//				fmt.Fprintf(g.b, "    _, ok := p.%s(yylex)\n", p)
+//				okDefined = true
+//			}
+//			fmt.Fprintf(g.b, "    if !ok {\n")
+//			fmt.Fprintf(g.b, "      p.fail(\"expected: '%s: %s <%s>', found: '\"+string(tok%d)+\"'\")\n", p, strings.Join(parts[:j], " "), p, j+1)
+//			fmt.Fprintf(g.b, "    }\n")
+//		}
+//	}
+//	//success, return
+//	fmt.Fprint(g.b, bb.String())
+//}
 
 var variableRe = regexp.MustCompile("(New\\w*\\()*\\$([1-6]+[0-9]*|[1-9])")
 

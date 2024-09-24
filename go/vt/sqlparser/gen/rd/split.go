@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 )
 
@@ -36,15 +37,31 @@ type yaccToken struct {
 }
 
 type def struct {
-	name    string
-	rules   []*rule
-	selfRec []*rule
+	name  string
+	rules *rulePrefix
+}
+
+func newDef() *def {
+	d := new(def)
+	d.rules = new(rulePrefix)
+	return d
 }
 
 type rule struct {
-	name  string
-	start bool
-	body  []string
+	name     string
+	fields   []string
+	start    bool
+	body     []string
+	usedVars int64
+}
+
+type rulePrefix struct {
+	prefix   string
+	term     []*rule
+	pref     []*rulePrefix
+	rec      *rulePrefix
+	empty    *rule
+	usedVars int64
 }
 
 func split(infile io.Reader) (*yaccFileContents, error) {
@@ -94,7 +111,7 @@ func split(infile io.Reader) (*yaccFileContents, error) {
 			if nesting > 0 {
 				nesting--
 			} else if d != nil {
-				d.rules = append(d.rules, r)
+				d.rules.term = append(d.rules.term, r)
 				r = nil
 				continue
 			} else {
@@ -117,7 +134,7 @@ func split(infile io.Reader) (*yaccFileContents, error) {
 				r = new(rule)
 			}
 			r.body = append(r.body, strings.TrimSpace(line[1:len(line)-1]))
-			d.rules = append(d.rules, r)
+			d.rules.term = append(d.rules.term, r)
 			r = nil
 			continue
 		}
@@ -147,7 +164,7 @@ func split(infile io.Reader) (*yaccFileContents, error) {
 		} else if strings.HasPrefix(line, "%start") {
 			yc.start = strings.Split(line, " ")[1]
 		} else if strings.HasPrefix(line, "|") && r != nil {
-			d.rules = append(d.rules, r)
+			d.rules.term = append(d.rules.term, r)
 			r = nil
 		} else if strings.HasPrefix(line, "} else") && r != nil {
 			nesting--
@@ -155,13 +172,13 @@ func split(infile io.Reader) (*yaccFileContents, error) {
 
 		if line[len(line)-1] == ':' && !strings.HasPrefix(line, "case ") {
 			if r != nil {
-				d.rules = append(d.rules, r)
+				d.rules.term = append(d.rules.term, r)
 				r = nil
 			}
 			if d != nil {
 				yc.defs = append(yc.defs, d)
 			}
-			d = new(def)
+			d = newDef()
 			d.name = line[:len(line)-1]
 			continue
 		}
@@ -175,7 +192,7 @@ func split(infile io.Reader) (*yaccFileContents, error) {
 			if strings.HasSuffix(line, "{}") {
 				line = line[:len(line)-2]
 				r.name = parseRuleName(line)
-				d.rules = append(d.rules, r)
+				d.rules.term = append(d.rules.term, r)
 				r = nil
 				continue
 			}
@@ -183,31 +200,102 @@ func split(infile io.Reader) (*yaccFileContents, error) {
 		}
 	}
 	if r != nil {
-		d.rules = append(d.rules, r)
+		d.rules.term = append(d.rules.term, r)
 	}
 	if d != nil {
-		d.segmentLeftRecursion()
+		if err := d.finalize(); err != nil {
+			return nil, err
+		}
 		yc.defs = append(yc.defs, d)
 	}
 	return yc, nil
 }
 
-func (d *def) segmentLeftRecursion() {
-	i := 0
-	j := len(d.rules) - 1
-	for j > 0 && strings.HasPrefix(d.rules[j].name, d.name) {
-		j--
+func (d *def) finalize() error {
+	sort.Slice(d.rules.term, func(i, j int) bool {
+		return d.rules.term[i].name < d.rules.term[j].name
+	})
+	for _, r := range d.rules.term {
+		if err := r.calcUsed(); err != nil {
+			return err
+		}
+		r.fields = strings.Fields(r.name)
 	}
-	for i <= j {
-		if strings.HasPrefix(d.rules[i].name, d.name) {
-			d.rules[i], d.rules[j] = d.rules[j], d.rules[i]
-			j--
-		} else {
-			i++
+	d.rules.partition(d.name)
+	return nil
+}
+
+func (r *rule) calcUsed() error {
+	for i, b := range r.body {
+		newB, used, err := normalizeBodyLine(b)
+		if err != nil {
+			return err
+		}
+		r.usedVars |= used
+		r.body[i] = newB
+	}
+	return nil
+}
+
+func (d *rulePrefix) calcUsed() {
+	for _, t := range d.term {
+		d.usedVars |= t.usedVars
+	}
+}
+
+func (d *rulePrefix) partition(name string) {
+	d.calcUsed()
+	j := 0
+	for i := 0; i < len(d.term); i++ {
+		if len(d.term[i].fields) == 0 {
+			// empty rule is special, checked last
+			d.empty = d.term[i]
+			d.term = append(d.term[:i], d.term[i+1:]...)
+			i--
+			continue
+		}
+		if d.term[i].fields[0] != d.term[j].fields[0] {
+			if i-j > 1 {
+				// leading field doesn't match, but sequence did
+				// new partition for the sequence
+				// recursively partition the subsequence
+				p := new(rulePrefix)
+				p.prefix = d.term[j].fields[0]
+				p.term = make([]*rule, i-j)
+				copy(p.term, d.term[j:i])
+				d.term = append(d.term[:j], d.term[i:]...)
+				for _, r := range p.term {
+					r.fields = r.fields[1:]
+				}
+				i = j
+				p.partition(name)
+				if p.prefix == name {
+					d.rec = p
+				} else {
+					d.pref = append(d.pref, p)
+				}
+			}
 		}
 	}
-	d.selfRec = d.rules[i:]
-	d.rules = d.rules[:i]
+	if d.term[j-1].fields[0] == d.term[j].fields[0] && len(d.term)-j > 1 {
+		// leading field doesn't match, but sequence did
+		// new partition for the sequence
+		// recursively partition the subsequence
+		p := new(rulePrefix)
+		p.prefix = d.term[j].fields[0]
+		p.term = make([]*rule, len(d.term)-j)
+		copy(p.term, d.term[j:len(d.term)])
+		d.term = append(d.term[:j], d.term[len(d.term):]...)
+		for _, r := range p.term {
+			r.fields = r.fields[1:]
+		}
+		p.partition(name)
+		if p.prefix == name {
+			d.rec = p
+		} else {
+			d.pref = append(d.pref, p)
+		}
+	}
 }
 
 func parseRuleName(s string) string {
