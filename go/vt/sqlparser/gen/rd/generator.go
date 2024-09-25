@@ -118,7 +118,7 @@ func (g *recursiveGen) genFunc(d *def) error {
 	fmt.Fprintf(g.b, "  var ret %s\n", typ)
 	fmt.Fprintf(g.b, "  var matched bool\n")
 
-	g.dfsRuleGen(d.rules, 1, true, "  ")
+	g.dfsRuleGen(d.name, d.rules, 1, true, "  ")
 
 	//var emptyRule string
 	//firstRule := true
@@ -167,14 +167,14 @@ func (g *recursiveGen) genFunc(d *def) error {
 	return nil
 }
 
-func (g *recursiveGen) dfsRuleGen(r *rulePrefix, fid int, first bool, indent string) error {
+func (g *recursiveGen) dfsRuleGen(defName string, r *rulePrefix, fid int, first bool, indent string) error {
 	var nesting int
 	if r.prefix != "" {
 		match, err := g.nestMatch(r.prefix, fid, first, r.usedVars, indent)
 		if err != nil {
 			return err
 		}
-		indent += " "
+		indent += "  "
 		fid++
 		first = true
 		nesting++
@@ -183,7 +183,7 @@ func (g *recursiveGen) dfsRuleGen(r *rulePrefix, fid int, first bool, indent str
 	// try to match terminal rules, easiest to distinguish
 	for _, r := range r.term {
 		// match terminal rule
-		match, err := g.termRuleMatch(r, fid, first, r.usedVars, indent)
+		match, err := g.termRuleMatch(defName, r, fid, first, r.usedVars, indent)
 		if err != nil {
 			return err
 		}
@@ -193,10 +193,11 @@ func (g *recursiveGen) dfsRuleGen(r *rulePrefix, fid int, first bool, indent str
 
 	// nested rule clusters
 	for _, r := range r.pref {
-		err := g.dfsRuleGen(r, fid, first, indent)
+		err := g.dfsRuleGen(defName, r, fid, first, indent)
 		if err != nil {
 			return err
 		}
+		first = false
 	}
 
 	if r.empty != nil {
@@ -205,7 +206,7 @@ func (g *recursiveGen) dfsRuleGen(r *rulePrefix, fid int, first bool, indent str
 			// no other rules in block
 			fmt.Fprintf(g.b, "%sreturn ret, true\n", indent)
 		} else {
-			fmt.Fprintf(g.b, "%s} else {\n", indent)
+			fmt.Fprintf(g.b, " else {\n")
 			fmt.Fprintf(g.b, "%s  return ret, true\n", indent)
 			fmt.Fprintf(g.b, "%s}\n", indent)
 		}
@@ -220,24 +221,30 @@ func (g *recursiveGen) dfsRuleGen(r *rulePrefix, fid int, first bool, indent str
 		fmt.Fprintf(g.b, "%s}\n", indent)
 		// otherwise |ret| becomes |var1| for the left recursion
 		// rule body
-		fmt.Fprintf(g.b, "%svar1 = ret\n", indent)
+		fmt.Fprintf(g.b, "%svar1 := ret\n", indent)
 
+		first = true
 		r.rec.prefix = ""
-		err := g.dfsRuleGen(r, fid, first, indent)
+		err := g.dfsRuleGen(defName, r.rec, fid+1, first, indent)
 		if err != nil {
 			return err
 		}
 	}
 
 	for i := 0; i < nesting; i++ {
-		fmt.Fprintf(g.b, "%s}\n", indent)
 		indent = indent[2:]
+		fmt.Fprintf(g.b, "\n%s}\n", indent)
 	}
-	fmt.Fprintf(g.b, "%sreturn ret, matched\n", indent)
+	if fid == 1 {
+		//only top level rule closes function body
+		fmt.Fprintf(g.b, "\n%sreturn ret, matched\n", indent)
+		indent = indent[2:]
+		fmt.Fprintf(g.b, "%s}\n\n", indent)
+	}
 	return nil
 }
 
-func (g *recursiveGen) termRuleMatch(r *rule, fid int, first bool, usedVars int64, indent string) (string, error) {
+func (g *recursiveGen) termRuleMatch(defName string, r *rule, fid int, first bool, usedVars int64, indent string) (string, error) {
 	var b strings.Builder
 
 	// nest the first token
@@ -245,21 +252,26 @@ func (g *recursiveGen) termRuleMatch(r *rule, fid int, first bool, usedVars int6
 	if err != nil {
 		return "", err
 	}
+	fmt.Fprintf(&b, match)
 	fid++
-	indent += " "
 
 	// rest of tokens have to match
 	var okDefined bool
-	for i, f := range r.fields[1:] {
-		match, okDefined, err = g.termMatch(f, r.fields[:i], fid, first, okDefined, r.usedVars, indent)
+	for _, f := range r.fields[1:] {
+		match, okDefined, err = g.termMatch(defName, f, r.name, fid, first, okDefined, r.usedVars, indent+"  ")
 		if err != nil {
 			return "", err
 		}
 		fid++
 		fmt.Fprintf(&b, match)
 	}
+	for _, l := range r.body {
+		fmt.Fprintf(&b, "  %s%s\n", indent, l)
+	}
 	// if all tokens match, set |matched| var
-	fmt.Fprintf(&b, "%smatched = true\n", indent)
+	fmt.Fprintf(&b, "  %smatched = true\n", indent)
+
+	fmt.Fprintf(&b, "%s}", indent)
 
 	return b.String(), nil
 }
@@ -283,11 +295,11 @@ func (g *recursiveGen) nestMatch(f string, fid int, first bool, usedVars int64, 
 	if first {
 		fmt.Fprintf(&b, "%sif ", indent)
 	} else {
-		fmt.Fprintf(&b, "%selse if ", indent)
+		fmt.Fprintf(&b, " else if ")
 	}
 
 	if cmp != "" {
-		fmt.Fprintf(&b, "%sid, _ := p.peek(); id == %s {\n", indent, cmp)
+		fmt.Fprintf(&b, "id, _ := p.peek(); id == %s {\n", cmp)
 		if setIncludes(usedVars, fid) {
 			fmt.Fprintf(&b, "%s  _, var%d := p.next()\n", indent, fid)
 		} else {
@@ -295,15 +307,15 @@ func (g *recursiveGen) nestMatch(f string, fid int, first bool, usedVars int64, 
 		}
 	} else {
 		if setIncludes(usedVars, fid) {
-			fmt.Fprintf(&b, "%svar%d, ok := p.%s(yylex); ok {\n", indent, fid, f)
+			fmt.Fprintf(&b, "var%d, ok := p.%s(yylex); ok {\n", fid, f)
 		} else {
-			fmt.Fprintf(&b, "%s_, ok := p.%s(yylex); ok {\n", indent, f)
+			fmt.Fprintf(&b, "_, ok := p.%s(yylex); ok {\n", f)
 		}
 	}
 	return b.String(), nil
 }
 
-func (g *recursiveGen) termMatch(f string, priorFields []string, fid int, first, okDefined bool, usedVars int64, indent string) (string, bool, error) {
+func (g *recursiveGen) termMatch(defName, f string, ruleFields string, fid int, first, okDefined bool, usedVars int64, indent string) (string, bool, error) {
 	var b strings.Builder
 	var cmp string
 	if f == "openb" {
@@ -320,24 +332,24 @@ func (g *recursiveGen) termMatch(f string, priorFields []string, fid int, first,
 	}
 
 	if cmp != "" {
-		fmt.Fprintf(&b, "    id%d, var%d := p.next()\n", fid, fid)
-		fmt.Fprintf(&b, "    if id%d != %s {\n", fid, cmp)
-		fmt.Fprintf(&b, "      p.fail(\"expected: '%s: %s <%s>', found: '\" + string(var%d) + \"'\")\n", f, strings.Join(priorFields, " "), cmp, fid)
-		fmt.Fprintf(&b, "    }\n")
+		fmt.Fprintf(&b, "%sid%d, var%d := p.next()\n", indent, fid, fid)
+		fmt.Fprintf(&b, "%sif id%d != %s {\n", indent, fid, cmp)
+		fmt.Fprintf(&b, "%s  p.fail(\"rule: '%s->%s', field %d expected '<%s>', found: '\" + string(var%d) + \"'\")\n", indent, defName, ruleFields, fid, f, fid)
+		fmt.Fprintf(&b, "%s}\n", indent)
 	} else if _, ok := g.funcExprs[f]; ok {
-		fmt.Fprintf(&b, "    _, tok%d := p.peek()\n", fid)
+		fmt.Fprintf(&b, "%s_, tok%d := p.peek()\n", indent, fid)
 		if setIncludes(usedVars, fid) {
-			fmt.Fprintf(&b, "    var%d, ok := p.%s(yylex)\n", fid, f)
+			fmt.Fprintf(&b, "%svar%d, ok := p.%s(yylex)\n", indent, fid, f)
 			okDefined = true
 		} else if okDefined {
-			fmt.Fprintf(&b, "    _, ok = p.%s(yylex)\n", f)
+			fmt.Fprintf(&b, "%s_, ok = p.%s(yylex)\n", indent, f)
 		} else {
-			fmt.Fprintf(&b, "    _, ok := p.%s(yylex)\n", f)
+			fmt.Fprintf(&b, "%s_, ok := p.%s(yylex)\n", indent, f)
 			okDefined = true
 		}
-		fmt.Fprintf(&b, "    if !ok&{\n")
-		fmt.Fprintf(&b, "      p.fail(\"expected: '%s: %s <%s>', found: '\"+string(tok%d)+\"'\")\n", f, strings.Join(priorFields, " "), f, fid)
-		fmt.Fprintf(&b, "    }\n")
+		fmt.Fprintf(&b, "%sif !ok {\n", indent)
+		fmt.Fprintf(&b, "%s  p.fail(\"rule: '%s->%s', field %d expected '<%s>', found: '\"+string(tok%d)+\"'\")\n", indent, defName, ruleFields, fid, f, fid)
+		fmt.Fprintf(&b, "%s}\n", indent)
 	}
 	return b.String(), okDefined, nil
 }

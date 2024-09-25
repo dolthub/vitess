@@ -176,6 +176,9 @@ func split(infile io.Reader) (*yaccFileContents, error) {
 				r = nil
 			}
 			if d != nil {
+				if err := d.finalize(); err != nil {
+					return nil, err
+				}
 				yc.defs = append(yc.defs, d)
 			}
 			d = newDef()
@@ -246,15 +249,20 @@ func (d *rulePrefix) calcUsed() {
 func (d *rulePrefix) partition(name string) {
 	d.calcUsed()
 	j := 0
-	for i := 0; i < len(d.term); i++ {
-		if len(d.term[i].fields) == 0 {
-			// empty rule is special, checked last
-			d.empty = d.term[i]
-			d.term = append(d.term[:i], d.term[i+1:]...)
-			i--
-			continue
+	for i := 0; i <= len(d.term); i++ {
+		if i < len(d.term) {
+			if len(d.term[i].fields) == 1 && d.term[i].fields[0] == "/*empty*/" {
+				d.term[i].fields = nil
+			}
+			if len(d.term[i].fields) == 0 {
+				// empty rule is special, checked last
+				d.empty = d.term[i]
+				d.term = append(d.term[:i], d.term[i+1:]...)
+				i--
+				continue
+			}
 		}
-		if d.term[i].fields[0] != d.term[j].fields[0] {
+		if i == len(d.term) || d.term[i].fields[0] != d.term[j].fields[0] {
 			if i-j > 1 {
 				// leading field doesn't match, but sequence did
 				// new partition for the sequence
@@ -275,25 +283,7 @@ func (d *rulePrefix) partition(name string) {
 					d.pref = append(d.pref, p)
 				}
 			}
-		}
-	}
-	if d.term[j-1].fields[0] == d.term[j].fields[0] && len(d.term)-j > 1 {
-		// leading field doesn't match, but sequence did
-		// new partition for the sequence
-		// recursively partition the subsequence
-		p := new(rulePrefix)
-		p.prefix = d.term[j].fields[0]
-		p.term = make([]*rule, len(d.term)-j)
-		copy(p.term, d.term[j:len(d.term)])
-		d.term = append(d.term[:j], d.term[len(d.term):]...)
-		for _, r := range p.term {
-			r.fields = r.fields[1:]
-		}
-		p.partition(name)
-		if p.prefix == name {
-			d.rec = p
-		} else {
-			d.pref = append(d.pref, p)
+			j = i
 		}
 	}
 }

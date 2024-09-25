@@ -147,13 +147,16 @@ func TestLeftRecursion(t *testing.T) {
   expr     Expr
 }
 
-%token <bytes> OR AND NOT
+%token <bytes> null_opt OR AND NOT
 %token <expr> value_expr
 
-value_expr:
+null_opt:
   {
     $$ = nil
   }
+| NULL
+
+value_expr:
 |  value_expr OR value_expr 
   {
     $$ = &Or{$1, $3}
@@ -164,11 +167,11 @@ value_expr:
   }
 |  NOT value_expr
   {
-    $$ = &Not{$1}
+    $$ = &Not{$2}
   }
 |  value_expr NOT AND value_expr 
   {
-    $$ = &Or{&Not{$1|, &Not{$4}}
+    $$ = &Or{&Not{$1}, &Not{$4}}
   }
 |  value_expr NOT OR value_expr 
   {
@@ -176,7 +179,7 @@ value_expr:
   }
 |  NOT EXISTS value_expr
   {
-    $$ = &Not{&Exists{$1}}
+    $$ = &Not{&Exists{$3}}
   }
 `
 	inp := strings.NewReader(y)
