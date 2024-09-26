@@ -147,8 +147,12 @@ func TestLeftRecursion(t *testing.T) {
   expr     Expr
 }
 
-%token <bytes> null_opt OR AND NOT
+%token <bytes> null_opt OR AND NOT TOKEN_A TOKEN_B tokens
 %token <expr> value_expr
+
+tokens:
+  TOKEN_A
+| TOKEN_B
 
 null_opt:
   {

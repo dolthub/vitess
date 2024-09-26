@@ -216,12 +216,15 @@ func (g *recursiveGen) dfsRuleGen(defName string, r *rulePrefix, fid int, first 
 	// field match is different, because it's whether we've matched current scope
 	if r.rec != nil {
 		// if no match, we don't recurse
+		fmt.Fprintf(g.b, "\n")
 		fmt.Fprintf(g.b, "%sif !matched {\n", indent)
 		fmt.Fprintf(g.b, "%s  return ret, false\n", indent)
 		fmt.Fprintf(g.b, "%s}\n", indent)
 		// otherwise |ret| becomes |var1| for the left recursion
 		// rule body
-		fmt.Fprintf(g.b, "%svar1 := ret\n", indent)
+		if setIncludes(r.rec.usedVars, 1) {
+			fmt.Fprintf(g.b, "%svar1 := ret\n", indent)
+		}
 
 		first = true
 		r.rec.prefix = ""
@@ -233,7 +236,7 @@ func (g *recursiveGen) dfsRuleGen(defName string, r *rulePrefix, fid int, first 
 
 	for i := 0; i < nesting; i++ {
 		indent = indent[2:]
-		fmt.Fprintf(g.b, "\n%s}\n", indent)
+		fmt.Fprintf(g.b, "\n%s}", indent)
 	}
 	if fid == 1 {
 		//only top level rule closes function body
@@ -252,7 +255,7 @@ func (g *recursiveGen) termRuleMatch(defName string, r *rule, fid int, first boo
 	if err != nil {
 		return "", err
 	}
-	fmt.Fprintf(&b, match)
+	fmt.Fprint(&b, match)
 	fid++
 
 	// rest of tokens have to match
@@ -263,11 +266,17 @@ func (g *recursiveGen) termRuleMatch(defName string, r *rule, fid int, first boo
 			return "", err
 		}
 		fid++
-		fmt.Fprintf(&b, match)
+		fmt.Fprint(&b, match)
+	}
+
+	if len(r.body) == 0 {
+		fmt.Fprintf(&b, "  %sret = var1\n", indent)
+
 	}
 	for _, l := range r.body {
 		fmt.Fprintf(&b, "  %s%s\n", indent, l)
 	}
+
 	// if all tokens match, set |matched| var
 	fmt.Fprintf(&b, "  %smatched = true\n", indent)
 
@@ -287,6 +296,8 @@ func (g *recursiveGen) nestMatch(f string, fid int, first bool, usedVars int64, 
 		cmp = "'}'"
 	} else if f == "{" {
 		cmp = "'{'"
+	} else if f == "'%'" {
+		cmp = "'%%'"
 	} else if _, ok := g.funcExprs[f]; ok {
 	} else {
 		cmp = f
@@ -326,6 +337,8 @@ func (g *recursiveGen) termMatch(defName, f string, ruleFields string, fid int, 
 		cmp = "'}'"
 	} else if f == "{" {
 		cmp = "'{'"
+	} else if f == "'%'" {
+		cmp = "'%%%'"
 	} else if _, ok := g.funcExprs[f]; ok {
 	} else {
 		cmp = f
@@ -458,6 +471,7 @@ func (g *recursiveGen) termMatch(defName, f string, ruleFields string, fid int, 
 var variableRe = regexp.MustCompile("(New\\w*\\()*\\$([1-6]+[0-9]*|[1-9])")
 
 func normalizeBodyLine(r string) (string, int64, error) {
+	r = strings.ReplaceAll(r, "%", "%%")
 	r = strings.ReplaceAll(r, "$$ =", "ret =")
 	r = strings.ReplaceAll(r, "return 1", "return ret, false")
 

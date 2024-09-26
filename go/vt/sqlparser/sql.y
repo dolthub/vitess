@@ -6192,7 +6192,7 @@ comment_opt:
   }
   comment_list
   {
-    $$ = $2
+    $$ = $1
     setAllowComments(yylex, false)
   }
 

@@ -229,6 +229,9 @@ func (d *def) finalize() error {
 }
 
 func (r *rule) calcUsed() error {
+	if len(r.body) == 0 {
+		r.usedVars |= 1 << 1
+	}
 	for i, b := range r.body {
 		newB, used, err := normalizeBodyLine(b)
 		if err != nil {
