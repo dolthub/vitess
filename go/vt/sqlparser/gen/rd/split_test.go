@@ -147,7 +147,7 @@ func TestLeftRecursion(t *testing.T) {
   expr     Expr
 }
 
-%token <bytes> null_opt OR AND NOT TOKEN_A TOKEN_B tokens
+%token <bytes> null_opt OR AND NOT TOKEN_A TOKEN_B tokens row_opt ROW
 %token <expr> value_expr
 
 tokens:
@@ -159,6 +159,11 @@ null_opt:
     $$ = nil
   }
 | NULL
+
+row_opt:
+  {}
+| ROW
+  {}
 
 value_expr:
 |  value_expr OR value_expr 
@@ -194,6 +199,91 @@ value_expr:
 	fmt.Println(g.b.String())
 }
 
+func TestConflicts(t *testing.T) {
+	y := `
+%union {
+  expr     Expr
+}
+
+%token <bytes> null_opt OR AND NOT TOKEN_A TOKEN_B tokens row_opt ROW ID
+%token <expr> value_expr condition expression
+
+expression:
+  condition
+  {
+    $$ = $1
+  }
+| expression AND expression
+  {
+    $$ = &AndExpr{Left: $1, Right: $3}
+  }
+| NOT expression
+  {
+    $$ = &NotExpr{Expr: $2}
+  }
+| value_expression
+  {
+    $$ = $1
+  }
+| DEFAULT default_opt
+  {
+    $$ = &Default{ColName: $2}
+  }
+
+value_expression:
+|  value_expression OR value_expression 
+  {
+    $$ = &Or{$1, $3}
+  }
+|  value_expression AND value_expression 
+  {
+    $$ = &And{$1, $3}
+  }
+|  NOT value_expression
+  {
+    $$ = &Not{$2}
+  }
+|  value_expression NOT AND value_expression 
+  {
+    $$ = &Or{&Not{$1}, &Not{$4}}
+  }
+|  value_expression NOT OR value_expression 
+  {
+    $$ = &And{&Not{$1}, &Not{$4}}
+  }
+|  NOT EXISTS value_expr
+  {
+    $$ = &Not{&Exists{$3}}
+  }
+
+condition:
+  value_expression compare value_expression
+  {
+    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
+  }
+| value_expression IN col_tuple
+  {
+    $$ = &ComparisonExpr{Left: $1, Operator: InStr, Right: $3}
+  }
+
+default_opt:
+  /*empty*/
+  {
+    $$ = ""
+  }
+| openb ID closeb
+  {
+    $$ = string($2)
+  }
+`
+	inp := strings.NewReader(y)
+	g := newRecursiveGen(inp, emptyWriter{})
+	err := g.init()
+	require.NoError(t, err)
+	err = g.gen()
+	fmt.Println(g.b.String())
+}
+
 func TestSplit(t *testing.T) {
 	inp := strings.NewReader(testY)
 	cmp, err := split(inp)
@@ -217,39 +307,39 @@ func TestSplit(t *testing.T) {
 		},
 		tokens: nil,
 		start:  "any_command",
-		defs: []*def{
-			{
+		defs: map[string]*def{
+			"any_command": {
 				name: "any_command",
 				rules: &rulePrefix{
 					prefix: "",
 					term: []*rule{
 						{
-							name:  "command",
-							start: true,
-							body:  []string{"setParseTree(yylex, $1)"},
+							name: "command",
+							set:  true,
+							body: []string{"setParseTree(yylex, $1)"},
 						},
 						{
-							name:  "command ';'",
-							start: true,
-							body:  []string{"setParseTree(yylex, $1)", "statementSeen(yylex)"},
+							name: "command ';'",
+							set:  true,
+							body: []string{"setParseTree(yylex, $1)", "statementSeen(yylex)"},
 						},
 					},
 				},
 			},
-			{
+			"command": {
 				name: "command",
 				rules: &rulePrefix{
 					prefix: "",
 					term: []*rule{
 						{
-							name:  "select_statement",
-							start: true,
-							body:  []string{"$$ = $1"},
+							name: "select_statement",
+							set:  true,
+							body: []string{"$$ = $1"},
 						},
 						{
-							name:  "values_select_statement",
-							start: true,
-							body:  []string{"$$ = $1"},
+							name: "values_select_statement",
+							set:  true,
+							body: []string{"$$ = $1"},
 						},
 						{
 							name: "stream_statement",
@@ -258,73 +348,73 @@ func TestSplit(t *testing.T) {
 							name: "insert_statement",
 						},
 						{
-							name:  "/*empty*/",
-							start: true,
-							body:  []string{"setParseTree(yylex, nil)"},
+							name: "/*empty*/",
+							set:  true,
+							body: []string{"setParseTree(yylex, nil)"},
 						},
 					},
 				},
 			},
-			{
+			"set_opt": {
 				name: "set_opt",
 				rules: &rulePrefix{
 					prefix: "",
 					term: []*rule{
 						{
-							name:  "",
-							start: true,
-							body:  []string{"$$ = nil"},
+							name: "",
+							set:  true,
+							body: []string{"$$ = nil"},
 						},
 						{
-							name:  "SET assignment_list",
-							start: true,
-							body:  []string{"$$ = $2"},
+							name: "SET assignment_list",
+							set:  true,
+							body: []string{"$$ = $2"},
 						},
 					},
 				},
 			},
-			{
+			"load_statement": {
 				name: "load_statement",
 				rules: &rulePrefix{
 					prefix: "",
 					term: []*rule{
 						{
-							name:  "LOAD DATA local_opt infile_opt ignore_or_replace_opt load_into_table_name opt_partition_clause charset_opt fields_opt lines_opt ignore_number_opt column_list_opt set_opt",
-							start: true,
+							name: "LOAD DATA local_opt infile_opt ignore_or_replace_opt load_into_table_name opt_partition_clause charset_opt fields_opt lines_opt ignore_number_opt column_list_opt set_opt",
+							set:  true,
 							body: []string{
 								"$$ = &Load{Local: $3, Infile: $4, IgnoreOrReplace: $5, Table: $6, Partition: $7, Charset: $8, Fields: $9, Lines: $10, IgnoreNum: $11, Columns: $12, SetExprs: $13}"},
 						},
 					},
 				},
 			},
-			{
+			"from_or_using": {
 				name: "from_or_using",
 				rules: &rulePrefix{
 					prefix: "",
 					term: []*rule{
 						{
-							name:  "FROM",
-							start: false,
+							name: "FROM",
+							set:  false,
 						},
 						{
-							name:  "USING",
-							start: false,
+							name: "USING",
+							set:  false,
 						},
 						{
-							name:  "OTHER",
-							start: false,
+							name: "OTHER",
+							set:  false,
 						},
 					},
 				},
 			},
-			{
+			"select_statement": {
 				name: "select_statement",
 				rules: &rulePrefix{
 					prefix: "",
 					term: []*rule{
 						{
-							name:  "with_select order_by_opt limit_opt lock_opt into_opt",
-							start: true,
+							name: "with_select order_by_opt limit_opt lock_opt into_opt",
+							set:  true,
 							body: []string{
 								"$1.SetOrderBy($2)",
 								"$1.SetLimit($3)",
@@ -337,8 +427,8 @@ func TestSplit(t *testing.T) {
 							},
 						},
 						{
-							name:  "SELECT comment_opt query_opts NEXT num_val for_from table_name",
-							start: true,
+							name: "SELECT comment_opt query_opts NEXT num_val for_from table_name",
+							set:  true,
 							body: []string{
 								"$$ = &Select{",
 								"Comments: Comments($2),",
@@ -351,41 +441,41 @@ func TestSplit(t *testing.T) {
 					},
 				},
 			},
-			{
+			"join_condition": {
 				name: "join_condition",
 				rules: &rulePrefix{
 					prefix: "",
 					term: []*rule{
 						{
-							name:  "",
-							start: false,
-							body:  []string{"$$ = JoinCondition{On: $2}"},
+							name: "",
+							set:  false,
+							body: []string{"$$ = JoinCondition{On: $2}"},
 						},
 						{
-							name:  "ON expression",
-							start: false,
-							body:  []string{"$$ = JoinCondition{On: $2}"},
+							name: "ON expression",
+							set:  false,
+							body: []string{"$$ = JoinCondition{On: $2}"},
 						},
 						{
-							name:  "USING '(' column_list ')'",
-							start: false,
-							body:  []string{"$$ = JoinCondition{Using: $3}"},
+							name: "USING '(' column_list ')'",
+							set:  false,
+							body: []string{"$$ = JoinCondition{Using: $3}"},
 						},
 					},
 				},
 			},
-			{
+			"func_parens_opt": {
 				name: "func_parens_opt",
 				rules: &rulePrefix{
 					prefix: "",
 					term: []*rule{
 						{
-							name:  "/*empty*/",
-							start: false,
+							name: "/*empty*/",
+							set:  false,
 						},
 						{
-							name:  "openb closeb",
-							start: false,
+							name: "openb closeb",
+							set:  false,
 						},
 					},
 				},

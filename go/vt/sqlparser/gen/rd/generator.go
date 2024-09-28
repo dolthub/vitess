@@ -180,6 +180,10 @@ func (g *recursiveGen) dfsRuleGen(defName string, r *rulePrefix, fid int, first 
 		nesting++
 		fmt.Fprintf(g.b, match)
 	}
+
+	if r.prefix == "value_expression" {
+		print()
+	}
 	// try to match terminal rules, easiest to distinguish
 	for _, r := range r.term {
 		// match terminal rule
