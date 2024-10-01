@@ -437,30 +437,59 @@ func (d *rulePrefix) replaceLeftRecursion(name string) error {
 	//newRec := make([]*rule, recEnd-recStart)
 	for i := recStart; i < recEnd; i++ {
 		r := d.flat[i]
-		for i := 1; i < len(r.fields); i++ {
-			suf := strings.Join(r.fields[i:], " ")
-			if term[suf] {
-				// direct left recursion
-				// expr -> (term) | (expr term)
-				//nr := r.copy()
-				newFields := append([]string{suf}, r.fields[1:i]...)
-				newFields = append(newFields, name)
-				r.fields = newFields
-				totalFields := len(strings.Fields(r.name))
-				offset := totalFields - len(r.fields)
-				from := fmt.Sprintf("var%d", offset+1)
-				to := fmt.Sprintf("var%d", totalFields)
-				for i, l := range r.body {
-					// XXX: this only works when recursive list rules are <10 fields
-					l = strings.ReplaceAll(l, to, "varx")
-					l = strings.ReplaceAll(l, from, to)
-					l = strings.ReplaceAll(l, "varx", from)
-					l = strings.ReplaceAll(l, "append(ret", "append("+to)
-					r.body[i] = l
-				}
-				r.calcUsed()
-				break
+		var match bool
+		suffix := strings.Join(r.fields[1:], " ")
+		if term[suffix] {
+			// direct left recursion
+			// expr -> (term) | (expr term)
+			//nr := r.copy()
+			match = true
+			r.fields = append(r.fields[1:], name)
+			totalFields := len(strings.Fields(r.name))
+			offset := totalFields - len(r.fields)
+			from := fmt.Sprintf("var%d", offset+1)
+			to := fmt.Sprintf("var%d", totalFields)
+			for i, l := range r.body {
+				// XXX: this only works when recursive list rules are <10 fields
+				l = strings.ReplaceAll(l, to, "varx")
+				l = strings.ReplaceAll(l, from, to)
+				l = strings.ReplaceAll(l, "varx", from)
+				l = strings.ReplaceAll(l, "append(ret", "append("+to)
+				r.body[i] = l
 			}
+			r.calcUsed()
+		} else if term[r.fields[len(r.fields)-1]] {
+			match = true
+			r.fields = append(r.fields[:len(r.fields)-1], name)
+			totalFields := len(strings.Fields(r.name))
+			offset := totalFields - len(r.fields)
+			from := fmt.Sprintf("var%d", offset+1)
+			to := fmt.Sprintf("var%d", totalFields)
+			for i, l := range r.body {
+				// XXX: this only works when recursive list rules are <10 fields
+				l = strings.ReplaceAll(l, to, "varx")
+				l = strings.ReplaceAll(l, from, to)
+				l = strings.ReplaceAll(l, "varx", from)
+				l = strings.ReplaceAll(l, "append(ret", "append("+to)
+				l = strings.ReplaceAll(l, fmt.Sprintf("append(%s, %s)", to, from), fmt.Sprintf("append(%s, %s...)", to, from))
+				r.body[i] = l
+			}
+			r.calcUsed()
+		}
+		if match {
+			totalFields := len(strings.Fields(r.name))
+			offset := totalFields - len(r.fields)
+			from := fmt.Sprintf("var%d", offset+1)
+			to := fmt.Sprintf("var%d", totalFields)
+			for i, l := range r.body {
+				// XXX: this only works when recursive list rules are <10 fields
+				l = strings.ReplaceAll(l, to, "varx")
+				l = strings.ReplaceAll(l, from, to)
+				l = strings.ReplaceAll(l, "varx", from)
+				l = strings.ReplaceAll(l, "append(ret", "append("+to)
+				r.body[i] = l
+			}
+			r.calcUsed()
 		}
 	}
 	//copy(d.flat[recStart:recEnd], newRec)
@@ -535,7 +564,7 @@ func (d *rulePrefix) partition(name string) error {
 
 		match := acc[0].fields[0] == r.fields[0]
 		if !match {
-			if len(acc) < 2 {
+			if len(acc) == 1 && acc[0].fields[0] != name {
 				d.term = append(d.term, acc[0])
 			} else {
 				if err := d.addPrefixPartition(name, acc); err != nil {

@@ -258,6 +258,49 @@ characteristic:
 	fmt.Println(g.b.String())
 }
 
+func TestListCommaOpt(t *testing.T) {
+	y := `
+%union {
+  valTuple ValTuple
+  values Values
+}
+
+%type <valTuple> tuple_or_empty
+%type <values> tuple_list 
+
+tuple_list:
+  tuple_or_empty
+  {
+    $$ = Values{$1}
+  }
+| tuple_list ',' tuple_or_empty
+  {
+    $$ = append($1, $3)
+  }
+
+tuple_or_empty:
+  row_opt openb STRING closeb
+  {
+     $$ = ValTuple($3)
+  }
+| row_opt openb closeb
+  {
+    $$ = ValTuple{}
+  }
+
+row_opt:
+  {}
+| ROW
+  {}
+`
+	inp := strings.NewReader(y)
+	g := newRecursiveGen(inp, emptyWriter{})
+	err := g.init()
+	require.NoError(t, err)
+	err = g.gen()
+	fmt.Println(g.b.String())
+}
+
 func TestConflicts(t *testing.T) {
 	y := `
 %union {
