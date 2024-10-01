@@ -19,6 +19,13 @@ type yaccFileContents struct {
 	tokens    []yaccToken
 	start     string
 	defs      map[string]*def
+	defNames  []string
+}
+
+func (yc *yaccFileContents) addDef(d *def) {
+	yc.defNames = append(yc.defNames, d.name)
+	yc.defs[d.name] = d
+	return
 }
 
 type goType struct {
@@ -192,7 +199,7 @@ func split(infile io.Reader) (yc *yaccFileContents, err error) {
 				r = nil
 			}
 			if d != nil {
-				yc.defs[d.name] = d
+				yc.addDef(d)
 			}
 			d = newDef()
 			d.name = line[:len(line)-1]
@@ -220,7 +227,7 @@ func split(infile io.Reader) (yc *yaccFileContents, err error) {
 		d.rules.addRule(r)
 	}
 	if d != nil {
-		yc.defs[d.name] = d
+		yc.addDef(d)
 	}
 	return yc, nil
 }
@@ -250,7 +257,7 @@ func (r *rule) calcUsed() error {
 }
 
 func (d *rulePrefix) calcUsed() {
-	for _, t := range d.term {
+	for _, t := range d.flat {
 		d.usedVars |= t.usedVars
 	}
 }
@@ -279,15 +286,21 @@ func (d *rulePrefix) expandConflicts(name string, defs map[string]*def) {
 
 	// token in r, conflicting starting token in r2
 	// two different r2's have conflicting starting token
-	nextTokens := make(map[string]bool)
+	nextTokens := make(map[string]string)
 	for _, r := range d.flat {
 		// toplevel next tokens
 		if len(r.fields) == 0 {
 			continue
 		}
-		nextTokens[r.fields[0]] = true
+		nextTokens[r.fields[0]] = r.name
 	}
 	ignore := make(map[string]bool)
+
+	// don't expand self-recursive
+	ignore[name] = true
+	if name == "table_name_list" {
+		print()
+	}
 	for {
 		var conflicts []*rule
 		for _, r := range d.flat {
@@ -296,13 +309,45 @@ func (d *rulePrefix) expandConflicts(name string, defs map[string]*def) {
 				// next token is a function, go one deeper
 				for _, r2 := range d.rules.flat {
 					// todo flat needs all fields
-					if len(r2.fields) == 0 {
+					if len(r2.fields) == 0 || r2.name == r.name {
 						continue
 					}
-					if nextTokens[r2.fields[0]] && !ignore[r2.fields[0]] {
+					if rc, ok := nextTokens[r2.fields[0]]; ok && rc != r.name && !ignore[r2.fields[0]] {
 						// lookahead conflict
 						// advance rule
-						conflicts = append(conflicts, r2)
+						if name == "table_name_list" {
+							print()
+						}
+						_, ok := defs[r2.fields[0]]
+						nr2 := r2.copy()
+						if len(r.body) > 0 && ok && len(r2.body) > 0 {
+							// previous return is wrong type
+							// rename |ret| to |varx|
+							// replace |var1| with |varx| in |r.body|
+							for i, l := range nr2.body {
+								if l == "ret = BoolVal(false)" {
+									print()
+								}
+								l = strings.ReplaceAll(l, "ret = ", "varx := ")
+								l = strings.ReplaceAll(l, "ret.", "varx.")
+								nr2.body[i] = l
+							}
+							callerBody := make([]string, len(r.body))
+							for i, l := range r.body {
+								if strings.Contains(l, "yylex.Error") {
+									callerBody = []string{l, "return ret, false"}
+									nr2.body = nil
+									break
+								}
+								l = strings.ReplaceAll(l, "var1", "varx")
+								callerBody[i] = l
+							}
+							nr2.body = append(nr2.body, callerBody...)
+						} else {
+							// same type return
+						}
+						nr2.calcUsed()
+						conflicts = append(conflicts, nr2)
 					}
 				}
 				for _, r2 := range d.rules.flat {
@@ -311,9 +356,9 @@ func (d *rulePrefix) expandConflicts(name string, defs map[string]*def) {
 					if len(r2.fields) == 0 {
 						continue
 					}
-					nextTokens[r2.fields[0]] = true
+					nextTokens[r2.fields[0]] = r2.name
 				}
-				nextTokens[d.name] = true
+				nextTokens[d.name] = d.name
 			}
 		}
 		if len(conflicts) == 0 {
@@ -342,7 +387,6 @@ func (d *rulePrefix) finalize(name string, defs map[string]*def) error {
 		}
 		r.fields = strings.Fields(r.name)
 	}
-	d.calcUsed()
 
 	if err := d.recurseChildren(name, defs); err != nil {
 		return err
@@ -350,11 +394,77 @@ func (d *rulePrefix) finalize(name string, defs map[string]*def) error {
 
 	d.expandConflicts(name, defs)
 
-	if name == "expression" {
+	if name == "any_command" {
 		print()
 	}
 
+	if err := d.replaceLeftRecursion(name); err != nil {
+		return err
+	}
+
 	return d.partition(name)
+}
+
+func (d *rulePrefix) replaceLeftRecursion(name string) error {
+	if name == "tuple_list" {
+		print()
+	}
+	// call this before partition
+	term := make(map[string]bool)
+	var recStart int = -1
+	var recEnd = -1
+	for i := 0; i < len(d.flat); i++ {
+		r := d.flat[i]
+		if fs := r.fields; len(fs) > 0 && fs[0] == name {
+			if recStart < 0 {
+				recStart = i
+			}
+			continue
+		}
+		if recStart > 0 && recEnd < 0 {
+			recEnd = i
+			continue
+		}
+		term[strings.Join(r.fields, " ")] = true
+	}
+	if recStart < 0 {
+		return nil
+	}
+	if recEnd < 0 {
+		recEnd = len(d.flat)
+	}
+
+	//newRec := make([]*rule, recEnd-recStart)
+	for i := recStart; i < recEnd; i++ {
+		r := d.flat[i]
+		for i := 1; i < len(r.fields); i++ {
+			suf := strings.Join(r.fields[i:], " ")
+			if term[suf] {
+				// direct left recursion
+				// expr -> (term) | (expr term)
+				//nr := r.copy()
+				newFields := append([]string{suf}, r.fields[1:i]...)
+				newFields = append(newFields, name)
+				r.fields = newFields
+				totalFields := len(strings.Fields(r.name))
+				offset := totalFields - len(r.fields)
+				from := fmt.Sprintf("var%d", offset+1)
+				to := fmt.Sprintf("var%d", totalFields)
+				for i, l := range r.body {
+					// XXX: this only works when recursive list rules are <10 fields
+					l = strings.ReplaceAll(l, to, "varx")
+					l = strings.ReplaceAll(l, from, to)
+					l = strings.ReplaceAll(l, "varx", from)
+					l = strings.ReplaceAll(l, "append(ret", "append("+to)
+					r.body[i] = l
+				}
+				r.calcUsed()
+				break
+			}
+		}
+	}
+	//copy(d.flat[recStart:recEnd], newRec)
+	return nil
 }
 
 func (r *rule) copy() *rule {
@@ -364,7 +474,6 @@ func (r *rule) copy() *rule {
 	copy(nr.fields, r.fields)
 	copy(nr.body, r.body)
 	nr.set = true
-	nr.body = r.body
 	nr.usedVars = r.usedVars
 	nr.name = r.name
 	return nr
@@ -437,7 +546,7 @@ func (d *rulePrefix) partition(name string) error {
 		}
 		acc = append(acc, r)
 	}
-	if len(acc) == 1 {
+	if len(acc) == 1 && acc[0].fields[0] != name {
 		d.term = append(d.term, acc[0])
 	} else if len(acc) > 0 {
 		if err := d.addPrefixPartition(name, acc); err != nil {

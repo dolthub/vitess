@@ -147,7 +147,7 @@ func TestLeftRecursion(t *testing.T) {
   expr     Expr
 }
 
-%token <bytes> null_opt OR AND NOT TOKEN_A TOKEN_B tokens row_opt ROW
+%token <bytes> TRUE FALSE null_opt OR AND NOT TOKEN_A TOKEN_B tokens row_opt ROW
 %token <expr> value_expr
 
 tokens:
@@ -166,6 +166,10 @@ row_opt:
   {}
 
 value_expr:
+  boolean_value
+  {
+    $$ = $1
+  }
 |  value_expr OR value_expr 
   {
     $$ = &Or{$1, $3}
@@ -189,6 +193,61 @@ value_expr:
 |  NOT EXISTS value_expr
   {
     $$ = &Not{&Exists{$3}}
+  }
+
+boolean_value:
+  TRUE
+  {
+    $$ = BoolVal(true)
+  }
+| FALSE
+  {
+    $$ = BoolVal(false)
+  }
+`
+	inp := strings.NewReader(y)
+	g := newRecursiveGen(inp, emptyWriter{})
+	err := g.init()
+	require.NoError(t, err)
+	err = g.gen()
+	fmt.Println(g.b.String())
+}
+
+func TestListOpt(t *testing.T) {
+	y := `
+%union {
+  characteristics Characteristic
+}
+
+%token <characteristics> characteristic_list_opt characteristic_list
+
+characteristic_list_opt:
+  {
+    $$ = nil
+  }
+| characteristic_list
+  {
+    $$ = $1
+  }
+
+characteristic_list:
+  characteristic
+  {
+    $$ = []Characteristic{$1}
+  }
+| characteristic_list characteristic
+  {
+    $$ = append($$, $2)
+  }
+
+characteristic:
+  COMMENT_KEYWORD STRING
+  {
+    $$ = Characteristic{Type: CharacteristicValue_Comment, Comment: string($2)}
+  }
+| LANGUAGE SQL
+  {
+    $$ = Characteristic{Type: CharacteristicValue_LanguageSql}
   }
 `
 	inp := strings.NewReader(y)

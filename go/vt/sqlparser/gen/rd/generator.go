@@ -75,7 +75,8 @@ func (g *recursiveGen) gen() error {
 		return err
 	}
 	// each function
-	for _, d := range g.yacc.defs {
+	for _, n := range g.yacc.defNames {
+		d := g.yacc.defs[n]
 		if err := g.genFunc(d); err != nil {
 			return err
 		}
