@@ -895,15 +895,17 @@ with_clause:
 base_select_no_cte:
   SELECT comment_opt query_opts select_expression_list into_opt from_opt where_expression_opt group_by_opt having_opt window_opt
   {
+    wh, _ := $7
+    ha, _ := $9
     $$ = &Select{
     	Comments: Comments($2),
     	QueryOpts: $3,
 	SelectExprs: $4,
 	Into: $5,
 	From: $6,
-	Where: NewWhere(WhereStr, $7),
+	Where: NewWhere(WhereStr, wh),
 	GroupBy: GroupBy($8),
-	Having: NewWhere(HavingStr, $9),
+	Having: NewWhere(HavingStr, ha),
 	Window: $10,
     }
   }
@@ -914,11 +916,11 @@ base_select_no_cte:
 
 from_opt:
   {
-    $$ = nil
+    $$ = []byte(nil)
   }
 | FROM DUAL
   {
-    $$ = nil
+    $$ = []byte(nil)
   }
 | FROM table_references
   {
@@ -2493,16 +2495,19 @@ declare_statement:
   }
 | DECLARE reserved_sql_id_list column_type charset_opt collate_opt
   {
-    $3.Charset = $4
-    $3.Collate = $5
-    $$ = &Declare{Variables: &DeclareVariables{Names: $2, VarType: $3}}
+    var ct ColumnType
+    ct = $3
+    ct.Charset = $4
+    ct.Collate = $5
+    $$ = &Declare{Variables: &DeclareVariables{Names: $2, VarType: ct}}
   }
 | DECLARE reserved_sql_id_list column_type charset_opt collate_opt DEFAULT value_expression
   {
-    $3.Charset = $4
-    $3.Collate = $5
-    $3.Default = $7
-    $$ = &Declare{Variables: &DeclareVariables{Names: $2, VarType: $3}}
+    ct := $3
+    ct.Charset = $4
+    ct.Collate = $5
+    ct.Default = $7
+    $$ = &Declare{Variables: &DeclareVariables{Names: $2, VarType: ct}}
   }
 
 declare_handler_action:
@@ -2935,7 +2940,8 @@ table_column_list:
 column_definition:
   ID column_type column_type_options
   {
-    if err := $2.merge($3); err != nil {
+    ct := $2
+    if err := ct.merge($3); err != nil {
       yylex.Error(err.Error())
       return 1
     }
@@ -2943,7 +2949,8 @@ column_definition:
   }
 | all_non_reserved column_type column_type_options
   {
-    if err := $2.merge($3); err != nil {
+    ct := $2
+    if err := ct.merge($3); err != nil {
       yylex.Error(err.Error())
       return 1
     }
@@ -2953,7 +2960,8 @@ column_definition:
 column_definition_for_create:
   sql_id column_type column_type_options
   {
-    if err := $2.merge($3); err != nil {
+    ct := $2
+    if err := ct.merge($3); err != nil {
       yylex.Error(err.Error())
       return 1
     }
@@ -2961,7 +2969,8 @@ column_definition_for_create:
   }
 | column_name_safe_keyword column_type column_type_options
   {
-    if err := $2.merge($3); err != nil {
+    ct := $2
+    if err := ct.merge($3); err != nil {
       yylex.Error(err.Error())
       return 1
     }
@@ -2969,7 +2978,8 @@ column_definition_for_create:
   }
 | non_reserved_keyword2 column_type column_type_options
   {
-    if err := $2.merge($3); err != nil {
+    ct := $2
+    if err := ct.merge($3); err != nil {
       yylex.Error(err.Error())
       return 1
     }
@@ -2977,7 +2987,8 @@ column_definition_for_create:
   }
 | non_reserved_keyword3 column_type column_type_options
   {
-    if err := $2.merge($3); err != nil {
+    ct := $2
+    if err := ct.merge($3); err != nil {
       yylex.Error(err.Error())
       return 1
     }
@@ -2985,7 +2996,8 @@ column_definition_for_create:
   }
 | ESCAPE column_type column_type_options
   {
-    if err := $2.merge($3); err != nil {
+    ct := $2
+    if err := ct.merge($3); err != nil {
       yylex.Error(err.Error())
       return 1
     }
@@ -2993,7 +3005,8 @@ column_definition_for_create:
   }
 | function_call_keywords column_type column_type_options
   {
-    if err := $2.merge($3); err != nil {
+    ct := $2
+    if err := ct.merge($3); err != nil {
       yylex.Error(err.Error())
       return 1
     }
@@ -3024,7 +3037,8 @@ column_type_options:
 | column_type_options NULL
   {
     opt := ColumnType{Null: BoolVal(true), NotNull: BoolVal(false), sawnull: true}
-    if err := $1.merge(opt); err != nil {
+    ct := $1
+    if err := ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
@@ -3033,7 +3047,8 @@ column_type_options:
 | column_type_options NOT NULL
   {
     opt := ColumnType{Null: BoolVal(false), NotNull: BoolVal(true), sawnull: true}
-    if err := $1.merge(opt); err != nil {
+    ct := $1
+    if err := ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
@@ -3042,7 +3057,8 @@ column_type_options:
 | column_type_options character_set
   {
     opt := ColumnType{Charset: $2}
-    if err := $1.merge(opt); err != nil {
+    ct := $1
+    if err := ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
@@ -3051,7 +3067,8 @@ column_type_options:
 | column_type_options collate
   {
     opt := ColumnType{Collate: $2}
-    if err := $1.merge(opt); err != nil {
+    ct := $1
+    if err := ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
@@ -3060,7 +3077,8 @@ column_type_options:
 | column_type_options BINARY
   {
     opt := ColumnType{BinaryCollate: true}
-    if err := $1.merge(opt); err != nil {
+    ct := $1
+    if err := ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
@@ -3069,7 +3087,8 @@ column_type_options:
 | column_type_options column_default
   {
     opt := ColumnType{Default: $2}
-    if err := $1.merge(opt); err != nil {
+    ct := $1
+    if err := ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
@@ -3078,7 +3097,8 @@ column_type_options:
 | column_type_options on_update
   {
     opt := ColumnType{OnUpdate: $2}
-    if err := $1.merge(opt); err != nil {
+    ct := $1
+    if err := ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
@@ -3087,7 +3107,8 @@ column_type_options:
 | column_type_options auto_increment
   {
     opt := ColumnType{Autoincrement: $2, sawai: true}
-    if err := $1.merge(opt); err != nil {
+    ct := $1
+    if err := ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
@@ -3096,7 +3117,8 @@ column_type_options:
 | column_type_options column_key
   {
     opt := ColumnType{KeyOpt: $2}
-    if err := $1.merge(opt); err != nil {
+    ct := $1
+    if err := ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
@@ -3105,7 +3127,8 @@ column_type_options:
 | column_type_options column_comment
   {
     opt := ColumnType{Comment: $2}
-    if err := $1.merge(opt); err != nil {
+    ct := $1
+    if err := ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
@@ -3114,7 +3137,8 @@ column_type_options:
 | column_type_options AS openb value_expression closeb stored_opt
   {
     opt := ColumnType{GeneratedExpr: &ParenExpr{$4}, Stored: $6}
-    if err := $1.merge(opt); err != nil {
+    ct := $1
+    if err := ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
@@ -3123,7 +3147,8 @@ column_type_options:
 | column_type_options GENERATED ALWAYS AS openb value_expression closeb stored_opt
   {
     opt := ColumnType{GeneratedExpr: &ParenExpr{$6}, Stored: $8}
-    if err := $1.merge(opt); err != nil {
+    ct := $1
+    if err := ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
@@ -3132,7 +3157,8 @@ column_type_options:
 | column_type_options SRID INTEGRAL
   {
     opt := ColumnType{SRID: NewIntVal($3)}
-    if err := $1.merge(opt); err != nil {
+    ct := $1
+    if err := ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
@@ -3142,7 +3168,8 @@ column_type_options:
   // TODO: This still needs support for "ON DELETE" and "ON UPDATE"
   {
     opt := ColumnType{ForeignKeyDef: &ForeignKeyDefinition{ReferencedTable: $3, ReferencedColumns: $5}}
-    if err := $1.merge(opt); err != nil {
+    ct := $1
+    if err := ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
@@ -3151,7 +3178,8 @@ column_type_options:
 | column_type_options check_constraint_definition
   {
     opt := ColumnType{Constraint: $2}
-    if err := $1.merge(opt); err != nil {
+    ct := $1
+    if err := ct.merge(opt); err != nil {
       yylex.Error(err.Error())
       return 1
     }
@@ -3161,9 +3189,10 @@ column_type_options:
 column_type:
   numeric_type signed_or_unsigned_opt zero_fill_opt
   {
-    $$ = $1
-    $$.Unsigned = $2
-    $$.Zerofill = $3
+    ct := $1
+    ct.Unsigned = $2
+    ct.Zerofill = $3
+    $$ = ct
   }
 | char_type
 | time_type
@@ -3172,8 +3201,9 @@ column_type:
 numeric_type:
   int_type length_opt
   {
-    $$ = $1
-    $$.Length = $2
+    ct := $1
+    ct.Length = $2
+    $$ = ct
   }
 | decimal_type
   {
@@ -3245,51 +3275,59 @@ int_type:
 decimal_type:
 REAL float_length_opt
   {
-    $$ = ColumnType{Type: string($1)}
-    $$.Length = $2.Length
-    $$.Scale = $2.Scale
+    ct := ColumnType{Type: string($1)}
+    ct.Length = $2.Length
+    ct.Scale = $2.Scale
+    $$ = ct
   }
 | DOUBLE float_length_opt
   {
-    $$ = ColumnType{Type: string($1)}
-    $$.Length = $2.Length
-    $$.Scale = $2.Scale
+    ct := ColumnType{Type: string($1)}
+    ct.Length = $2.Length
+    ct.Scale = $2.Scale
+    $$ = ct
   }
 | DOUBLE PRECISION float_length_opt
   {
-    $$ = ColumnType{Type: string($1) + " " + string($2)}
-    $$.Length = $3.Length
-    $$.Scale = $3.Scale
+    ct := ColumnType{Type: string($1) + " " + string($2)}
+    ct.Length = $3.Length
+    ct.Scale = $3.Scale
+    $$ = ct
   }
 | FLOAT_TYPE decimal_length_opt
   {
-    $$ = ColumnType{Type: string($1)}
-    $$.Length = $2.Length
-    $$.Scale = $2.Scale
+    ct := ColumnType{Type: string($1)}
+    ct.Length = $2.Length
+    ct.Scale = $2.Scale
+    $$ = ct
   }
 | DECIMAL decimal_length_opt
   {
-    $$ = ColumnType{Type: string($1)}
-    $$.Length = $2.Length
-    $$.Scale = $2.Scale
+    ct := ColumnType{Type: string($1)}
+    ct.Length = $2.Length
+    ct.Scale = $2.Scale
+    $$ = ct
   }
 | NUMERIC decimal_length_opt
   {
-    $$ = ColumnType{Type: string($1)}
-    $$.Length = $2.Length
-    $$.Scale = $2.Scale
+    ct := ColumnType{Type: string($1)}
+    ct.Length = $2.Length
+    ct.Scale = $2.Scale
+    $$ = ct
   }
 | DEC decimal_length_opt
   {
-    $$ = ColumnType{Type: string($1)}
-    $$.Length = $2.Length
-    $$.Scale = $2.Scale
+    ct := ColumnType{Type: string($1)}
+    ct.Length = $2.Length
+    ct.Scale = $2.Scale
+    $$ = ct
   }
 | FIXED decimal_length_opt
   {
-    $$ = ColumnType{Type: string($1)}
-    $$.Length = $2.Length
-    $$.Scale = $2.Scale
+    ct := ColumnType{Type: string($1)}
+    ct.Length = $2.Length
+    ct.Scale = $2.Scale
+    $$ = ct
   }
 
 time_type:
@@ -6192,7 +6230,15 @@ comment_opt:
   }
   comment_list
   {
+<<<<<<< Updated upstream
     $$ = $1
+=======
+<<<<<<< Updated upstream
+    $$ = $2
+=======
+    $$ = nil
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
     setAllowComments(yylex, false)
   }
 
@@ -6254,7 +6300,8 @@ query_opts:
 | query_opts ALL
   {
     opt := QueryOpts{All: true}
-    if err := $1.merge(opt); err != nil {
+    ct := $1
+    if err := ct.merge(opt); err != nil {
     	yylex.Error(err.Error())
 	return 1
     }
@@ -6263,7 +6310,8 @@ query_opts:
 | query_opts DISTINCT
   {
     opt := QueryOpts{Distinct: true}
-    if err := $1.merge(opt); err != nil {
+    ct := $1
+    if err := ct.merge(opt); err != nil {
     	yylex.Error(err.Error())
 	return 1
     }
@@ -6272,7 +6320,8 @@ query_opts:
 | query_opts STRAIGHT_JOIN
   {
     opt := QueryOpts{StraightJoinHint: true}
-    if err := $1.merge(opt); err != nil {
+    ct := $1
+    if err := ct.merge(opt); err != nil {
     	yylex.Error(err.Error())
 	return 1
     }
@@ -6281,7 +6330,8 @@ query_opts:
 | query_opts SQL_CALC_FOUND_ROWS
   {
     opt := QueryOpts{SQLCalcFoundRows: true}
-    if err := $1.merge(opt); err != nil {
+    ct := $1
+    if err := ct.merge(opt); err != nil {
     	yylex.Error(err.Error())
 	return 1
     }
@@ -6290,7 +6340,8 @@ query_opts:
 | query_opts SQL_CACHE
   {
     opt := QueryOpts{SQLCache: true}
-    if err := $1.merge(opt); err != nil {
+    ct := $1
+    if err := ct.merge(opt); err != nil {
     	yylex.Error(err.Error())
 	return 1
     }
@@ -6299,7 +6350,8 @@ query_opts:
 | query_opts SQL_NO_CACHE
   {
     opt := QueryOpts{SQLNoCache: true}
-    if err := $1.merge(opt); err != nil {
+    ct := $1
+    if err := ct.merge(opt); err != nil {
     	yylex.Error(err.Error())
 	return 1
     }
@@ -8133,9 +8185,10 @@ convert_type:
   }
 | DECIMAL decimal_length_opt
   {
-    $$ = &ConvertType{Type: string($1)}
-    $$.Length = $2.Length
-    $$.Scale = $2.Scale
+    ct := &ConvertType{Type: string($1)}
+    ct.Length = $2.Length
+    ct.Scale = $2.Scale
+    $$ = ct
   }
 | DOUBLE
   {
@@ -8772,7 +8825,8 @@ set_expression_assignment:
     //       The full fix is for any adjacent single-quoted or double-quoted strings to be concatenated but
     //       this fixes the most pressing case. For more details, see: https://github.com/dolthub/dolt/issues/5232
     // In other places we can correctly concatenate adjacent string literals, but the special comments break it
-    $$ = &SetVarExpr{Name: $1, Expr: NewStrVal([]byte(string($3)+string($4))), Scope: SetScope_None}
+
+    $$ = &SetVarExpr{Name: $1.(*ColName), Expr: NewStrVal([]byte(string($3)+string($4))), Scope: SetScope_None}
   }
 | column_name assignment_op expression
   {
