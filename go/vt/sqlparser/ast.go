@@ -361,6 +361,149 @@ func SplitStatementToPieces(blob string) (pieces []string, err error) {
 	return
 }
 
+// AuthNode is a node that contains AuthInformation.
+type AuthNode interface {
+	// GetAuthInformation returns the AuthInformation contained on this node.
+	GetAuthInformation() AuthInformation
+	// SetAuthType sets the AuthType field, overwriting an existing value if one was already set.
+	SetAuthType(authType string)
+	// SetAuthTargetType sets the TargetType field, overwriting an existing value if one was already set.
+	SetAuthTargetType(targetType string)
+	// SetExtra sets the Extra field, overwriting an existing value if one was already set.
+	SetExtra(extra any)
+}
+
+// AuthInformation contains authorization information that is relevant to the node that this is embedded in. Such
+// information will be used to determine, for example, whether a user has the correct permissions to execute the
+// command. All information that could possibly be related to authorization should be stored here, rather than on the
+// node. This allows for integrators to consolidate their authorization logic.
+type AuthInformation struct {
+	// This specifies the authorization "type". For example, a node representing a table query may use the "SELECT"
+	// type, while one that updates a table may use the "UPDATE" type. It is intended that these will relatively match
+	// the SQL statements that generated the node, however it is up to the integrator to interpret this field's use.
+	AuthType string
+	// This is the target of the authorization, which is dependent on the AuthType. It could be a table, function, etc.
+	// It is possible for this field to be empty depending on the AuthType.
+	TargetType string
+	// These are the names of the targets. For example, if the TargetType represents a table, then this could be the
+	// database and table name. It could also represent multiple table names, depending on the value of TargetType.
+	TargetNames []string
+	// This allows for additional information to be added, which is completely up to the integrator.
+	Extra any
+}
+
+// These AuthType_ enums are used as the AuthType in AuthInformation. However, these are only built-in suggestions that
+// will be used from the accompanying parser. Integrators may produce nodes through other means, therefore these are
+// only relevant for the parser's MySQL dialect.
+const (
+	AuthType_IGNORE = "IGNORE"
+	AuthType_DELETE = "DELETE"
+	AuthType_INSERT = "INSERT"
+	AuthType_REPLACE = "REPLACE"
+	AuthType_SELECT = "SELECT"
+	AuthType_UPDATE = "UPDATE"
+)
+
+// These AuthTargetType_ enums are used as the TargetType in AuthInformation. However, these are only built-in
+// suggestions that will be used from the accompanying parser. Integrators may produce nodes through other means,
+// therefore these are only relevant for the parser's MySQL dialect.
+const (
+	AuthTargetType_MultipleTableIdentifiers = "DB_TABLE_IDENTS"
+	AuthTargetType_SingleTableIdentifier = "DB_TABLE_IDENT"
+	AuthTargetType_TableColumn = "TABLE_COLUMN"
+)
+
+// SetAuthType sets the AuthType on the given node (if it's an AuthNode), as well as recursively setting the AuthType on
+// all children if the node is walkable. Does not overwrite an existing AuthType, and stops walking the children if an
+// existing AuthType is encountered. Does not walk the children if walkChildren is false.
+func SetAuthType(node SQLNode, authType string, walkChildren bool) SQLNode {
+	if authNode, ok := node.(AuthNode); ok {
+		authInfo := authNode.GetAuthInformation()
+		if len(authInfo.AuthType) == 0 {
+			authNode.SetAuthType(authType)
+		}
+	}
+	if walkableNode, ok := node.(WalkableSQLNode); ok && walkChildren {
+		_ = walkableNode.walkSubtree(func(node SQLNode) (bool, error) {
+			if authNode, ok := node.(AuthNode); ok {
+				authInfo := authNode.GetAuthInformation()
+				if len(authInfo.AuthType) == 0 {
+					authNode.SetAuthType(authType)
+					return true, nil
+				}
+				return false, nil
+			}
+			return true, nil
+		})
+	}
+	return node
+}
+
+// SetAuthTargetType sets the TargetType on the given node (if it's an AuthNode), as well as recursively setting the
+// TargetType on all children if the node is walkable. Does not overwrite an existing TargetType, and stops walking the
+// children if an existing TargetType is encountered. Does not walk the children if walkChildren is false.
+func SetAuthTargetType(node SQLNode, targetType string, walkChildren bool) SQLNode {
+	if authNode, ok := node.(AuthNode); ok {
+		authInfo := authNode.GetAuthInformation()
+		if len(authInfo.TargetType) == 0 {
+			authNode.SetAuthTargetType(targetType)
+		}
+	}
+	if walkableNode, ok := node.(WalkableSQLNode); ok && walkChildren {
+		_ = walkableNode.walkSubtree(func(node SQLNode) (bool, error) {
+			if authNode, ok := node.(AuthNode); ok {
+				authInfo := authNode.GetAuthInformation()
+				if len(authInfo.TargetType) == 0 {
+					authNode.SetAuthTargetType(targetType)
+					return true, nil
+				}
+				return false, nil
+			}
+			return true, nil
+		})
+	}
+	return node
+}
+
+// OverwriteAuthType sets the AuthType on the given node (if it's an AuthNode), as well as recursively setting the
+// AuthType on all children if the node is walkable. Always overwrites an existing AuthType, and will also overwrite all
+// children. Does not walk the children if walkChildren is false.
+func OverwriteAuthType(node SQLNode, authType string, walkChildren bool) SQLNode {
+	if authNode, ok := node.(AuthNode); ok {
+		authNode.SetAuthType(authType)
+	}
+	if walkableNode, ok := node.(WalkableSQLNode); ok && walkChildren {
+		_ = walkableNode.walkSubtree(func(node SQLNode) (bool, error) {
+			if authNode, ok := node.(AuthNode); ok {
+				authNode.SetAuthType(authType)
+			}
+			return true, nil
+		})
+	}
+	return node
+}
+
+// OverwriteAuthTargetType sets the TargetType on the given node (if it's an AuthNode), as well as recursively setting
+// the TargetType on all children if the node is walkable. Always overwrites an existing TargetType, and will also
+// overwrite all children. Does not walk the children if walkChildren is false.
+func OverwriteAuthTargetType(node SQLNode, targetType string, walkChildren bool) SQLNode {
+	if authNode, ok := node.(AuthNode); ok {
+		authInfo := authNode.GetAuthInformation()
+		if len(authInfo.TargetType) == 0 {
+			authNode.SetAuthTargetType(targetType)
+		}
+	}
+	if walkableNode, ok := node.(WalkableSQLNode); ok && walkChildren {
+		_ = walkableNode.walkSubtree(func(node SQLNode) (bool, error) {
+			if authNode, ok := node.(AuthNode); ok {
+				authNode.SetAuthTargetType(targetType)
+			}
+			return true, nil
+		})
+	}
+	return node
+}
+
 // SQLNode defines the interface for all nodes
 // generated by the parser.
 type SQLNode interface {
@@ -1634,7 +1777,10 @@ type Insert struct {
 	Columns    Columns
 	Rows       InsertRows
 	OnDup      OnDup
+	Auth       AuthInformation
 }
+
+var _ AuthNode = (*Insert)(nil)
 
 const (
 	ReplaceStr = "replace"
@@ -1651,6 +1797,26 @@ func (node *Insert) Format(buf *TrackedBuffer) {
 		buf.Myprintf(" partition (%v)", node.Partitions)
 	}
 	buf.Myprintf("%v %v%v", node.Columns, node.Rows, node.OnDup)
+}
+
+// GetAuthInformation implements the AuthNode interface.
+func (node *Insert) GetAuthInformation() AuthInformation {
+	return node.Auth
+}
+
+// SetAuthType implements the AuthNode interface.
+func (node *Insert) SetAuthType(authType string) {
+	node.Auth.AuthType = authType
+}
+
+// SetAuthTargetType implements the AuthNode interface.
+func (node *Insert) SetAuthTargetType(targetType string) {
+	node.Auth.TargetType = targetType
+}
+
+// SetExtra implements the AuthNode interface.
+func (node *Insert) SetExtra(extra any) {
+	node.Auth.Extra = extra
 }
 
 func (node *Insert) walkSubtree(visit Visit) error {
@@ -4497,6 +4663,7 @@ type AliasedTableExpr struct {
 	Hints      *IndexHints
 	AsOf       *AsOf
 	Lateral    bool
+	Auth       AuthInformation
 }
 
 type AsOf struct {
@@ -4569,6 +4736,27 @@ func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
 		// Hint node provides the space padding.
 		buf.Myprintf("%v", node.Hints)
 	}
+}
+
+
+// GetAuthInformation implements the AuthNode interface.
+func (node *AliasedTableExpr) GetAuthInformation() AuthInformation {
+	return node.Auth
+}
+
+// SetAuthType implements the AuthNode interface.
+func (node *AliasedTableExpr) SetAuthType(authType string) {
+	node.Auth.AuthType = authType
+}
+
+// SetAuthTargetType implements the AuthNode interface.
+func (node *AliasedTableExpr) SetAuthTargetType(targetType string) {
+	node.Auth.TargetType = targetType
+}
+
+// SetExtra implements the AuthNode interface.
+func (node *AliasedTableExpr) SetExtra(extra any) {
+	node.Auth.Extra = extra
 }
 
 func (node *AliasedTableExpr) walkSubtree(visit Visit) error {
