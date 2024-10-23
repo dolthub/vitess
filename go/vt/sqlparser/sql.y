@@ -622,11 +622,19 @@ select_statement:
   }
 | SELECT comment_opt query_opts NEXT num_val for_from table_name
   {
+    tableName := $7.(TableName)
     $$ = &Select{
     	Comments: Comments($2.(Comments)),
     	QueryOpts: $3.(QueryOpts),
     	SelectExprs: SelectExprs{Nextval{Expr: tryCastExpr($5)}},
-    	From: TableExprs{&AliasedTableExpr{Expr: $7.(TableName)}},
+    	From: TableExprs{&AliasedTableExpr{
+    	  Expr: tableName,
+    	  Auth: AuthInformation{
+            AuthType: AuthType_SELECT,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+            TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+          },
+        }},
     }
   }
 
@@ -635,7 +643,10 @@ values_select_statement:
   {
     $$ = &Select{
     	SelectExprs: SelectExprs{&StarExpr{}},
-    	From: TableExprs{&AliasedTableExpr{Expr: $1.(SimpleTableExpr)}},
+    	From: TableExprs{&AliasedTableExpr{
+    	  Expr: $1.(SimpleTableExpr),
+    	  Auth: AuthInformation{AuthType: AuthType_IGNORE},
+    	}},
     	OrderBy: $2.(OrderBy),
     	Limit: $3.(*Limit),
     }
@@ -768,7 +779,7 @@ base_select_no_cte:
     	QueryOpts: $3.(QueryOpts),
 	SelectExprs: $4.(SelectExprs),
 	Into: $5.(*Into),
-	From: $6.(TableExprs),
+	From: SetAuthType($6.(TableExprs), AuthType_SELECT, true).(TableExprs),
 	Where: NewWhere(WhereStr, tryCastExpr($7)),
 	GroupBy: GroupBy($8.(Exprs)),
 	Having: NewWhere(HavingStr, tryCastExpr($9)),
@@ -777,7 +788,10 @@ base_select_no_cte:
   }
 | TABLE table_reference
   {
-    $$ = &Select{SelectExprs: SelectExprs{&StarExpr{}}, From: TableExprs{$2.(TableExpr)}}
+    $$ = &Select{
+	SelectExprs: SelectExprs{&StarExpr{}},
+	From: TableExprs{SetAuthType($2.(TableExpr), AuthType_SELECT, true).(TableExpr)},
+    }
   }
 
 from_opt:
@@ -846,7 +860,13 @@ cte_list:
 common_table_expression:
   table_alias ins_column_list_opt AS subquery_or_values
   {
-    $$ = &CommonTableExpr{&AliasedTableExpr{Expr:$4.(SimpleTableExpr), As: $1.(TableIdent)}, $2.(Columns)}
+    $$ = &CommonTableExpr{
+      &AliasedTableExpr{
+        Expr: $4.(SimpleTableExpr),
+        As: $1.(TableIdent),
+        Auth: AuthInformation{AuthType: AuthType_IGNORE},
+      },
+    $2.(Columns)}
   }
 
 insert_statement:
@@ -857,7 +877,17 @@ insert_statement:
     ins.Action = $2.(string)
     ins.Comments = $3.(Comments)
     ins.Ignore = $4.(string)
-    ins.Table = $5.(TableName)
+    tableName := $5.(TableName)
+    ins.Table = tableName
+    authType := AuthType_INSERT
+    if ins.Action == ReplaceStr {
+      authType = AuthType_REPLACE
+    }
+    ins.Auth = AuthInformation{
+      AuthType: authType,
+      TargetType: AuthTargetType_SingleTableIdentifier,
+      TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+    }
     ins.Partitions = $6.(Partitions)
     ins.OnDup = OnDup($8.(AssignmentExprs))
     ins.With = $1.(*With)
@@ -870,7 +900,17 @@ insert_statement:
     ins.Action = $2.(string)
     ins.Comments = $3.(Comments)
     ins.Ignore = $4.(string)
-    ins.Table = $5.(TableName)
+    tableName := $5.(TableName)
+    ins.Table = tableName
+    authType := AuthType_INSERT
+    if ins.Action == ReplaceStr {
+      authType = AuthType_REPLACE
+    }
+    ins.Auth = AuthInformation{
+      AuthType: authType,
+      TargetType: AuthTargetType_SingleTableIdentifier,
+      TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+    }
     ins.Partitions = $6.(Partitions)
     ins.OnDup = OnDup($8.(AssignmentExprs))
     ins.With = $1.(*With)
@@ -884,7 +924,27 @@ insert_statement:
       cols = append(cols, updateList.Name.Name)
       vals = append(vals, updateList.Expr)
     }
-    $$ = &Insert{Action: $2.(string), Comments: Comments($3.(Comments)), Ignore: $4.(string), Table: $5.(TableName), Partitions: $6.(Partitions), Columns: cols, Rows: &AliasedValues{Values: Values{vals}}, OnDup: OnDup($9.(AssignmentExprs)), With: $1.(*With)}
+    tableName := $5.(TableName)
+    authType := AuthType_INSERT
+    if $2.(string) == ReplaceStr {
+      authType = AuthType_REPLACE
+    }
+    $$ = &Insert{
+	Action: $2.(string),
+	Comments: Comments($3.(Comments)),
+	Ignore: $4.(string),
+	Table: tableName,
+	Partitions: $6.(Partitions),
+	Columns: cols,
+	Rows: &AliasedValues{Values: Values{vals}},
+	OnDup: OnDup($9.(AssignmentExprs)),
+	With: $1.(*With),
+	Auth: AuthInformation{
+	  AuthType: authType,
+	  TargetType: AuthTargetType_SingleTableIdentifier,
+	  TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+	},
+    }
   }
 
 insert_or_replace:
@@ -900,25 +960,74 @@ insert_or_replace:
 update_statement:
   with_clause_opt UPDATE comment_opt ignore_opt table_references SET assignment_list where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Update{Comments: Comments($3.(Comments)), Ignore: $4.(string), TableExprs: $5.(TableExprs), Exprs: $7.(AssignmentExprs), Where: NewWhere(WhereStr, tryCastExpr($8)), OrderBy: $9.(OrderBy), Limit: $10.(*Limit), With: $1.(*With)}
+    $$ = &Update{
+	Comments: Comments($3.(Comments)),
+	Ignore: $4.(string),
+	TableExprs: SetAuthType($5.(TableExprs), AuthType_UPDATE, true).(TableExprs),
+	Exprs: $7.(AssignmentExprs),
+	Where: NewWhere(WhereStr, tryCastExpr($8)),
+	OrderBy: $9.(OrderBy),
+	Limit: $10.(*Limit),
+	With: $1.(*With),
+    }
   }
 
 delete_statement:
   with_clause_opt DELETE comment_opt FROM table_name opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{Comments: Comments($3.(Comments)), TableExprs: TableExprs{&AliasedTableExpr{Expr:$5.(TableName)}}, Partitions: $6.(Partitions), Where: NewWhere(WhereStr, tryCastExpr($7)), OrderBy: $8.(OrderBy), Limit: $9.(*Limit), With: $1.(*With)}
+    tableName := $5.(TableName)
+    $$ = &Delete{
+	Comments: Comments($3.(Comments)),
+	TableExprs: TableExprs{&AliasedTableExpr{
+	  Expr: tableName,
+	  Auth: AuthInformation{
+            AuthType: AuthType_DELETE,
+            TargetType: AuthTargetType_SingleTableIdentifier,
+            TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+          },
+	}},
+	Partitions: $6.(Partitions),
+	Where: NewWhere(WhereStr, tryCastExpr($7)),
+	OrderBy: $8.(OrderBy),
+	Limit: $9.(*Limit),
+	With: $1.(*With),
+    }
   }
 | with_clause_opt DELETE comment_opt FROM table_name_list USING table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($3.(Comments)), Targets: $5.(TableNames), TableExprs: $7.(TableExprs), Where: NewWhere(WhereStr, tryCastExpr($8)), With: $1.(*With)}
+    $$ = &Delete{
+	Comments: Comments($3.(Comments)),
+	Targets: $5.(TableNames),
+	TableExprs: SetAuthType($7.(TableExprs), AuthType_DELETE, true).(TableExprs),
+	Where: NewWhere(WhereStr, tryCastExpr($8)),
+	With: $1.(*With),
+    }
   }
 | with_clause_opt DELETE comment_opt table_name_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($3.(Comments)), Targets: $4.(TableNames), TableExprs: $6.(TableExprs), Where: NewWhere(WhereStr, tryCastExpr($7)), With: $1.(*With)}
+    $$ = &Delete{
+	Comments: Comments($3.(Comments)),
+	Targets: $4.(TableNames),
+	TableExprs: SetAuthType($6.(TableExprs), AuthType_DELETE, true).(TableExprs),
+	Where: NewWhere(WhereStr, tryCastExpr($7)),
+	With: $1.(*With),
+    }
   }
 | with_clause_opt DELETE comment_opt delete_table_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($3.(Comments)), Targets: $4.(TableNames), TableExprs: $6.(TableExprs), Where: NewWhere(WhereStr, tryCastExpr($7)), With: $1.(*With)}
+    tableNames := $4.(TableNames)
+    authTargetNames := make([]string, len(tableNames)*2)
+    for i, tableName := range tableNames {
+    	authTargetNames[2*i] = tableName.DbQualifier.String()
+    	authTargetNames[2*i+1] = tableName.Name.String()
+    }
+    $$ = &Delete{
+	Comments: Comments($3.(Comments)),
+	Targets: tableNames,
+	TableExprs: SetAuthType($6.(TableExprs), AuthType_DELETE, true).(TableExprs),
+	Where: NewWhere(WhereStr, tryCastExpr($7)),
+	With: $1.(*With),
+    }
   }
 
 from_or_using:
@@ -6565,7 +6674,12 @@ table_factor:
     case *ValuesStatement:
         n.Columns = $4.(Columns)
     }
-    $$ = &AliasedTableExpr{Lateral: false, Expr:$1.(SimpleTableExpr), As: $3.(TableIdent)}
+    $$ = &AliasedTableExpr{
+      Lateral: false,
+      Expr:$1.(SimpleTableExpr),
+      As: $3.(TableIdent),
+      Auth: AuthInformation{AuthType: AuthType_IGNORE},
+    }
   }
 | LATERAL subquery_or_values as_opt table_alias column_list_opt
   {
@@ -6575,7 +6689,12 @@ table_factor:
     case *ValuesStatement:
         n.Columns = $5.(Columns)
     }
-    $$ = &AliasedTableExpr{Lateral: true, Expr:$2.(SimpleTableExpr), As: $4.(TableIdent)}
+    $$ = &AliasedTableExpr{
+      Lateral: true,
+      Expr:$2.(SimpleTableExpr),
+      As: $4.(TableIdent),
+      Auth: AuthInformation{AuthType: AuthType_IGNORE},
+    }
   }
 | subquery_or_values
   {
@@ -6621,13 +6740,23 @@ aliased_table_name:
   table_name aliased_table_options
   {
     $$ = $2.(*AliasedTableExpr)
-    $$.(*AliasedTableExpr).Expr = $1.(TableName)
+    tableName := $1.(TableName)
+    $$.(*AliasedTableExpr).Expr = tableName
+    $$.(*AliasedTableExpr).Auth = AuthInformation{
+      TargetType: AuthTargetType_SingleTableIdentifier,
+      TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+    }
   }
 | table_name PARTITION openb partition_list closeb aliased_table_options
   {
     $$ = $6.(*AliasedTableExpr)
-    $$.(*AliasedTableExpr).Expr = $1.(TableName)
+    tableName := $1.(TableName)
+    $$.(*AliasedTableExpr).Expr = tableName
     $$.(*AliasedTableExpr).Partitions = $4.(Partitions)
+    $$.(*AliasedTableExpr).Auth = AuthInformation{
+      TargetType: AuthTargetType_SingleTableIdentifier,
+      TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+    }
   }
 
 // All possible combinations of qualifiers for a table alias expression, declared in a single rule to avoid
@@ -8507,7 +8636,7 @@ insert_data_select:
 insert_data_values:
   value_or_values tuple_list
   {
-    $$ = &Insert{Rows: &AliasedValues{Values: $2.(Values)}}
+    $$ = &Insert{Rows: &AliasedValues{Values: $2.(Values)}, Auth: AuthInformation{AuthType: AuthType_IGNORE}}
   }
 | openb insert_data_values closeb
   {
@@ -8979,11 +9108,32 @@ lock_table_list:
 lock_table:
   table_name lock_type
   {
-    $$ = &TableAndLockType{Table:&AliasedTableExpr{Expr: $1.(TableName)}, Lock:$2.(LockType)}
+    tableName := $1.(TableName)
+    $$ = &TableAndLockType{
+      Table: &AliasedTableExpr{
+        Expr: tableName,
+        Auth: AuthInformation{
+          TargetType: AuthTargetType_SingleTableIdentifier,
+          TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+        },
+      },
+      Lock: $2.(LockType),
+    }
   }
 |  table_name AS table_alias lock_type
   {
-    $$ = &TableAndLockType{Table:&AliasedTableExpr{Expr: $1.(TableName), As: $3.(TableIdent)}, Lock:$4.(LockType)}
+    tableName := $1.(TableName)
+    $$ = &TableAndLockType{
+      Table: &AliasedTableExpr{
+        Expr: tableName,
+        As: $3.(TableIdent),
+        Auth: AuthInformation{
+          TargetType: AuthTargetType_SingleTableIdentifier,
+          TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+        },
+      },
+      Lock: $4.(LockType),
+    }
   }
 
 lock_type:
