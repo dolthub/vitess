@@ -2679,6 +2679,7 @@ const (
 
 // OptLike works for create table xxx like xxx
 type OptLike struct {
+	// MySQL only allows single table in LIKE clause, but Postgres allows multiple tables in their `INHERIT` clause
 	LikeTables []TableName
 }
 
