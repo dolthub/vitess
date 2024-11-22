@@ -149,6 +149,10 @@ var (
 			input: "show replica status",
 		},
 		{
+			input:  "show slave status",
+			output: "show replica status",
+		},
+		{
 			input:  "change replication source to SOURCE_HOST = 'Host'",
 			output: "change replication source to source_host = Host",
 		},
