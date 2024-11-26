@@ -149,6 +149,9 @@ var (
 			input: "show replica status",
 		},
 		{
+			input: "show slave status",
+		},
+		{
 			input:  "change replication source to SOURCE_HOST = 'Host'",
 			output: "change replication source to source_host = Host",
 		},
@@ -3007,6 +3010,15 @@ var (
 			input:  "CREATE USER UserName@localhost IDENTIFIED WITH some_plugin INITIAL AUTHENTICATION IDENTIFIED BY RANDOM PASSWORD",
 			output: "create user `UserName`@`localhost` identified with some_plugin initial authentication identified by random password",
 		}, {
+			input:  "CREATE USER UserName@localhost IDENTIFIED WITH 'some_plugin'",
+			output: "create user `UserName`@`localhost` identified with some_plugin",
+		}, {
+			input:  "CREATE USER UserName@localhost IDENTIFIED WITH 'some_plugin' BY random password",
+			output: "create user `UserName`@`localhost` identified with some_plugin by random password",
+		}, {
+			input:  "CREATE USER UserName@localhost IDENTIFIED WITH 'some_plugin' BY 'password'",
+			output: "create user `UserName`@`localhost` identified with some_plugin by 'password'",
+		}, {
 			input:  "CREATE USER UserName1@localhost IDENTIFIED BY 'some_auth1', UserName2@localhost IDENTIFIED BY 'some_auth2' DEFAULT ROLE role1, role2@localhost",
 			output: "create user `UserName1`@`localhost` identified by 'some_auth1', `UserName2`@`localhost` identified by 'some_auth2' default role `role1`@`%`, `role2`@`localhost`",
 		}, {
@@ -4274,7 +4286,7 @@ var (
 			output: "set global validate_password.length = 1",
 		},
 		{
-			input:  "set @@session.validate_password.length = 1",
+			input: "set @@session.validate_password.length = 1",
 		},
 	}
 
