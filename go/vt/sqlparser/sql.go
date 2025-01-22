@@ -15786,9 +15786,10 @@ yydefault:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:3192
 		{
-			var neTemp bool
+			var temp bool
+			authType := AuthType_CREATE
 			if yyDollar[2].val.(int) != 0 {
-				neTemp = true
+				temp = true
 				authType = AuthType_CREATE_TEMP
 			}
 
@@ -15797,13 +15798,12 @@ yydefault:
 				ne = true
 			}
 
-			authType := AuthType_CREATE
 			tableName := yyDollar[5].val.(TableName)
 			yyVAL.val = &DDL{
 				Action:      CreateStr,
 				Table:       tableName,
 				IfNotExists: ne,
-				Temporary:   neTemp,
+				Temporary:   temp,
 				Auth: AuthInformation{
 					AuthType:    authType,
 					TargetType:  AuthTargetType_DatabaseIdentifiers,
