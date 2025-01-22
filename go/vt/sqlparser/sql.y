@@ -6532,17 +6532,22 @@ rename_user_list:
   }
 
 drop_statement:
-  DROP TABLE exists_opt table_name_list drop_statement_action
+  DROP temp_opt TABLE exists_opt table_name_list drop_statement_action
   {
     var exists bool
-    if $3.(int) != 0 {
+    if $4.(int) != 0 {
       exists = true
     }
-    tableNames := $4.(TableNames)
+    var neTemp bool
+    if $2.(int) != 0 {
+      neTemp = true
+    }
+    tableNames := $5.(TableNames)
     $$ = &DDL{
       Action: DropStr,
       FromTables: tableNames,
       IfExists: exists,
+      Temporary: neTemp,
       Auth: AuthInformation{
         AuthType: AuthType_DROP,
         TargetType: AuthTargetType_MultipleTableIdentifiers,
