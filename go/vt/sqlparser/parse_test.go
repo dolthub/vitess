@@ -3787,6 +3787,10 @@ var (
 			output: "drop temporary table `dual`",
 		},
 		{
+			input:  "DROP TEMPORARY TABLE IF EXISTS `dual`",
+			output: "drop temporary table if exists `dual`",
+		},
+		{
 			input:  "CREATE TABLE `t4` (`pk` int NOT NULL, `_tinytext` tinytext, `_text` text, `_longtext` longtext, `_mediumtext` mediumtext, PRIMARY KEY (`pk`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;",
 			output: "create table t4 (\n\tpk int not null,\n\t_tinytext tinytext,\n\t_text text,\n\t_longtext longtext,\n\t_mediumtext mediumtext,\n\tPRIMARY KEY (pk)\n) ENGINE InnoDB CHARACTER SET utf8mb3",
 		},

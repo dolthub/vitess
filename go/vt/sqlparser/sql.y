@@ -3190,18 +3190,18 @@ statement_list_statement:
 create_table_prefix:
   CREATE temp_opt TABLE not_exists_opt table_name
   {
-    var ne bool
-    if $4.(int) != 0 {
-      ne = true
-    }
-
-    authType := AuthType_CREATE
     var neTemp bool
     if $2.(int) != 0 {
       neTemp = true
       authType = AuthType_CREATE_TEMP
     }
 
+    var ne bool
+    if $4.(int) != 0 {
+      ne = true
+    }
+
+    authType := AuthType_CREATE
     tableName := $5.(TableName)
     $$ = &DDL{
       Action: CreateStr,
