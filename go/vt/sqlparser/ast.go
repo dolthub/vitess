@@ -6073,9 +6073,11 @@ func (node BoolVal) replace(from, to Expr) bool {
 
 // ColName represents a column name.
 type ColName struct {
-	Metadata  *SQLVal // Hacky solution for stored procedures
 	Name      ColIdent
 	Qualifier TableName
+
+	// Hacky solution for stored procedures
+	StoredProcVal Expr
 }
 
 // NewColName returns a simple ColName with no table qualifier
