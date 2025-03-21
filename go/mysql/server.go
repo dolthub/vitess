@@ -232,8 +232,8 @@ type Listener struct {
 	// Reads are unbuffered if it's <=0.
 	connReadBufferSize int
 
-	// shutdown indicates that Shutdown method was called.
-	shutdown sync2.AtomicBool
+	// shutdownCh - open channel until it's not. Used to block and handle shutdown without hanging
+	shutdownCh chan struct{}
 
 	// RequireSecureTransport configures the server to reject connections from insecure clients
 	RequireSecureTransport bool
@@ -302,6 +302,7 @@ func NewListenerWithConfig(cfg ListenerConfig) (*Listener, error) {
 		connReadBufferSize:       cfg.ConnReadBufferSize,
 		maxConns:                 cfg.MaxConns,
 		AllowClearTextWithoutTLS: sync2.NewAtomicBool(cfg.AllowClearTextWithoutTLS),
+		shutdownCh:               make(chan struct{}),
 	}, nil
 }
 
@@ -312,7 +313,12 @@ func (l *Listener) Addr() net.Addr {
 
 // Accept runs an accept loop until the listener is closed.
 func (l *Listener) Accept() {
-	for {
+	var sem chan struct{}
+	if l.maxConns > 0 {
+		sem = make(chan struct{}, l.maxConns)
+	}
+
+	for !l.isShutdown() {
 		conn, err := l.listener.Accept()
 		if err != nil {
 			// Close() was probably called.
@@ -320,24 +326,33 @@ func (l *Listener) Accept() {
 		}
 
 		acceptTime := time.Now()
-
 		connectionID := l.connectionID
 		l.connectionID++
 
-		maxConWarn := false
-		for l.maxConns > 0 && uint64(connCount.Get()) >= l.maxConns {
-			if !maxConWarn {
-				log.Warning("max connections reached. Clients waiting. Increase server max connections")
-				maxConWarn = true // Logging once for each connection seems adequate.
-			}
+		if sem != nil && len(sem) == cap(sem) {
+			log.Warning("max connections reached. Clients waiting. Increase server max connections")
+		}
 
-			// TODO: make this behavior configurable (wait v. reject)
-			time.Sleep(500 * time.Millisecond)
+		if sem != nil {
+			select {
+			case sem <- struct{}{}:
+			case <-l.shutdownCh:
+				// shutdown while waiting for a slot. give up.
+				conn.Close()
+				return
+			}
 		}
 
 		connCount.Add(1)
 		connAccept.Add(1)
-		go l.handle(context.Background(), conn, connectionID, acceptTime)
+		go func() {
+			if sem != nil {
+				defer func() {
+					<-sem // release slot.
+				}()
+			}
+			l.handle(context.Background(), conn, connectionID, acceptTime)
+		}()
 	}
 }
 
@@ -560,19 +575,27 @@ func (l *Listener) handleConnectionWarning(c *Conn, reason string) {
 
 // Close stops the listener, which prevents accept of any new connections. Existing connections won't be closed.
 func (l *Listener) Close() {
-	l.listener.Close()
+	l.Shutdown()
 }
 
 // Shutdown closes listener and fails any Ping requests from existing connections.
 // This can be used for graceful shutdown, to let clients know that they should reconnect to another server.
 func (l *Listener) Shutdown() {
-	if l.shutdown.CompareAndSwap(false, true) {
-		l.Close()
+	select {
+	case <-l.shutdownCh:
+	default:
+		close(l.shutdownCh)
+		l.listener.Close()
 	}
 }
 
 func (l *Listener) isShutdown() bool {
-	return l.shutdown.Get()
+	select {
+	case <-l.shutdownCh:
+		return true
+	default:
+		return false
+	}
 }
 
 // writeHandshakeV10 writes the Initial Handshake Packet, server side.
