@@ -3359,6 +3359,10 @@ var (
 			output: "flush local optimizer_costs",
 		},
 		{
+			input:  "FLUSH NO_WRITE_TO_BINLOG TABLES",
+			output: "flush no_write_to_binlog tables",
+		},
+		{
 			input:  "FLUSH NO_WRITE_TO_BINLOG HOSTS",
 			output: "flush no_write_to_binlog hosts",
 		},
