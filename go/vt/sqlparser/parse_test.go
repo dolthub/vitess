@@ -164,6 +164,10 @@ var (
 			output: "change replication source to source_host = Host",
 		},
 		{
+			input:  "change replication source to SOURCE_HOST = 'Host', SOURCE_SSL = 1",
+			output: "change replication source to source_host = Host, source_ssl = 1",
+		},
+		{
 			input:  "change replication source to SOURCE_HOST = 'Host', SOURCE_AUTO_POSITION=0",
 			output: "change replication source to source_host = Host, source_auto_position = 0",
 		},
@@ -2459,22 +2463,54 @@ var (
 		}, {
 			input:  "show columns from a for system_time as of 'foo'",
 			output: "show columns from a as of 'foo'",
-		}, {
+		},
+		{
 			input: "explain select * from foobar",
-		}, {
+		},
+		{
 			input: "explain format = tree select * from foobar",
-		}, {
+		},
+		{
 			input: "explain analyze select * from foobar",
-		}, {
+		},
+		{
 			input:  "explain extended select * from foobar",
 			output: "explain select * from foobar",
-		}, {
+		},
+		{
 			input: "explain update foobar set foo = bar",
-		}, {
+		},
+		{
 			input: "explain delete from foobar where foo = bar",
-		}, {
+		},
+		{
 			input: "explain insert into foobar values (1, 2, 3)",
-		}, {
+		},
+
+		{
+			input: "explain plan select * from foobar",
+		},
+		{
+			input: "explain format = tree plan select * from foobar",
+		},
+		{
+			input: "explain analyze plan select * from foobar",
+		},
+		{
+			input:  "explain extended plan select * from foobar",
+			output: "explain plan select * from foobar",
+		},
+		{
+			input: "explain plan update foobar set foo = bar",
+		},
+		{
+			input: "explain plan delete from foobar where foo = bar",
+		},
+		{
+			input: "explain plan insert into foobar values (1, 2, 3)",
+		},
+
+		{
 			input:  "truncate table foo",
 			output: "truncate table foo",
 		}, {
@@ -2660,7 +2696,7 @@ var (
 		}, {
 			input: "select `name`, nth_value(a) over (partition by b) from t",
 		}, {
-			input: "select `name`, ntile() over (partition by b) from t",
+			input: "select `name`, ntile(123) over (partition by b) from t",
 		}, {
 			input: "select `name`, percent_rank() over (partition by b) from t",
 		}, {
@@ -2684,7 +2720,7 @@ var (
 		}, {
 			input: "select `name`, nth_value(a) over (partition by b order by c asc) from t",
 		}, {
-			input: "select `name`, ntile() over (partition by b order by c asc) from t",
+			input: "select `name`, ntile(123) over (partition by b order by c asc) from t",
 		}, {
 			input: "select `name`, percent_rank() over (partition by b order by c asc) from t",
 		}, {
@@ -3765,9 +3801,18 @@ var (
 		}, {
 			input:  "CREATE TABLE `dual` (id int)",
 			output: "create table `dual` (\n\tid int\n)",
-		}, {
+		},
+		{
 			input:  "DROP TABLE `dual`",
 			output: "drop table `dual`",
+		},
+		{
+			input:  "DROP TEMPORARY TABLE `dual`",
+			output: "drop temporary table `dual`",
+		},
+		{
+			input:  "DROP TEMPORARY TABLE IF EXISTS `dual`",
+			output: "drop temporary table if exists `dual`",
 		},
 		{
 			input:  "CREATE TABLE `t4` (`pk` int NOT NULL, `_tinytext` tinytext, `_text` text, `_longtext` longtext, `_mediumtext` mediumtext, PRIMARY KEY (`pk`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;",
@@ -4236,6 +4281,90 @@ var (
 				"\tcol varchar(20) not null\n" +
 				"),,",
 		},
+
+		// partition options
+		{
+			input: "alter table t partition by range (store_id) (\n" +
+				"partition p0 values less than (6),\n" +
+				"partition p1 values less than (11),\n" +
+				"partition p2 values less than (16),\n" +
+				"partition p3 values less than (21)\n" +
+				")",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t partition by hash ('values')",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t partition by hash (col)",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t partition by linear hash (col)",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t partition by KEY (col)",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t partition by KEY ALGORITHM = 7 (col)",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t partition by linear KEY ALGORITHM = 7 (col)",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t partition by RANGE (col)",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t partition by RANGE (i + j)",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t partition by RANGE (month(i))",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t partition by RANGE (concat(i))",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t partition by RANGE COLUMNS (c1, c2, c3)",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t partition by LIST (col)",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t partition by LIST (i + j)",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t partition by LIST (month(i))",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t partition by LIST (concat(i))",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t partition by LIST COLUMNS (c1, c2, c3)",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t partition by linear hash (a) partitions 20",
+			output: "alter table t",
+		},
+		{
+			input:  "alter table t partition by linear hash (a) partitions 10 subpartition by linear hash (b) subpartitions 20",
+			output: "alter table t",
+		},
+
 		{
 			input:  "table t",
 			output: "select * from t",
@@ -5574,17 +5703,6 @@ func TestInvalid(t *testing.T) {
 			err:   "syntax error",
 		},
 		{
-			// TODO: should work
-			input: "select * from tbl into outfile 'outfile.txt' lines terminated by 'e' starting by 'd'",
-			err:   "syntax error",
-		},
-		{
-			// TODO: should work
-			input: "select * from tbl into outfile 'outfile.txt' lines starting by 'd' terminated by 'e' starting by 'd' terminated by 'e'",
-			err:   "syntax error",
-		},
-
-		{
 			input: "select date 20010203",
 			err:   "syntax error",
 		},
@@ -6171,7 +6289,7 @@ func TestFunctionCalls(t *testing.T) {
 		"select NAME_CONST() from dual",
 		"select NOW() from dual",
 		"select NTH_VALUE(col) over mywindow from dual",
-		"select NTILE() over mywindow from dual",
+		"select NTILE(123) over mywindow from dual",
 		"select NULLIF() from dual",
 		"select OCT() from dual",
 		"select OCTET_LENGTH() from dual",
@@ -7403,6 +7521,7 @@ func TestCreateTable(t *testing.T) {
 				"\ti int\n" +
 				") partition by linear hash (a) partitions 10 subpartition by linear hash (b) subpartitions 20",
 		},
+
 		{
 			input: "create table t (\n" +
 				"\ti int\n)" +
@@ -7560,6 +7679,14 @@ func TestLoadData(t *testing.T) {
 		{
 			input:  "LOAD DATA INFILE '/tmp/jokes.txt' INTO TABLE jokes FIELDS TERMINATED BY '' LINES TERMINATED BY '\n%%\n' (joke)",
 			output: "load data infile '/tmp/jokes.txt' into table jokes fields terminated by '' lines terminated by '\n%%\n' (joke)",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' lines terminated by 'e' starting by 'd'",
+			output: "select * from tbl into outfile 'outfile.txt' lines starting by 'd' terminated by 'e'",
+		},
+		{
+			input:  "select * from tbl into outfile 'outfile.txt' lines starting by 'a' terminated by 'b' starting by 'd' terminated by 'e'",
+			output: "select * from tbl into outfile 'outfile.txt' lines starting by 'd' terminated by 'e'",
 		},
 		{
 			input:  "LOAD DATA INFILE 'data.txt' INTO TABLE db2.my_table",
@@ -7907,8 +8034,8 @@ var (
 		input:  "select name, dense_rank(a) over (partition by b) from t",
 		output: "syntax error at position 26 near 'a'",
 	}, {
-		input:  "select name, ntile(a) over (partition by b) from t",
-		output: "syntax error at position 21 near 'a'",
+		input:  "select name, ntile() over (partition by b) from t",
+		output: "syntax error at position 21 near 'ntile'",
 	}, {
 		input:  "select name, percent_rank(a) over (partition by b) from t",
 		output: "syntax error at position 28 near 'a'",
@@ -8252,6 +8379,7 @@ var correctlyDoParse = []string{
 	"byte",
 	"cache",
 	"cascaded",
+	"cast",
 	"catalog_name",
 	"chain",
 	"challenge_response",
@@ -8501,6 +8629,7 @@ var correctlyDoParse = []string{
 	"point",
 	"polygon",
 	"port",
+	"position",
 	"precedes",
 	"preceding",
 	"prepare",
@@ -8670,6 +8799,7 @@ var correctlyDoParse = []string{
 	"tls",
 	"transaction",
 	"triggers",
+	"trim",
 	"truncate",
 	"type",
 	"types",

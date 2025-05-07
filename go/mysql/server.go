@@ -23,6 +23,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/dolthub/vitess/go/netutil"
@@ -198,6 +199,12 @@ type Listener struct {
 	// Max limit for connections
 	maxConns uint64
 
+	// maxWaitConns it the number of waiting connections allowed before new connections start getting rejected.
+	maxWaitConns uint32
+
+	// maxWaitConnsTimeout is the amount of time to block a new connection before giving up and rejecting it.
+	maxWaitConnsTimeout time.Duration
+
 	// The following parameters are read by multiple connection go
 	// routines.  They are not protected by a mutex, so they
 	// should be set after NewListener, and not changed while
@@ -232,8 +239,8 @@ type Listener struct {
 	// Reads are unbuffered if it's <=0.
 	connReadBufferSize int
 
-	// shutdown indicates that Shutdown method was called.
-	shutdown sync2.AtomicBool
+	// shutdownCh - open channel until it's not. Used to block and handle shutdown without hanging
+	shutdownCh chan struct{}
 
 	// RequireSecureTransport configures the server to reject connections from insecure clients
 	RequireSecureTransport bool
@@ -274,6 +281,8 @@ type ListenerConfig struct {
 	ConnWriteTimeout         time.Duration
 	ConnReadBufferSize       int
 	MaxConns                 uint64
+	MaxWaitConns             uint32
+	MaxWaitConnsTimeout      time.Duration
 	AllowClearTextWithoutTLS bool
 }
 
@@ -301,7 +310,10 @@ func NewListenerWithConfig(cfg ListenerConfig) (*Listener, error) {
 		connWriteTimeout:         cfg.ConnWriteTimeout,
 		connReadBufferSize:       cfg.ConnReadBufferSize,
 		maxConns:                 cfg.MaxConns,
+		maxWaitConns:             cfg.MaxWaitConns,
+		maxWaitConnsTimeout:      cfg.MaxWaitConnsTimeout,
 		AllowClearTextWithoutTLS: sync2.NewAtomicBool(cfg.AllowClearTextWithoutTLS),
+		shutdownCh:               make(chan struct{}),
 	}, nil
 }
 
@@ -312,6 +324,26 @@ func (l *Listener) Addr() net.Addr {
 
 // Accept runs an accept loop until the listener is closed.
 func (l *Listener) Accept() {
+	var sem chan struct{}
+	if l.maxConns > 0 {
+		sem = make(chan struct{}, l.maxConns)
+	}
+
+	// don't spam the logs if we have a bunch of waiting connections come in at once
+	warnOnWait := true
+	var waitingConnections atomic.Int32
+
+	accepted := func(ctx context.Context, conn net.Conn, id uint32, acceptTime time.Time) {
+		connCount.Add(1)
+		connAccept.Add(1)
+		go func() {
+			if sem != nil {
+				defer func() { <-sem }()
+			}
+			l.handle(ctx, conn, id, acceptTime)
+		}()
+	}
+
 	for {
 		conn, err := l.listener.Accept()
 		if err != nil {
@@ -320,18 +352,44 @@ func (l *Listener) Accept() {
 		}
 
 		acceptTime := time.Now()
-
 		connectionID := l.connectionID
 		l.connectionID++
 
-		for l.maxConns > 0 && uint64(connCount.Get()) >= l.maxConns {
-			// TODO: make this behavior configurable (wait v. reject)
-			time.Sleep(500 * time.Millisecond)
+		if sem == nil {
+			accepted(context.Background(), conn, connectionID, acceptTime)
+			continue
 		}
 
-		connCount.Add(1)
-		connAccept.Add(1)
-		go l.handle(context.Background(), conn, connectionID, acceptTime)
+		select {
+		case sem <- struct{}{}:
+			accepted(context.Background(), conn, connectionID, acceptTime)
+			warnOnWait = true
+		default:
+			if warnOnWait {
+				log.Warning("max connections reached. Clients waiting. Increase server max_connections")
+				warnOnWait = false
+			}
+			waitNum := waitingConnections.Add(1)
+			if uint32(waitNum) > l.maxWaitConns {
+				log.Warning("max waiting connections reached. Client rejected. Increase server max_connections and back_log")
+				conn.Close()
+				waitingConnections.Add(-1)
+				continue
+			}
+			go func(conn net.Conn, connectionID uint32, acceptTime time.Time) {
+				select {
+				case sem <- struct{}{}:
+					waitingConnections.Add(-1)
+					accepted(context.Background(), conn, connectionID, acceptTime)
+				case <-l.shutdownCh:
+					conn.Close()
+					waitingConnections.Add(-1)
+				case <-time.After(l.maxWaitConnsTimeout):
+					conn.Close()
+					waitingConnections.Add(-1)
+				}
+			}(conn, connectionID, acceptTime)
+		}
 	}
 }
 
@@ -407,12 +465,12 @@ func (l *Listener) handle(ctx context.Context, conn net.Conn, connectionID uint3
 
 		// Returns copies of the data, so we can recycle the buffer.
 		user, clientAuthMethod, clientAuthResponse, err = l.parseClientHandshakePacket(c, false, response)
+		c.recycleReadPacket()
 		if err != nil {
 			l.handleConnectionError(c, fmt.Sprintf(
 				"Cannot parse post-SSL client handshake response from %s: %v", c, err))
 			return
 		}
-		c.recycleReadPacket()
 
 		if con, ok := c.Conn.(*tls.Conn); ok {
 			connState := con.ConnectionState()
@@ -439,7 +497,6 @@ func (l *Listener) handle(ctx context.Context, conn net.Conn, connectionID uint3
 	// The latter case happens for example for MySQL 8.0 clients until 8.0.25 who advertise
 	// support for caching_sha2_password by default but with no plugin data.
 	if err != nil || (len(clientAuthResponse) == 0 && clientAuthMethod == CachingSha2Password) {
-		l.handleConnectionError(c, "auth server failed to determine auth method")
 		if err != nil {
 			// The client will disconnect if it doesn't understand
 			// the first auth method that we send, so we only have to send the
@@ -452,37 +509,46 @@ func (l *Listener) handle(ctx context.Context, conn net.Conn, connectionID uint3
 			}
 		}
 		if negotiatedAuthMethod == nil {
+			l.handleConnectionError(c, "No authentication methods available for authentication.")
 			c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "No authentication methods available for authentication.")
 			return
 		}
 
 		if !l.AllowClearTextWithoutTLS.Get() && !c.TLSEnabled() && !negotiatedAuthMethod.AllowClearTextWithoutTLS() {
+			l.handleConnectionError(c, "Cannot use clear text authentication over non-SSL connections.")
 			c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "Cannot use clear text authentication over non-SSL connections.")
 			return
 		}
 
 		serverAuthPluginData, err = negotiatedAuthMethod.AuthPluginData()
 		if err != nil {
-			log.Errorf("Error generating auth switch packet for %s: %v", c, err)
+			l.handleConnectionError(c, fmt.Sprintf("Error generating auth switch packet for %s: %v", c, err))
 			return
 		}
 
 		if err := c.writeAuthSwitchRequest(string(negotiatedAuthMethod.Name()), serverAuthPluginData); err != nil {
-			log.Errorf("Error writing auth switch packet for %s: %v", c, err)
+			l.handleConnectionError(c, fmt.Sprintf("Error writing auth switch packet for %s: %v", c, err))
 			return
 		}
 
-		clientAuthResponse, err = c.readEphemeralPacket(context.Background())
+		data, err := c.readEphemeralPacket(context.Background())
 		if err != nil {
-			log.Errorf("Error reading auth switch response for %s: %v", c, err)
+			l.handleConnectionError(c, fmt.Sprintf("Error reading auth switch response for %s: %v", c, err))
 			return
 		}
+
+		var ok bool
+		clientAuthResponse, _, ok = readBytesCopy(data, 0, len(data))
 		c.recycleReadPacket()
+		if !ok {
+			l.handleConnectionError(c, fmt.Sprintf("Unable to copy client auth response for %s", c))
+			return
+		}
 	}
 
 	userData, err := negotiatedAuthMethod.HandleAuthPluginData(c, user, serverAuthPluginData, clientAuthResponse, conn.RemoteAddr())
 	if err != nil {
-		log.Warningf("Error authenticating user %s using: %s", user, negotiatedAuthMethod.Name())
+		l.handleConnectionWarning(c, fmt.Sprintf("Error authenticating user %s using: %s", user, negotiatedAuthMethod.Name()))
 		c.writeErrorPacketFromError(err)
 		return
 	}
@@ -546,19 +612,27 @@ func (l *Listener) handleConnectionWarning(c *Conn, reason string) {
 
 // Close stops the listener, which prevents accept of any new connections. Existing connections won't be closed.
 func (l *Listener) Close() {
-	l.listener.Close()
+	l.Shutdown()
 }
 
 // Shutdown closes listener and fails any Ping requests from existing connections.
 // This can be used for graceful shutdown, to let clients know that they should reconnect to another server.
 func (l *Listener) Shutdown() {
-	if l.shutdown.CompareAndSwap(false, true) {
-		l.Close()
+	select {
+	case <-l.shutdownCh:
+	default:
+		close(l.shutdownCh)
+		l.listener.Close()
 	}
 }
 
 func (l *Listener) isShutdown() bool {
-	return l.shutdown.Get()
+	select {
+	case <-l.shutdownCh:
+		return true
+	default:
+		return false
+	}
 }
 
 // writeHandshakeV10 writes the Initial Handshake Packet, server side.

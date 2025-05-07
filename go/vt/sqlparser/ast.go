@@ -1688,9 +1688,12 @@ type Insert struct {
 	With       *With
 	Partitions Partitions
 	Columns    Columns
-	Rows       InsertRows
-	OnDup      OnDup
-	Auth       AuthInformation
+	// Returning is specific to PostgreSQL syntax, and allows Insert statements to return
+	// results via a set of select expressions that are evaluated on the inserted rows.
+	Returning SelectExprs
+	Rows      InsertRows
+	OnDup     OnDup
+	Auth      AuthInformation
 }
 
 var _ AuthNode = (*Insert)(nil)
@@ -1775,6 +1778,9 @@ type Update struct {
 	Where      *Where
 	OrderBy    OrderBy
 	Limit      *Limit
+	// Returning is specific to PostgreSQL syntax, and allows Insert statements to return
+	// results via a set of select expressions that are evaluated on the inserted rows.
+	Returning SelectExprs
 }
 
 // Format formats the node.
@@ -1811,6 +1817,9 @@ type Delete struct {
 	Where      *Where
 	OrderBy    OrderBy
 	Limit      *Limit
+	// Returning is specific to PostgreSQL syntax, and allows Insert statements to return
+	// results via a set of select expressions that are evaluated on the inserted rows.
+	Returning SelectExprs
 }
 
 // Format formats the node.
@@ -2193,6 +2202,9 @@ type DDL struct {
 	// Set for constraint alter statements
 	ConstraintAction string
 
+	// ConstraintIfExists is set to true if the constraint action should not fail if the constraint doesn't exist.
+	ConstraintIfExists bool
+
 	// Set for column add / drop / rename statements
 	Column ColIdent
 
@@ -2465,7 +2477,11 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			}
 			buf.Myprintf(fmt.Sprintf("%s event%s %v", node.Action, exists, node.EventSpec.EventName))
 		} else {
-			buf.Myprintf("%s table%s %v", node.Action, exists, node.FromTables)
+			temporary := ""
+			if node.Temporary {
+				temporary = " " + TemporaryStr
+			}
+			buf.Myprintf("%s%s table%s %v", node.Action, temporary, exists, node.FromTables)
 		}
 	case RenameStr:
 		buf.Myprintf("%s table %v to %v", node.Action, node.FromTables[0], node.ToTables[0])
@@ -3936,6 +3952,7 @@ const (
 // Explain represents an explain statement
 type Explain struct {
 	Statement     Statement
+	Plan          bool
 	Analyze       bool
 	ExplainFormat string
 }
@@ -3950,7 +3967,11 @@ func (node *Explain) Format(buf *TrackedBuffer) {
 	if !node.Analyze && node.ExplainFormat != "" {
 		formatOpt = fmt.Sprintf("format = %s ", node.ExplainFormat)
 	}
-	buf.Myprintf("explain %s%s%v", analyzeOpt, formatOpt, node.Statement)
+	planOpt := ""
+	if node.Plan {
+		planOpt = "plan "
+	}
+	buf.Myprintf("explain %s%s%s%v", analyzeOpt, formatOpt, planOpt, node.Statement)
 }
 
 const (
@@ -4468,7 +4489,7 @@ type ReplicationOption struct {
 
 // StartReplica represents a "START REPLICA" statement.
 // https://dev.mysql.com/doc/refman/8.0/en/start-replica.html
-type StartReplica struct{
+type StartReplica struct {
 	Auth AuthInformation
 }
 
@@ -4508,7 +4529,7 @@ func (r *StartReplica) SetExtra(extra any) {
 
 // StopReplica represents a "STOP REPLICA" statement.
 // https://dev.mysql.com/doc/refman/8.0/en/stop-replica.html
-type StopReplica struct{
+type StopReplica struct {
 	Auth AuthInformation
 }
 
@@ -6061,13 +6082,11 @@ func (node BoolVal) replace(from, to Expr) bool {
 
 // ColName represents a column name.
 type ColName struct {
-	// Metadata is not populated by the parser.
-	// It's a placeholder for analyzers to store
-	// additional data, typically info about which
-	// table or column this node references.
-	Metadata  interface{}
 	Name      ColIdent
 	Qualifier TableName
+
+	// Hacky solution for stored procedures
+	StoredProcVal Expr
 }
 
 // NewColName returns a simple ColName with no table qualifier
@@ -8124,6 +8143,7 @@ type InjectedExpr struct {
 
 var _ Expr = InjectedExpr{}
 var _ AuthNode = InjectedExpr{}
+var _ WalkableSQLNode = InjectedExpr{}
 
 // iExpr implements the Expr interface.
 func (d InjectedExpr) iExpr() {}
@@ -8165,6 +8185,17 @@ func (d InjectedExpr) SetAuthTargetNames(targetNames []string) {
 // SetExtra implements the AuthNode interface.
 func (d InjectedExpr) SetExtra(extra any) {
 	d.Auth.Extra = extra
+}
+
+func (d InjectedExpr) walkSubtree(visit Visit) error {
+	for _, child := range d.Children {
+		err := Walk(visit, child)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // InjectedStatement allows bypassing AST analysis. This is used by projects that rely on Vitess, but may not implement

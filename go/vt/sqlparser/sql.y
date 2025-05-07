@@ -156,7 +156,7 @@ func tryCastStatement(v interface{}) Statement {
 %token <bytes> SCHEMA TABLE INDEX INDEXES VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL VECTOR FULLTEXT KEY_BLOCK_SIZE CHECK
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> FIRST AFTER LAST
-%token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE FORMAT EXTENDED
+%token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE FORMAT EXTENDED PLAN
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER TRIGGERS FUNCTION
 %token <bytes> STATUS VARIABLES WARNINGS ERRORS KILL CONNECTION
 %token <bytes> SEQUENCE ENABLE DISABLE
@@ -197,7 +197,7 @@ func tryCastStatement(v interface{}) Statement {
 
 // Replication Tokens
 %token <bytes> REPLICA REPLICAS SOURCE STOP RESET FILTER LOG MASTER
-%token <bytes> SOURCE_HOST SOURCE_USER SOURCE_PASSWORD SOURCE_PORT SOURCE_CONNECT_RETRY SOURCE_RETRY_COUNT SOURCE_AUTO_POSITION
+%token <bytes> SOURCE_HOST SOURCE_SSL SOURCE_USER SOURCE_PASSWORD SOURCE_PORT SOURCE_CONNECT_RETRY SOURCE_RETRY_COUNT SOURCE_AUTO_POSITION
 %token <bytes> REPLICATE_DO_TABLE REPLICATE_IGNORE_TABLE
 %token <bytes> IO_THREAD SQL_THREAD
 
@@ -351,7 +351,7 @@ func tryCastStatement(v interface{}) Statement {
 %type <bytes> work_opt no_opt chain_opt release_opt index_name_opt no_first_last yes_no
 %type <val> comment_opt comment_list
 %type <val> distinct_opt union_op intersect_op except_op insert_or_replace
-%type <val> match_option format_opt
+%type <val> match_option format_opt plan_opt
 %type <val> separator_opt
 %type <val> like_escape_opt
 %type <val> select_expression_list argument_expression_list argument_expression_list_opt
@@ -468,7 +468,7 @@ func tryCastStatement(v interface{}) Statement {
 %type <val> equal_opt assignment_op
 %type <val> table_spec table_column_list
 %type <val> table_opt_value row_fmt_opt
-%type <val> partition_option_opt partition_option linear_partition_opt
+%type <val> partition_option_opt partition_option partition_option_part linear_partition_opt
 %type <val> subpartition_opt
 %type <val> linear_opt
 %type <val> range_or_list
@@ -498,9 +498,9 @@ func tryCastStatement(v interface{}) Statement {
 %type <val> characteristic_list_opt characteristic_list
 %type <val> characteristic
 %type <val> fields_opt
-%type <val> lines_opt
+%type <val> lines_opt lines_option_list
 %type <val> enclosed_by_opt
-%type <val> terminated_by_opt starting_by_opt escaped_by_opt
+%type <val> terminated_by_opt escaped_by_opt
 %type <val> lock_table_list
 %type <val> lock_table
 %type <val> lock_type
@@ -3190,16 +3190,16 @@ statement_list_statement:
 create_table_prefix:
   CREATE temp_opt TABLE not_exists_opt table_name
   {
+    var temp bool
+    authType := AuthType_CREATE
+    if $2.(int) != 0 {
+      temp = true
+      authType = AuthType_CREATE_TEMP
+    }
+
     var ne bool
     if $4.(int) != 0 {
       ne = true
-    }
-
-    authType := AuthType_CREATE
-    var neTemp bool
-    if $2.(int) != 0 {
-      neTemp = true
-      authType = AuthType_CREATE_TEMP
     }
 
     tableName := $5.(TableName)
@@ -3207,7 +3207,7 @@ create_table_prefix:
       Action: CreateStr,
       Table: tableName,
       IfNotExists: ne,
-      Temporary: neTemp,
+      Temporary: temp,
       Auth: AuthInformation{
         AuthType: authType,
         TargetType: AuthTargetType_DatabaseIdentifiers,
@@ -3217,16 +3217,16 @@ create_table_prefix:
   }
 | CREATE temp_opt TABLE not_exists_opt FORMAT
   {
+    authType := AuthType_CREATE
+    var temp bool
+    if $2.(int) != 0 {
+      temp = true
+      authType = AuthType_CREATE_TEMP
+    }
+
     var ne bool
     if $4.(int) != 0 {
       ne = true
-    }
-
-    authType := AuthType_CREATE
-    var neTemp bool
-    if $2.(int) != 0 {
-      neTemp = true
-      authType = AuthType_CREATE_TEMP
     }
 
     $$ = &DDL{
@@ -3235,7 +3235,7 @@ create_table_prefix:
         Name: NewTableIdent(string($5)),
       },
       IfNotExists: ne,
-      Temporary: neTemp,
+      Temporary: temp,
       Auth: AuthInformation{
         AuthType: authType,
         TargetType: AuthTargetType_DatabaseIdentifiers,
@@ -4380,6 +4380,10 @@ replication_option:
   {
     $$ = &ReplicationOption{Name: string($1), Value: string($3)}
   }
+| SOURCE_SSL '=' INTEGRAL
+  {
+    $$ = &ReplicationOption{Name: string($1), Value: mustAtoi(yylex, string($3))}
+  }
 | SOURCE_PORT '=' INTEGRAL
   {
     $$ = &ReplicationOption{Name: string($1), Value: mustAtoi(yylex, string($3))}
@@ -5067,7 +5071,13 @@ partition_option_opt:
   {
     $$ = (*PartitionOption)(nil)
   }
-| PARTITION BY partition_option partition_num_opt subpartition_opt partition_definitions_opt
+| partition_option
+  {
+    $$ = $1.(*PartitionOption)
+  }
+
+partition_option:
+  PARTITION BY partition_option_part partition_num_opt subpartition_opt partition_definitions_opt
   {
     $3.(*PartitionOption).Partitions = $4.(*SQLVal)
     $3.(*PartitionOption).SubPartition = $5.(*SubPartition)
@@ -5075,7 +5085,7 @@ partition_option_opt:
     $$ = $3.(*PartitionOption)
   }
 
-partition_option:
+partition_option_part:
   linear_partition_opt
   {
     $$ = $1.(*PartitionOption)
@@ -5242,7 +5252,7 @@ alter_database_statement:
   }
 
 alter_table_statement:
-  ALTER ignore_opt TABLE table_name alter_table_statement_list partition_operation_list_opt
+  ALTER ignore_opt TABLE table_name alter_table_statement_list partition_operation_list_opt partition_option_opt
   {
     tableName := $4.(TableName)
     ddls := $5.([]*DDL)
@@ -5275,6 +5285,18 @@ alter_table_statement:
       },
     }
   }
+| ALTER ignore_opt TABLE table_name partition_option
+  {
+    tableName := $4.(TableName)
+    $$ = &AlterTable{
+      Table: tableName,
+      Auth: AuthInformation{
+        AuthType: AuthType_ALTER,
+        TargetType: AuthTargetType_SingleTableIdentifier,
+        TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+      },
+    }
+  }
 
 alter_table_statement_list:
   alter_table_statement_part
@@ -5300,6 +5322,9 @@ alter_table_statement_part:
     }
     ddl.TableSpec.AddColumn($4.(*ColumnDefinition))
     ddl.Column = $4.(*ColumnDefinition).Name
+    if ddl.TableSpec.Constraints != nil {
+    	ddl.ConstraintAction = AddStr
+    }
     $$ = ddl
   }
 | ADD column_opt column_definition column_order_opt
@@ -5316,6 +5341,9 @@ alter_table_statement_part:
     }
     ddl.TableSpec.AddColumn($3.(*ColumnDefinition))
     ddl.Column = $3.(*ColumnDefinition).Name
+    if ddl.TableSpec.Constraints != nil {
+    	ddl.ConstraintAction = AddStr
+    }
     $$ = ddl
   }
 | ADD index_or_key name_opt using_opt '(' index_column_list ')' index_option_list_opt
@@ -6522,17 +6550,24 @@ rename_user_list:
   }
 
 drop_statement:
-  DROP TABLE exists_opt table_name_list drop_statement_action
+  DROP temp_opt TABLE exists_opt table_name_list drop_statement_action
   {
+    var temp bool
+    if $2.(int) != 0 {
+      temp = true
+    }
+
     var exists bool
-    if $3.(int) != 0 {
+    if $4.(int) != 0 {
       exists = true
     }
-    tableNames := $4.(TableNames)
+
+    tableNames := $5.(TableNames)
     $$ = &DDL{
       Action: DropStr,
       FromTables: tableNames,
       IfExists: exists,
+      Temporary: temp,
       Auth: AuthInformation{
         AuthType: AuthType_DROP,
         TargetType: AuthTargetType_MultipleTableIdentifiers,
@@ -6767,6 +6802,7 @@ all_non_reserved:
 | non_reserved_keyword2
 | non_reserved_keyword3
 | column_name_safe_keyword
+| function_call_keywords
 
 prepare_statement:
   PREPARE ID FROM STRING
@@ -7549,17 +7585,17 @@ release_savepoint_statement:
   }
 
 explain_statement:
-  explain_verb format_opt explainable_statement
+  explain_verb format_opt plan_opt explainable_statement
   {
-    $$ = &Explain{ExplainFormat: $2.(string), Statement: tryCastStatement($3)}
+    $$ = &Explain{ExplainFormat: $2.(string), Plan: $3.(bool), Statement: tryCastStatement($4)}
   }
-| explain_verb EXTENDED format_opt explainable_statement
+| explain_verb EXTENDED format_opt plan_opt explainable_statement
   {
-    $$ = &Explain{ExplainFormat: $3.(string), Statement: tryCastStatement($4)}
+    $$ = &Explain{ExplainFormat: $3.(string), Plan: $4.(bool), Statement: tryCastStatement($5)}
   }
-| explain_verb ANALYZE select_statement_with_no_trailing_into
+| explain_verb ANALYZE plan_opt select_statement_with_no_trailing_into
   {
-    $$ = &Explain{Analyze: true, ExplainFormat: TreeStr, Statement: $3.(SelectStatement)}
+    $$ = &Explain{Analyze: true, Plan: $3.(bool), ExplainFormat: TreeStr, Statement: $4.(SelectStatement)}
   }
 
 explainable_statement:
@@ -7578,6 +7614,15 @@ format_opt:
 | FORMAT '=' ID
   {
     $$ = string($3)
+  }
+
+plan_opt:
+  {
+    $$ = false
+  }
+| PLAN
+  {
+    $$ = true
   }
 
 explain_verb:
@@ -8361,6 +8406,10 @@ table_alias:
   {
     $$ = NewTableIdent(string($1))
   }
+| function_call_keywords
+  {
+    $$ = NewTableIdent(string($1))
+  }
 
 inner_join:
   JOIN
@@ -9099,9 +9148,9 @@ function_call_window:
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3.(SelectExprs), Over: $5.(*Over)}
   }
-| NTILE openb closeb over
+| NTILE openb argument_expression closeb over
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Over: $4.(*Over)}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3.(SelectExpr)}, Over: $5.(*Over)}
   }
 | PERCENT_RANK openb closeb over
   {
@@ -9728,6 +9777,10 @@ column_name:
   {
     $$ = &ColName{Qualifier: TableName{Name: $1.(TableIdent)}, Name: NewColIdent(string($3))}
   }
+| table_id '.' function_call_keywords
+  {
+    $$ = &ColName{Qualifier: TableName{Name: $1.(TableIdent)}, Name: NewColIdent(string($3))}
+  }
 | table_id '.' ACCOUNT
   {
     $$ = &ColName{Qualifier: TableName{Name: $1.(TableIdent)}, Name: NewColIdent(string($3))}
@@ -9737,6 +9790,10 @@ column_name:
     $$ = &ColName{Qualifier: TableName{Name: $1.(TableIdent)}, Name: NewColIdent(string($3))}
   }
 | column_name_safe_keyword '.' sql_id
+  {
+    $$ = &ColName{Qualifier: TableName{Name: NewTableIdent(string($1))}, Name: $3.(ColIdent)}
+  }
+| function_call_keywords '.' sql_id
   {
     $$ = &ColName{Qualifier: TableName{Name: NewTableIdent(string($1))}, Name: $3.(ColIdent)}
   }
@@ -10058,6 +10115,10 @@ ins_column:
     $$ = $1.(ColIdent)
   }
 | column_name_safe_keyword
+  {
+    $$ = NewColIdent(string($1))
+  }
+| function_call_keywords
   {
     $$ = NewColIdent(string($1))
   }
@@ -10461,18 +10522,32 @@ lines_opt:
   {
     $$ = (*Lines)(nil)
   }
-| LINES starting_by_opt terminated_by_opt
+| LINES lines_option_list
   {
-    $$ = &Lines{StartingBy: $2.(*SQLVal), TerminatedBy: $3.(*SQLVal)}
+    $$ = $2
   }
 
-starting_by_opt:
+lines_option_list:
   {
-    $$ = (*SQLVal)(nil)
+    $$ = &Lines{}
   }
-| STARTING BY STRING
+| lines_option_list STARTING BY STRING
   {
-    $$ = NewStrVal($3)
+    if $1 == nil {
+      $$ = &Lines{StartingBy: NewStrVal($4)}
+    } else {
+      $1.(*Lines).StartingBy = NewStrVal($4)
+      $$ = $1
+    }
+  }
+| lines_option_list TERMINATED BY STRING
+  {
+    if $1 == nil {
+      $$ = &Lines{TerminatedBy: NewStrVal($4)}
+    } else {
+      $1.(*Lines).TerminatedBy = NewStrVal($4)
+      $$ = $1
+    }
   }
 
 lock_statement:
@@ -11392,6 +11467,7 @@ non_reserved_keyword:
 | SOURCE
 | SOURCE_CONNECT_RETRY
 | SOURCE_HOST
+| SOURCE_SSL
 | SOURCE_PASSWORD
 | SOURCE_PORT
 | SOURCE_AUTO_POSITION
