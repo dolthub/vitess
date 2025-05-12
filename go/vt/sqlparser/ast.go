@@ -2284,8 +2284,8 @@ type DDL struct {
 	OptSelect *OptSelect
 
 	// User is set for ALTER USER operations.
-	User              AccountName
-	AccountLimitItems []AccountLimitItem
+	User          AccountName
+	AccountLimits *AccountLimits
 
 	// Authentication is set for ALTER USER operations.
 	Authentication *Authentication
@@ -2540,6 +2540,9 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 				ifExists = "if exists "
 			}
 			buf.Myprintf("%s user %s%s %s", node.Action, ifExists, node.User.String(), node.Authentication.String())
+			if node.AccountLimits != nil {
+				buf.Myprintf(" with %s", node.AccountLimits.String())
+			}
 			node.alterFormat(buf)
 		} else {
 			buf.Myprintf(fmt.Sprintf("unsupported alter command: %v", node))

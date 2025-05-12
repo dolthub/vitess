@@ -6194,6 +6194,11 @@ alter_user_statement:
       ifExists = true
     }
     accountName := $4.(AccountName)
+    accountLimits, err := NewAccountLimits($6.([]AccountLimitItem))
+    if err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
     $$ = &DDL{
       Action: AlterStr,
       User: accountName,
@@ -6204,7 +6209,7 @@ alter_user_statement:
           TargetType: AuthTargetType_Ignore,
           TargetNames: []string{accountName.Name, accountName.Host},
       },
-      AccountLimitItems: $6.([]AccountLimitItem),
+      AccountLimits: accountLimits,
     }
   }
 
