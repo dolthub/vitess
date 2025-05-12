@@ -2284,7 +2284,8 @@ type DDL struct {
 	OptSelect *OptSelect
 
 	// User is set for ALTER USER operations.
-	User AccountName
+	User              AccountName
+	AccountLimitItems []AccountLimitItem
 
 	// Authentication is set for ALTER USER operations.
 	Authentication *Authentication
