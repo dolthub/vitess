@@ -1821,6 +1821,8 @@ grant_statement:
     }
   }
 
+// TODO: add IF EXISTS opt
+// TODO: add IGNORE UNKNOWN USER opt
 revoke_statement:
   REVOKE ALL ON grant_object_type grant_privilege_level FROM account_name_list
   {
@@ -1851,7 +1853,11 @@ revoke_statement:
   }
 | REVOKE ALL ',' GRANT OPTION FROM account_name_list
   {
-    $$ = &RevokeAllPrivileges{
+    allPriv := []Privilege{Privilege{Type: PrivilegeType_All, Columns: nil}}
+    $$ = &RevokePrivilege{
+      Privileges: allPriv,
+      ObjectType: GrantObjectType_Any,
+      PrivilegeLevel: PrivilegeLevel{Database: "*", TableRoutine: "*"},
       From: $7.([]AccountName),
       Auth: AuthInformation{
         AuthType: AuthType_REVOKE_ALL,
