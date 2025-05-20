@@ -1867,7 +1867,11 @@ revoke_statement:
   }
 | REVOKE ALL PRIVILEGES ',' GRANT OPTION FROM account_name_list
   {
-    $$ = &RevokeAllPrivileges{
+    allPriv := []Privilege{Privilege{Type: PrivilegeType_All, Columns: nil}}
+    $$ = &RevokePrivilege{
+      Privileges: allPriv,
+      ObjectType: GrantObjectType_Any,
+      PrivilegeLevel: PrivilegeLevel{Database: "*", TableRoutine: "*"},
       From: $8.([]AccountName),
       Auth: AuthInformation{
         AuthType: AuthType_REVOKE_ALL,
