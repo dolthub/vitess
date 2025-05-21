@@ -1069,12 +1069,11 @@ func (g *GrantProxy) SetExtra(extra any) {
 
 // RevokePrivilege represents the REVOKE...ON...FROM statement.
 type RevokePrivilege struct {
-	Privileges     []Privilege
-	ObjectType     GrantObjectType
-	PrivilegeLevel PrivilegeLevel
-	From           []AccountName
-	Auth           AuthInformation
-
+	Privileges        []Privilege
+	ObjectType        GrantObjectType
+	PrivilegeLevel    PrivilegeLevel
+	From              []AccountName
+	Auth              AuthInformation
 	IfExists          bool
 	IgnoreUnknownUser bool
 }
@@ -1147,10 +1146,9 @@ func (r *RevokePrivilege) SetExtra(extra any) {
 
 // RevokeRole represents the REVOKE...FROM statement.
 type RevokeRole struct {
-	Roles []AccountName
-	From  []AccountName
-	Auth  AuthInformation
-
+	Roles             []AccountName
+	From              []AccountName
+	Auth              AuthInformation
 	IfExists          bool
 	IgnoreUnknownUser bool
 }
