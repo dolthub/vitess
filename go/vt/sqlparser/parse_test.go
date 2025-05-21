@@ -3330,11 +3330,11 @@ var (
 		},
 		{
 			input:  "REVOKE ALL, GRANT OPTION FROM UserName",
-			output: "revoke all privileges, grant option from `UserName`@`%`",
+			output: "revoke all on *.* from `UserName`@`%`",
 		},
 		{
 			input:  "REVOKE ALL PRIVILEGES, GRANT OPTION FROM UserName",
-			output: "revoke all privileges, grant option from `UserName`@`%`",
+			output: "revoke all on *.* from `UserName`@`%`",
 		},
 		{
 			input:  "REVOKE Role1 FROM UserName",
