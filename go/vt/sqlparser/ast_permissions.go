@@ -1069,6 +1069,7 @@ func (g *GrantProxy) SetExtra(extra any) {
 
 // RevokePrivilege represents the REVOKE...ON...FROM statement.
 type RevokePrivilege struct {
+	IfExists       bool
 	Privileges     []Privilege
 	ObjectType     GrantObjectType
 	PrivilegeLevel PrivilegeLevel
@@ -1085,6 +1086,9 @@ func (r *RevokePrivilege) iStatement() {}
 // Format implements the interface Statement.
 func (r *RevokePrivilege) Format(buf *TrackedBuffer) {
 	buf.Myprintf("revoke")
+	if r.IfExists {
+		buf.Myprintf(" if exists")
+	}
 	for i, privilege := range r.Privileges {
 		if i > 0 {
 			buf.Myprintf(",")
@@ -1186,9 +1190,10 @@ func (r *RevokeAllPrivileges) SetExtra(extra any) {
 
 // RevokeRole represents the REVOKE...FROM statement.
 type RevokeRole struct {
-	Roles []AccountName
-	From  []AccountName
-	Auth  AuthInformation
+	IfExists bool
+	Roles    []AccountName
+	From     []AccountName
+	Auth     AuthInformation
 }
 
 var _ Statement = (*RevokeRole)(nil)
@@ -1200,6 +1205,9 @@ func (r *RevokeRole) iStatement() {}
 // Format implements the interface Statement.
 func (r *RevokeRole) Format(buf *TrackedBuffer) {
 	buf.Myprintf("revoke")
+	if r.IfExists {
+		buf.Myprintf(" if exists")
+	}
 	for i, role := range r.Roles {
 		if i > 0 {
 			buf.Myprintf(",")
@@ -1242,9 +1250,10 @@ func (r *RevokeRole) SetExtra(extra any) {
 
 // RevokeProxy represents the REVOKE PROXY statement.
 type RevokeProxy struct {
-	On   AccountName
-	From []AccountName
-	Auth AuthInformation
+	IfExists bool
+	On       AccountName
+	From     []AccountName
+	Auth     AuthInformation
 }
 
 var _ Statement = (*RevokeProxy)(nil)
@@ -1255,7 +1264,11 @@ func (r *RevokeProxy) iStatement() {}
 
 // Format implements the interface Statement.
 func (r *RevokeProxy) Format(buf *TrackedBuffer) {
-	buf.Myprintf("revoke proxy on %s from", r.On.String())
+	buf.Myprintf("revoke")
+	if r.IfExists {
+		buf.Myprintf(" if exists")
+	}
+	buf.Myprintf(" proxy on %s from", r.On.String())
 	for i, user := range r.From {
 		if i > 0 {
 			buf.Myprintf(",")
@@ -1350,7 +1363,7 @@ func (s *ShowGrants) SetExtra(extra any) {
 }
 
 // ShowPrivileges represents the SHOW PRIVILEGES statement.
-type ShowPrivileges struct{
+type ShowPrivileges struct {
 	Auth AuthInformation
 }
 

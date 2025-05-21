@@ -1824,51 +1824,40 @@ grant_statement:
 // TODO: add IF EXISTS opt
 // TODO: add IGNORE UNKNOWN USER opt
 revoke_statement:
-  REVOKE ALL ON grant_object_type grant_privilege_level FROM account_name_list
+  REVOKE exists_opt ALL ON grant_object_type grant_privilege_level FROM account_name_list
   {
     allPriv := []Privilege{Privilege{Type: PrivilegeType_All, Columns: nil}}
     $$ = &RevokePrivilege{
+      IfExists: $2.(int) == 1,
       Privileges: allPriv,
-      ObjectType: $4.(GrantObjectType),
-      PrivilegeLevel: $5.(PrivilegeLevel),
-      From: $7.([]AccountName),
+      ObjectType: $5.(GrantObjectType),
+      PrivilegeLevel: $6.(PrivilegeLevel),
+      From: $8.([]AccountName),
       Auth: AuthInformation{
         AuthType: AuthType_REVOKE_PRIVILEGE,
         TargetType: AuthTargetType_Ignore,
       },
     }
   }
-| REVOKE grant_privilege_list ON grant_object_type grant_privilege_level FROM account_name_list
+| REVOKE exists_opt grant_privilege_list ON grant_object_type grant_privilege_level FROM account_name_list
   {
     $$ = &RevokePrivilege{
-      Privileges: $2.([]Privilege),
-      ObjectType: $4.(GrantObjectType),
-      PrivilegeLevel: $5.(PrivilegeLevel),
-      From: $7.([]AccountName),
+      IfExists: $2.(int) == 1,
+      Privileges: $3.([]Privilege),
+      ObjectType: $5.(GrantObjectType),
+      PrivilegeLevel: $6.(PrivilegeLevel),
+      From: $8.([]AccountName),
       Auth: AuthInformation{
         AuthType: AuthType_REVOKE_PRIVILEGE,
         TargetType: AuthTargetType_Ignore,
       },
     }
   }
-| REVOKE ALL ',' GRANT OPTION FROM account_name_list
+| REVOKE exists_opt ALL ',' GRANT OPTION FROM account_name_list
   {
     allPriv := []Privilege{Privilege{Type: PrivilegeType_All, Columns: nil}}
     $$ = &RevokePrivilege{
-      Privileges: allPriv,
-      ObjectType: GrantObjectType_Any,
-      PrivilegeLevel: PrivilegeLevel{Database: "*", TableRoutine: "*"},
-      From: $7.([]AccountName),
-      Auth: AuthInformation{
-        AuthType: AuthType_REVOKE_ALL,
-        TargetType: AuthTargetType_Ignore,
-      },
-    }
-  }
-| REVOKE ALL PRIVILEGES ',' GRANT OPTION FROM account_name_list
-  {
-    allPriv := []Privilege{Privilege{Type: PrivilegeType_All, Columns: nil}}
-    $$ = &RevokePrivilege{
+      IfExists: $2.(int) == 1,
       Privileges: allPriv,
       ObjectType: GrantObjectType_Any,
       PrivilegeLevel: PrivilegeLevel{Database: "*", TableRoutine: "*"},
@@ -1879,22 +1868,39 @@ revoke_statement:
       },
     }
   }
-| REVOKE role_name_list FROM account_name_list
+| REVOKE exists_opt ALL PRIVILEGES ',' GRANT OPTION FROM account_name_list
+  {
+    allPriv := []Privilege{Privilege{Type: PrivilegeType_All, Columns: nil}}
+    $$ = &RevokePrivilege{
+      IfExists: $2.(int) == 1,
+      Privileges: allPriv,
+      ObjectType: GrantObjectType_Any,
+      PrivilegeLevel: PrivilegeLevel{Database: "*", TableRoutine: "*"},
+      From: $9.([]AccountName),
+      Auth: AuthInformation{
+        AuthType: AuthType_REVOKE_ALL,
+        TargetType: AuthTargetType_Ignore,
+      },
+    }
+  }
+| REVOKE exists_opt role_name_list FROM account_name_list
   {
     $$ = &RevokeRole{
-      Roles: $2.([]AccountName),
-      From: $4.([]AccountName),
+      IfExists: $2.(int) == 1,
+      Roles: $3.([]AccountName),
+      From: $5.([]AccountName),
       Auth: AuthInformation{
         AuthType: AuthType_REVOKE_ROLE,
         TargetType: AuthTargetType_Ignore,
       },
     }
   }
-| REVOKE PROXY ON account_name FROM account_name_list
+| REVOKE exists_opt PROXY ON account_name FROM account_name_list
   {
     $$ = &RevokeProxy{
-      On: $4.(AccountName),
-      From: $6.([]AccountName),
+      IfExists: $2.(int) == 1,
+      On: $5.(AccountName),
+      From: $7.([]AccountName),
       Auth: AuthInformation{
         AuthType: AuthType_REVOKE_PROXY,
         TargetType: AuthTargetType_Ignore,
