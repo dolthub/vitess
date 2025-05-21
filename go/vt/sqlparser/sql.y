@@ -183,7 +183,7 @@ func tryCastStatement(v interface{}) Statement {
 %token <bytes> MAX_QUERIES_PER_HOUR MAX_UPDATES_PER_HOUR MAX_CONNECTIONS_PER_HOUR MAX_USER_CONNECTIONS FLUSH
 %token <bytes> FAILED_LOGIN_ATTEMPTS PASSWORD_LOCK_TIME UNBOUNDED REQUIRE PROXY ROUTINE TABLESPACE CLIENT SLAVE
 %token <bytes> EXECUTE FILE RELOAD REPLICATION SHUTDOWN SUPER USAGE LOGS ENGINE ERROR GENERAL HOSTS
-%token <bytes> OPTIMIZER_COSTS RELAY SLOW USER_RESOURCES NO_WRITE_TO_BINLOG CHANNEL
+%token <bytes> OPTIMIZER_COSTS RELAY SLOW USER_RESOURCES NO_WRITE_TO_BINLOG CHANNEL UNKNOWN
 
 // Dynamic Privilege Tokens
 %token <bytes> APPLICATION_PASSWORD_ADMIN AUDIT_ABORT_EXEMPT AUDIT_ADMIN AUTHENTICATION_POLICY_ADMIN BACKUP_ADMIN
@@ -325,6 +325,7 @@ func tryCastStatement(v interface{}) Statement {
 %type <val> loop_statement leave_statement iterate_statement repeat_statement while_statement return_statement
 %type <val> savepoint_statement rollback_savepoint_statement release_savepoint_statement purge_binary_logs_statement
 %type <val> lock_statement unlock_statement kill_statement grant_statement revoke_statement flush_statement replication_statement
+%type <val> ignore_unknown_user_opt
 %type <bytes> thread_type_opt
 %type <val> statement_list
 %type <val> case_statement_case_list
@@ -1821,10 +1822,17 @@ grant_statement:
     }
   }
 
-// TODO: add IF EXISTS opt
-// TODO: add IGNORE UNKNOWN USER opt
+ignore_unknown_user_opt:
+  {
+    $$ = false
+  }
+| IGNORE UNKNOWN USER
+  {
+    $$ = true
+  }
+
 revoke_statement:
-  REVOKE exists_opt ALL ON grant_object_type grant_privilege_level FROM account_name_list
+  REVOKE exists_opt ALL ON grant_object_type grant_privilege_level FROM account_name_list ignore_unknown_user_opt
   {
     allPriv := []Privilege{Privilege{Type: PrivilegeType_All, Columns: nil}}
     $$ = &RevokePrivilege{
@@ -1837,9 +1845,10 @@ revoke_statement:
         AuthType: AuthType_REVOKE_PRIVILEGE,
         TargetType: AuthTargetType_Ignore,
       },
+      IgnoreUnknownUser: $9.(bool),
     }
   }
-| REVOKE exists_opt grant_privilege_list ON grant_object_type grant_privilege_level FROM account_name_list
+| REVOKE exists_opt grant_privilege_list ON grant_object_type grant_privilege_level FROM account_name_list ignore_unknown_user_opt
   {
     $$ = &RevokePrivilege{
       IfExists: $2.(int) == 1,
@@ -1851,9 +1860,10 @@ revoke_statement:
         AuthType: AuthType_REVOKE_PRIVILEGE,
         TargetType: AuthTargetType_Ignore,
       },
+      IgnoreUnknownUser: $9.(bool),
     }
   }
-| REVOKE exists_opt ALL ',' GRANT OPTION FROM account_name_list
+| REVOKE exists_opt ALL ',' GRANT OPTION FROM account_name_list ignore_unknown_user_opt
   {
     allPriv := []Privilege{Privilege{Type: PrivilegeType_All, Columns: nil}}
     $$ = &RevokePrivilege{
@@ -1866,9 +1876,10 @@ revoke_statement:
         AuthType: AuthType_REVOKE_ALL,
         TargetType: AuthTargetType_Ignore,
       },
+      IgnoreUnknownUser: $9.(bool),
     }
   }
-| REVOKE exists_opt ALL PRIVILEGES ',' GRANT OPTION FROM account_name_list
+| REVOKE exists_opt ALL PRIVILEGES ',' GRANT OPTION FROM account_name_list ignore_unknown_user_opt
   {
     allPriv := []Privilege{Privilege{Type: PrivilegeType_All, Columns: nil}}
     $$ = &RevokePrivilege{
@@ -1881,9 +1892,10 @@ revoke_statement:
         AuthType: AuthType_REVOKE_ALL,
         TargetType: AuthTargetType_Ignore,
       },
+      IgnoreUnknownUser: $10.(bool),
     }
   }
-| REVOKE exists_opt role_name_list FROM account_name_list
+| REVOKE exists_opt role_name_list FROM account_name_list ignore_unknown_user_opt
   {
     $$ = &RevokeRole{
       IfExists: $2.(int) == 1,
@@ -1893,9 +1905,10 @@ revoke_statement:
         AuthType: AuthType_REVOKE_ROLE,
         TargetType: AuthTargetType_Ignore,
       },
+      IgnoreUnknownUser: $6.(bool),
     }
   }
-| REVOKE exists_opt PROXY ON account_name FROM account_name_list
+| REVOKE exists_opt PROXY ON account_name FROM account_name_list ignore_unknown_user_opt
   {
     $$ = &RevokeProxy{
       IfExists: $2.(int) == 1,
@@ -1905,6 +1918,7 @@ revoke_statement:
         AuthType: AuthType_REVOKE_PROXY,
         TargetType: AuthTargetType_Ignore,
       },
+      IgnoreUnknownUser: $8.(bool),
     }
   }
 
@@ -11536,6 +11550,7 @@ non_reserved_keyword:
 | TRUNCATE
 | UNBOUNDED
 | UNCOMMITTED
+| UNKNOWN
 | UNTIL
 | UNUSED
 | USER

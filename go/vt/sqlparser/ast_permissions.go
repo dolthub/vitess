@@ -1069,12 +1069,14 @@ func (g *GrantProxy) SetExtra(extra any) {
 
 // RevokePrivilege represents the REVOKE...ON...FROM statement.
 type RevokePrivilege struct {
-	IfExists       bool
 	Privileges     []Privilege
 	ObjectType     GrantObjectType
 	PrivilegeLevel PrivilegeLevel
 	From           []AccountName
 	Auth           AuthInformation
+
+	IfExists          bool
+	IgnoreUnknownUser bool
 }
 
 var _ Statement = (*RevokePrivilege)(nil)
@@ -1112,6 +1114,9 @@ func (r *RevokePrivilege) Format(buf *TrackedBuffer) {
 			buf.Myprintf(",")
 		}
 		buf.Myprintf(" %s", user.String())
+	}
+	if r.IgnoreUnknownUser {
+		buf.Myprintf(" ignore unknown user")
 	}
 }
 
@@ -1190,10 +1195,12 @@ func (r *RevokeAllPrivileges) SetExtra(extra any) {
 
 // RevokeRole represents the REVOKE...FROM statement.
 type RevokeRole struct {
-	IfExists bool
-	Roles    []AccountName
-	From     []AccountName
-	Auth     AuthInformation
+	Roles []AccountName
+	From  []AccountName
+	Auth  AuthInformation
+
+	IfExists          bool
+	IgnoreUnknownUser bool
 }
 
 var _ Statement = (*RevokeRole)(nil)
@@ -1220,6 +1227,9 @@ func (r *RevokeRole) Format(buf *TrackedBuffer) {
 			buf.Myprintf(",")
 		}
 		buf.Myprintf(" %s", user.String())
+	}
+	if r.IgnoreUnknownUser {
+		buf.Myprintf(" ignore unknown user")
 	}
 }
 
@@ -1250,10 +1260,12 @@ func (r *RevokeRole) SetExtra(extra any) {
 
 // RevokeProxy represents the REVOKE PROXY statement.
 type RevokeProxy struct {
-	IfExists bool
-	On       AccountName
-	From     []AccountName
-	Auth     AuthInformation
+	On   AccountName
+	From []AccountName
+	Auth AuthInformation
+
+	IfExists          bool
+	IgnoreUnknownUser bool
 }
 
 var _ Statement = (*RevokeProxy)(nil)
@@ -1274,6 +1286,9 @@ func (r *RevokeProxy) Format(buf *TrackedBuffer) {
 			buf.Myprintf(",")
 		}
 		buf.Myprintf(" %s", user.String())
+	}
+	if r.IgnoreUnknownUser {
+		buf.Myprintf(" ignore unknown user")
 	}
 }
 
