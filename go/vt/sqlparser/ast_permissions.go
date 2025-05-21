@@ -1145,54 +1145,6 @@ func (r *RevokePrivilege) SetExtra(extra any) {
 	r.Auth.Extra = extra
 }
 
-// RevokeAllPrivileges represents the REVOKE ALL statement.
-type RevokeAllPrivileges struct {
-	From []AccountName
-	Auth AuthInformation
-}
-
-var _ Statement = (*RevokeAllPrivileges)(nil)
-var _ AuthNode = (*RevokeAllPrivileges)(nil)
-
-// iStatement implements the interface Statement.
-func (r *RevokeAllPrivileges) iStatement() {}
-
-// Format implements the interface Statement.
-func (r *RevokeAllPrivileges) Format(buf *TrackedBuffer) {
-	buf.Myprintf("revoke all privileges, grant option from")
-	for i, user := range r.From {
-		if i > 0 {
-			buf.Myprintf(",")
-		}
-		buf.Myprintf(" %s", user.String())
-	}
-}
-
-// GetAuthInformation implements the AuthNode interface.
-func (r *RevokeAllPrivileges) GetAuthInformation() AuthInformation {
-	return r.Auth
-}
-
-// SetAuthType implements the AuthNode interface.
-func (r *RevokeAllPrivileges) SetAuthType(authType string) {
-	r.Auth.AuthType = authType
-}
-
-// SetAuthTargetType implements the AuthNode interface.
-func (r *RevokeAllPrivileges) SetAuthTargetType(targetType string) {
-	r.Auth.TargetType = targetType
-}
-
-// SetAuthTargetNames implements the AuthNode interface.
-func (r *RevokeAllPrivileges) SetAuthTargetNames(targetNames []string) {
-	r.Auth.TargetNames = targetNames
-}
-
-// SetExtra implements the AuthNode interface.
-func (r *RevokeAllPrivileges) SetExtra(extra any) {
-	r.Auth.Extra = extra
-}
-
 // RevokeRole represents the REVOKE...FROM statement.
 type RevokeRole struct {
 	Roles []AccountName
