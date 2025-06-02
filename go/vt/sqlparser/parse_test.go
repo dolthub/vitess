@@ -2020,13 +2020,20 @@ var (
 		}, {
 			input:  "create SQL SECURITY INVOKER view a as select current_timestamp()",
 			output: "create sql security invoker view a as select current_timestamp(0)",
-		}, {
+		},
+		{
 			input:  "CREATE VIEW a AS SELECT current_timestamp()",
 			output: "create view a as select current_timestamp(0)",
-		}, {
+		},
+		{
+			input:  "CREATE IF NOT EXISTS VIEW a AS SELECT 1",
+			output: "create if not exists view a as select 1",
+		},
+		{
 			input:  "create view a_view as select * from table_1 join table_2 on table_1.table_2_id_fk = table_2.id where city = 'my city'",
 			output: "create view a_view as select * from table_1 join table_2 on table_1.table_2_id_fk = table_2.id where city = 'my city'",
-		}, {
+		},
+		{
 			input:  "CREATE OR REPLACE VIEW a AS SELECT current_timestamp()",
 			output: "create or replace view a as select current_timestamp(0)",
 		},

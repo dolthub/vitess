@@ -1264,19 +1264,20 @@ create_statement:
       Auth: AuthInformation{AuthType: AuthType_IGNORE},
     }
   }
-| CREATE view_opts VIEW table_name ins_column_list_opt AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position opt_with_check_option
+| CREATE view_opts not_exists_opt VIEW table_name ins_column_list_opt AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position opt_with_check_option
   {
-    viewName := $4.(TableName)
+    viewName := $5.(TableName)
     $2.(*ViewSpec).ViewName = viewName.ToViewName()
-    $2.(*ViewSpec).ViewExpr = $9.(SelectStatement)
-    $2.(*ViewSpec).Columns = $5.(Columns)
-    $2.(*ViewSpec).CheckOption = $11.(ViewCheckOption)
+    $2.(*ViewSpec).ViewExpr = $10.(SelectStatement)
+    $2.(*ViewSpec).Columns = $6.(Columns)
+    $2.(*ViewSpec).CheckOption = $12.(ViewCheckOption)
     $$ = &DDL{
       Action: CreateStr,
       ViewSpec: $2.(*ViewSpec),
-      SpecialCommentMode: $8.(bool),
-      SubStatementPositionStart: $7.(int),
-      SubStatementPositionEnd: $10.(int) - 1,
+      IfNotExists: $3.(int) != 0,
+      SpecialCommentMode: $9.(bool),
+      SubStatementPositionStart: $8.(int),
+      SubStatementPositionEnd: $11.(int) - 1,
       Auth: AuthInformation{
         AuthType: AuthType_CREATE_VIEW,
         TargetType: AuthTargetType_DatabaseIdentifiers,

@@ -2357,7 +2357,11 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			if view.CheckOption != ViewCheckOptionUnspecified {
 				checkOpt = fmt.Sprintf(" with %s check option", view.CheckOption)
 			}
-			buf.Myprintf("%s %sview %v%v as %v%s", node.Action, afterCreate, view.ViewName, view.Columns, view.ViewExpr, checkOpt)
+			notExists := ""
+			if node.IfNotExists {
+				notExists = " if not exists"
+			}
+			buf.Myprintf("%s%s %sview %v%v as %v%s", node.Action, notExists, afterCreate, view.ViewName, view.Columns, view.ViewExpr, checkOpt)
 		} else if node.TriggerSpec != nil {
 			trigger := node.TriggerSpec
 			triggerDef := ""
@@ -8141,15 +8145,15 @@ type Injectable interface {
 // MySQL's dialect.
 type InjectedExpr struct {
 	// Expression is an expression that implements the Expr interface. It can be any expression type.
-	Expression         Injectable
+	Expression Injectable
 	// Children are the children of the expression, which can be any Expr type. This is a union type, and either this
 	// or SelectExprChildren will be set.
-	Children           Exprs
-	// SelectExprChildren are the children of the expression, which can be any SelectExpr type. This is a union type, 
+	Children Exprs
+	// SelectExprChildren are the children of the expression, which can be any SelectExpr type. This is a union type,
 	// and either this or Children will be set.
 	SelectExprChildren SelectExprs
 	// Auth contains the authentication information for the expression.
-	Auth               AuthInformation
+	Auth AuthInformation
 }
 
 var _ Expr = InjectedExpr{}
