@@ -1237,20 +1237,21 @@ create_statement:
     $1.(*DDL).OptLike = &OptLike{LikeTables: []TableName{$3.(TableName)}}
     $$ = $1.(*DDL)
   }
-| CREATE key_type_opt INDEX sql_id using_opt ON table_name '(' index_column_list ')' index_option_list_opt
+| CREATE key_type_opt INDEX not_exists_opt sql_id using_opt ON table_name '(' index_column_list ')' index_option_list_opt
   {
     // For consistency, we always return AlterTable for any ALTER TABLE-equivalent statements
-    tableName := $7.(TableName)
+    tableName := $8.(TableName)
     ddl := &DDL{
       Action: AlterStr,
       Table: tableName,
+      IfNotExists: $4.(int) != 0,
       IndexSpec: &IndexSpec{
         Action: CreateStr,
-        ToName: $4.(ColIdent),
-        Using: $5.(ColIdent),
+        ToName: $5.(ColIdent),
+        Using: $6.(ColIdent),
         Type: $2.(string),
-        Columns: $9.([]*IndexColumn),
-        Options: $11.([]*IndexOption),
+        Columns: $10.([]*IndexColumn),
+        Options: $12.([]*IndexOption),
       },
       Auth: AuthInformation{
         AuthType: AuthType_INDEX,
@@ -1259,12 +1260,12 @@ create_statement:
       },
     }
     $$ = &AlterTable{
-      Table: $7.(TableName),
+      Table: $8.(TableName),
       Statements: []*DDL{ddl},
       Auth: AuthInformation{AuthType: AuthType_IGNORE},
     }
   }
-| CREATE view_opts not_exists_opt VIEW table_name ins_column_list_opt AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position opt_with_check_option
+| CREATE view_opts VIEW not_exists_opt table_name ins_column_list_opt AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position opt_with_check_option
   {
     viewName := $5.(TableName)
     $2.(*ViewSpec).ViewName = viewName.ToViewName()
@@ -1274,7 +1275,7 @@ create_statement:
     $$ = &DDL{
       Action: CreateStr,
       ViewSpec: $2.(*ViewSpec),
-      IfNotExists: $3.(int) != 0,
+      IfNotExists: $4.(int) != 0,
       SpecialCommentMode: $9.(bool),
       SubStatementPositionStart: $8.(int),
       SubStatementPositionEnd: $11.(int) - 1,
@@ -5386,18 +5387,20 @@ alter_table_statement_part:
     }
     $$ = ddl
   }
-| ADD index_or_key name_opt using_opt '(' index_column_list ')' index_option_list_opt
+| ADD index_or_key not_exists_opt name_opt using_opt '(' index_column_list ')' index_option_list_opt
   {
     $$ = &DDL{
     	Action: AlterStr,
+    	//IfNotExists: $3.(int) != 0,
     	IndexSpec: &IndexSpec{
     		Action: CreateStr,
     		ToName: NewColIdent($3.(string)),
-    		Using: $4.(ColIdent),
-    		Columns: $6.([]*IndexColumn),
-    		Options: $8.([]*IndexOption),
-	},
-	Auth: AuthInformation{
+    		Using: $5.(ColIdent),
+    		Columns: $7.([]*IndexColumn),
+    		Options: $9.([]*IndexOption),
+    		//ifNotExists: $3.(int) != 0,
+	    },
+	    Auth: AuthInformation{
         	AuthType: AuthType_INDEX,
         	TargetType: AuthTargetType_SingleTableIdentifier,
         },

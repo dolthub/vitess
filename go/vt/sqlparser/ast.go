@@ -2361,7 +2361,7 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			if node.IfNotExists {
 				notExists = " if not exists"
 			}
-			buf.Myprintf("%s%s %sview %v%v as %v%s", node.Action, notExists, afterCreate, view.ViewName, view.Columns, view.ViewExpr, checkOpt)
+			buf.Myprintf("%s %sview%s %v%v as %v%s", node.Action, afterCreate, notExists, view.ViewName, view.Columns, view.ViewExpr, checkOpt)
 		} else if node.TriggerSpec != nil {
 			trigger := node.TriggerSpec
 			triggerDef := ""
@@ -3481,6 +3481,10 @@ type IndexSpec struct {
 	Columns []*IndexColumn
 	// Options contains the index options when creating an index
 	Options []*IndexOption
+
+	// ifNotExists states whether `IF NOT EXISTS` was present in query
+	//   This is solely for printing purposes; we rely on the one in ast.DDL for actual logic
+	ifNotExists bool
 }
 
 func (idx *IndexSpec) Format(buf *TrackedBuffer) {
