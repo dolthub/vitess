@@ -3482,8 +3482,9 @@ type IndexSpec struct {
 	// Options contains the index options when creating an index
 	Options []*IndexOption
 
-	// ifNotExists states whether `IF NOT EXISTS` was present in query
+	// ifExists and ifNotExists states whether `IF [NOT] EXISTS` was present in query
 	//   This is solely for printing purposes; we rely on the one in ast.DDL for actual logic
+	ifExists    bool
 	ifNotExists bool
 }
 
@@ -3539,10 +3540,14 @@ func (idx *IndexSpec) Format(buf *TrackedBuffer) {
 			}
 		}
 	case "drop":
+		exists := ""
+		if idx.ifExists {
+			exists = " if exists"
+		}
 		if idx.Type == PrimaryStr {
 			buf.Myprintf("drop primary key")
 		} else {
-			buf.Myprintf("drop index %s", idx.ToName.val)
+			buf.Myprintf("drop index%s %s", exists, idx.ToName.val)
 		}
 	case "rename":
 		buf.Myprintf("rename index %s to %s", idx.FromName.val, idx.ToName.val)

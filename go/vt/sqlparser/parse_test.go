@@ -1843,35 +1843,58 @@ var (
 			input: "alter table a add vector index idx (id)",
 		},
 		{
+			input:  "alter table a add constraint unique index idx (id)",
+			output: "alter table a add unique index idx (id)",
+		},
+		{
+			input:  "alter table a add constraint unique index if not exists idx (id)",
+			output: "alter table a add unique index if not exists idx (id)",
+		},
+		{
 			input:  "alter table a add foreign key (x) references y(z)",
 			output: "alter table a add foreign key (x) references y (z)",
-		}, {
+		},
+		{
 			input:  "alter table a add constraint foreign key (x) references y(z)",
 			output: "alter table a add foreign key (x) references y (z)",
-		}, {
+		},
+		{
 			input:  "alter table a add constraint abc foreign key country_code (country_code) REFERENCES premium_country (country_code)",
 			output: "alter table a add constraint abc foreign key country_code (country_code) references premium_country (country_code)",
-		}, {
+		},
+		{
 			input:  "alter table a add constraint abc foreign key country_code (country_code) REFERENCES premium_country (country_code) on delete cascade",
 			output: "alter table a add constraint abc foreign key country_code (country_code) references premium_country (country_code) on delete cascade",
-		}, {
+		},
+		{
 			input:  "alter table a add constraint abc foreign key country_code (country_code) REFERENCES premium_country (country_code) on update set null",
 			output: "alter table a add constraint abc foreign key country_code (country_code) references premium_country (country_code) on update set null",
-		}, {
+		},
+		{
 			input: "alter table a add primary key (a, b)",
-		}, {
+		},
+		{
 			input: "alter table a add constraint a_pk primary key (a, b)",
-		}, {
+		},
+		{
 			input: "alter table a add constraint a_pk primary key (value)",
-		}, {
+		},
+		{
 			input: "alter table a add primary key (value)",
-		}, {
+		},
+		{
 			input: "alter table a drop primary key",
-		}, {
+		},
+		{
 			input: "alter table a drop column id",
-		}, {
+		},
+		{
 			input: "alter table a drop index idx",
-		}, {
+		},
+		{
+			input: "alter table a drop index if exists idx",
+		},
+		{
 			input:  "alter table a add constraint check (b > 0)",
 			output: "alter table a add check (b > 0)",
 		}, {
@@ -2113,13 +2136,20 @@ var (
 		}, {
 			input:  "drop table b        ",
 			output: "drop table b",
-		}, {
+		},
+		{
 			input:  "drop view if exists a",
 			output: "drop view if exists a",
-		}, {
+		},
+		{
 			input:  "drop index b on a",
 			output: "alter table a drop index b",
-		}, {
+		},
+		{
+			input:  "drop index if exists b on a",
+			output: "alter table a drop index if exists b",
+		},
+		{
 			input:  "analyze table a",
 			output: "analyze table a",
 		}, {
