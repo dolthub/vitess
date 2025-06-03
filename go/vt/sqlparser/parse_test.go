@@ -1831,6 +1831,9 @@ var (
 			input: "alter table a add index idx (id)",
 		},
 		{
+			input: "alter table a add index if not exists idx (id)",
+		},
+		{
 			input: "alter table a add fulltext index idx (id)",
 		},
 		{
@@ -1969,8 +1972,8 @@ var (
 			output: "alter table b add index a (id)",
 		},
 		{
-			input:  "CREATE INDEX a ON b (id)",
-			output: "alter table b add index a (id)",
+			input:  "create index if not exists a ON b (id)",
+			output: "alter table b add index if not exists a (id)",
 		},
 		{
 			input:  "create index a on b (foo(6) desc, foo asc)",

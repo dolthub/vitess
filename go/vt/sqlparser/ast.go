@@ -3502,9 +3502,13 @@ func (idx *IndexSpec) Format(buf *TrackedBuffer) {
 				buf.Myprintf("%s ", idx.Type)
 			}
 		}
+		notExists := ""
+		if idx.ifNotExists {
+			notExists = " if not exists"
+		}
 
 		if idx.Type != PrimaryStr {
-			buf.Myprintf("index %s ", idx.ToName.val)
+			buf.Myprintf("index%s %s ", notExists, idx.ToName.val)
 		}
 
 		if idx.Using.val != "" {

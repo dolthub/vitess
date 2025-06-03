@@ -1252,6 +1252,7 @@ create_statement:
         Type: $2.(string),
         Columns: $10.([]*IndexColumn),
         Options: $12.([]*IndexOption),
+        ifNotExists: $4.(int) != 0,
       },
       Auth: AuthInformation{
         AuthType: AuthType_INDEX,
@@ -5391,14 +5392,14 @@ alter_table_statement_part:
   {
     $$ = &DDL{
     	Action: AlterStr,
-    	//IfNotExists: $3.(int) != 0,
+    	IfNotExists: $3.(int) != 0,
     	IndexSpec: &IndexSpec{
     		Action: CreateStr,
-    		ToName: NewColIdent($3.(string)),
+    		ToName: NewColIdent($4.(string)),
     		Using: $5.(ColIdent),
     		Columns: $7.([]*IndexColumn),
     		Options: $9.([]*IndexOption),
-    		//ifNotExists: $3.(int) != 0,
+    		ifNotExists: $3.(int) != 0,
 	    },
 	    Auth: AuthInformation{
         	AuthType: AuthType_INDEX,
