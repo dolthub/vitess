@@ -1688,8 +1688,8 @@ type Insert struct {
 	With       *With
 	Partitions Partitions
 	Columns    Columns
-	// Returning is specific to PostgreSQL syntax, and allows Insert statements to return
-	// results via a set of select expressions that are evaluated on the inserted rows.
+	// Returning is specific to PostgreSQL and MariaDB syntax, and allows Insert statements
+	//to return results via a set of select expressions that are evaluated on the inserted rows.
 	Returning SelectExprs
 	Rows      InsertRows
 	OnDup     OnDup
@@ -1713,6 +1713,9 @@ func (node *Insert) Format(buf *TrackedBuffer) {
 		buf.Myprintf(" partition (%v)", node.Partitions)
 	}
 	buf.Myprintf("%v %v%v", node.Columns, node.Rows, node.OnDup)
+	if len(node.Returning) > 0 {
+		buf.Myprintf(" returning %v", node.Returning)
+	}
 }
 
 // GetAuthInformation implements the AuthNode interface.
