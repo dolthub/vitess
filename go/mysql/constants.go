@@ -170,10 +170,11 @@ const (
 // Cursor Types. They are received on COM_STMT_EXECUTE()
 // See https://mariadb.com/kb/en/com_stmt_execute/
 const (
-	NoCursor = iota
-	ReadOnly
-	CursorForUpdate
-	ScrollableCursor
+	NoCursor uint8 = 0x00
+	ReadOnly uint8 = 0x01
+	CursorForUpdate uint8 = 0x02
+	ScrollableCursor uint8 = 0x04
+	ParameterCountAvailable uint8 = 0x08
 )
 
 // State Change Information
