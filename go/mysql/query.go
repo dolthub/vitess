@@ -1548,7 +1548,7 @@ func val2MySQL(v sqltypes.Value) ([]byte, error) {
 		}
 	case sqltypes.Decimal, sqltypes.Text, sqltypes.Blob, sqltypes.VarChar,
 		sqltypes.VarBinary, sqltypes.Char, sqltypes.Bit, sqltypes.Enum,
-		sqltypes.Set, sqltypes.Geometry, sqltypes.Binary, sqltypes.TypeJSON:
+		sqltypes.Set, sqltypes.Geometry, sqltypes.Binary, sqltypes.TypeJSON, sqltypes.Vector:
 		l := len(v.Raw())
 		length := lenEncIntSize(uint64(l)) + l
 		out = make([]byte, length)
@@ -1598,7 +1598,7 @@ func val2MySQLLen(v sqltypes.Value) (int, error) {
 		}
 	case sqltypes.Decimal, sqltypes.Text, sqltypes.Blob, sqltypes.VarChar,
 		sqltypes.VarBinary, sqltypes.Char, sqltypes.Bit, sqltypes.Enum,
-		sqltypes.Set, sqltypes.Geometry, sqltypes.Binary, sqltypes.TypeJSON:
+		sqltypes.Set, sqltypes.Geometry, sqltypes.Binary, sqltypes.TypeJSON, sqltypes.Vector:
 		l := len(v.Raw())
 		length = lenEncIntSize(uint64(l)) + l
 	default:
