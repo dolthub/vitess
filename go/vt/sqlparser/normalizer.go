@@ -39,10 +39,10 @@ func Normalize(stmt Statement, bindVars map[string]*querypb.BindVariable, prefix
 type normalizer struct {
 	stmt     Statement
 	bindVars map[string]*querypb.BindVariable
-	prefix   string
 	reserved map[string]struct{}
-	counter  int
 	vals     map[string]string
+	prefix   string
+	counter  int
 }
 
 func newNormalizer(stmt Statement, bindVars map[string]*querypb.BindVariable, prefix string) *normalizer {
