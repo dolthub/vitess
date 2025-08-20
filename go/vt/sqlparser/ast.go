@@ -555,19 +555,19 @@ func (q *QueryOpts) Format(buf *TrackedBuffer) {
 
 // Select represents a SELECT statement.
 type Select struct {
-	Comments    Comments
-	QueryOpts   QueryOpts
+	Into        *Into
 	With        *With
-	SelectExprs SelectExprs
-	From        TableExprs
-	Where       *Where
-	GroupBy     GroupBy
+	Limit       *Limit
 	Having      *Where
+	Where       *Where
+	Lock        string
+	GroupBy     GroupBy
+	Comments    Comments
 	Window      Window
 	OrderBy     OrderBy
-	Limit       *Limit
-	Lock        string
-	Into        *Into
+	SelectExprs SelectExprs
+	From        TableExprs
+	QueryOpts   QueryOpts
 }
 
 // Select.QueryOpts
@@ -780,13 +780,14 @@ func (s *ValuesStatement) walkSubtree(visit Visit) error {
 
 // SetOp represents a UNION, INTERSECT, and EXCEPT statement.
 type SetOp struct {
-	Type        string
-	Left, Right SelectStatement
-	OrderBy     OrderBy
-	With        *With
-	Limit       *Limit
-	Lock        string
-	Into        *Into
+	Left    SelectStatement
+	Right   SelectStatement
+	With    *With
+	Limit   *Limit
+	Into    *Into
+	Type    string
+	Lock    string
+	OrderBy OrderBy
 }
 
 // SetOp.Type
@@ -869,18 +870,18 @@ type LoadStatement interface {
 
 // Load represents a LOAD statement
 type Load struct {
-	Local     BoolVal
-	Infile    string
-	Table     TableName
-	Partition Partitions
-	Charset   string
+	Auth AuthInformation
 	*Fields
 	*Lines
-	IgnoreNum *SQLVal
-	Columns
-	SetExprs        AssignmentExprs
+	IgnoreNum       *SQLVal
+	Table           TableName
+	Infile          string
+	Charset         string
 	IgnoreOrReplace string
-	Auth            AuthInformation
+	Partition       Partitions
+	Columns
+	SetExprs AssignmentExprs
+	Local    BoolVal
 }
 
 var _ AuthNode = (*Load)(nil)
@@ -987,9 +988,9 @@ func (node *Fields) Format(buf *TrackedBuffer) {
 }
 
 type EnclosedBy struct {
-	Optionally BoolVal
-	Delim      *SQLVal
 	SQLNode
+	Delim      *SQLVal
+	Optionally BoolVal
 }
 
 func (node *EnclosedBy) Format(buf *TrackedBuffer) {
@@ -1215,22 +1216,22 @@ type DeclareHandlerCondition struct {
 
 // DeclareCondition represents the DECLARE CONDITION statement
 type DeclareCondition struct {
+	MysqlErrorCode *SQLVal
 	Name           string
 	SqlStateValue  string
-	MysqlErrorCode *SQLVal
 }
 
 // DeclareCursor represents the DECLARE CURSOR statement
 type DeclareCursor struct {
-	Name       string
 	SelectStmt SelectStatement
+	Name       string
 }
 
 // DeclareHandler represents the DECLARE HANDLER statement
 type DeclareHandler struct {
+	Statement       Statement
 	Action          DeclareHandlerAction
 	ConditionValues []DeclareHandlerCondition
-	Statement       Statement
 }
 
 // DeclareVariables represents the DECLARE statement for declaring variables
@@ -1513,8 +1514,8 @@ type Signal struct {
 
 // SignalInfo represents a piece of information for a SIGNAL statement
 type SignalInfo struct {
-	ConditionItemName SignalConditionItemName
 	Value             Expr
+	ConditionItemName SignalConditionItemName
 }
 
 // SignalConditionItemName represents the item name for the set conditions of a SIGNAL statement.
@@ -1589,10 +1590,10 @@ func (s *Resignal) Format(buf *TrackedBuffer) {
 
 // Call represents the CALL statement
 type Call struct {
+	Auth     AuthInformation
+	AsOf     Expr
 	ProcName ProcedureName
 	Params   []Expr
-	AsOf     Expr
-	Auth     AuthInformation
 }
 
 var _ AuthNode = (*Call)(nil)
@@ -1653,9 +1654,9 @@ func (c *Call) walkSubtree(visit Visit) error {
 
 // Stream represents a SELECT statement.
 type Stream struct {
-	Comments   Comments
 	SelectExpr SelectExpr
 	Table      TableName
+	Comments   Comments
 }
 
 // Format formats the node.
@@ -1682,19 +1683,17 @@ func (node *Stream) walkSubtree(visit Visit) error {
 // normal INSERT except if the row exists. In that case it first deletes
 // the row and re-inserts with new values. For that reason we keep it as an Insert struct.
 type Insert struct {
-	Action     string
-	Comments   Comments
-	Ignore     string
-	Table      TableName
+	Auth       AuthInformation
+	Rows       InsertRows
 	With       *With
+	Table      TableName
+	Action     string
+	Ignore     string
+	Comments   Comments
 	Partitions Partitions
 	Columns    Columns
-	// Returning is specific to PostgreSQL and MariaDB syntax, and allows Insert statements
-	//to return results via a set of select expressions that are evaluated on the inserted rows.
-	Returning SelectExprs
-	Rows      InsertRows
-	OnDup     OnDup
-	Auth      AuthInformation
+	Returning  SelectExprs
+	OnDup      OnDup
 }
 
 var _ AuthNode = (*Insert)(nil)
@@ -1909,13 +1908,13 @@ type CharsetAndCollate struct {
 
 // DBDDL represents a CREATE, DROP database statement.
 type DBDDL struct {
+	Auth             AuthInformation
 	Action           string
 	SchemaOrDatabase string
 	DBName           string
+	CharsetCollate   []*CharsetAndCollate
 	IfNotExists      bool
 	IfExists         bool
-	CharsetCollate   []*CharsetAndCollate
-	Auth             AuthInformation
 }
 
 var _ AuthNode = (*DBDDL)(nil)
@@ -1986,22 +1985,22 @@ const (
 )
 
 type ViewSpec struct {
+	ViewExpr    SelectStatement
 	ViewName    TableName
-	Columns     Columns
 	Algorithm   string
 	Definer     string
 	Security    string
-	ViewExpr    SelectStatement
 	CheckOption ViewCheckOption
+	Columns     Columns
 }
 
 type TriggerSpec struct {
+	Body     Statement
+	Order    *TriggerOrder
 	TrigName TriggerName
 	Definer  string
-	Time     string // BeforeStr, AfterStr
-	Event    string // UpdateStr, InsertStr, DeleteStr
-	Order    *TriggerOrder
-	Body     Statement
+	Time     string
+	Event    string
 }
 
 type TriggerOrder struct {
@@ -2019,11 +2018,11 @@ type AlterCommentSpec struct {
 }
 
 type ProcedureSpec struct {
+	Body            Statement
 	ProcName        ProcedureName
 	Definer         string
 	Params          []ProcedureParam
 	Characteristics []Characteristic
-	Body            Statement
 }
 
 type ProcedureParamDirection string
@@ -2041,17 +2040,15 @@ type ProcedureParam struct {
 }
 
 type EventSpec struct {
-	EventName            EventName
-	Definer              string
-	IfNotExists          bool
+	Body                 Statement
 	OnSchedule           *EventScheduleSpec
+	Comment              *SQLVal
+	EventName            EventName
+	RenameName           EventName
+	Definer              string
 	OnCompletionPreserve EventOnCompletion
 	Status               EventStatus
-	Comment              *SQLVal
-	Body                 Statement
-
-	// used for ALTER EVENT statement
-	RenameName EventName
+	IfNotExists          bool
 }
 
 // ValidateAlterEvent checks that at least one event field is defined to alter.
@@ -2081,9 +2078,9 @@ const (
 
 type EventScheduleSpec struct {
 	At            *EventScheduleTimeSpec
-	EveryInterval IntervalExpr
 	Starts        *EventScheduleTimeSpec
 	Ends          *EventScheduleTimeSpec
+	EveryInterval IntervalExpr
 }
 
 type EventScheduleTimeSpec struct {
@@ -2139,10 +2136,10 @@ func (c Characteristic) String() string {
 
 // AlterTable represents an ALTER table statement, which can include multiple DDL clauses.
 type AlterTable struct {
+	Auth           AuthInformation
 	Table          TableName
 	Statements     []*DDL
 	PartitionSpecs []*PartitionSpec
-	Auth           AuthInformation
 }
 
 var _ SQLNode = (*AlterTable)(nil)
@@ -2202,117 +2199,95 @@ func (m *AlterTable) walkSubtree(visit Visit) error {
 
 // DDL represents a CREATE, ALTER, DROP, RENAME, TRUNCATE or ANALYZE statement.
 type DDL struct {
-	Action string
-
-	// Set for column alter statements
-	ColumnAction string
-
-	// Set for constraint alter statements
-	ConstraintAction string
-
-	// ConstraintIfExists is set to true if the constraint action should not fail if the constraint doesn't exist.
-	ConstraintIfExists bool
-
-	// Set for column add / drop / rename statements
-	Column ColIdent
-
+	// Auth handles authentication for the node itself.
+	Auth AuthInformation
+	// Authentication is set for ALTER USER operations.
+	Authentication *Authentication
 	// Set for column add / drop / modify statements that specify a column order
 	ColumnOrder *ColumnOrder
+	// ViewSpec is set for CREATE VIEW operations.
+	ViewSpec *ViewSpec
+	// AutoIncSpec is set for AddAutoIncStr.
+	AutoIncSpec *AutoIncSpec
+	// IndexSpec is set for all ALTER operations on an index
+	IndexSpec *IndexSpec
+	// DefaultSpec is set for SET / DROP DEFAULT operations
+	DefaultSpec *DefaultSpec
+	// TriggerSpec is set for CREATE / ALTER / DROP trigger operations
+	TriggerSpec *TriggerSpec
+	// ProcedureSpec is set for CREATE PROCEDURE operations
+	ProcedureSpec *ProcedureSpec
+	// AlterCollationSpec is set for CHARACTER SET / COLLATE operations on ALTER statements
+	AlterCollationSpec *AlterCollationSpec
+	// AlterCommentSpec is set for COMMENT operations on ALTER statements
+	AlterCommentSpec *AlterCommentSpec
+	// EventSpec is set for CREATE EVENT operations
+	EventSpec *EventSpec
+	// NotNullSpec is set when adding or dropping a NOT NULL constraint on a column
+	NotNullSpec *NotNullSpec
+	// ColumnTypeSpec is set when altering a column's type, without specifying the full column definition
+	ColumnTypeSpec *ColumnTypeSpec
+	// OptSelect is set for CREATE TABLE <> AS SELECT operations.
+	OptSelect *OptSelect
+	OptLike   *OptLike
+	// TableSpec contains the full table spec in case of a create, or a single column in case of an add, drop, or alter.
+	TableSpec     *TableSpec
+	PartitionSpec *PartitionSpec
 
-	// Set for column rename
-	ToColumn ColIdent
-
-	// FromTables is set if Action is RenameStr or DropStr.
-	FromTables TableNames
-
-	// ToTables is set if Action is RenameStr.
-	ToTables TableNames
+	// AccountLimits is set for ALTER USER operations.
+	AccountLimits *AccountLimits
 
 	// Table is set if Action is other than RenameStr or DropStr.
 	Table TableName
+	// Set for column rename
+	ToColumn ColIdent
+	// Set for column add / drop / rename statements
+	Column ColIdent
 
-	// ViewSpec is set for CREATE VIEW operations.
-	ViewSpec *ViewSpec
+	// Set for any DDL statement
+	Action string
+	// Set for column alter statements
+	ColumnAction string
+	// Set for constraint alter statements
+	ConstraintAction string
 
-	// This exposes the start and end index of the string that makes up the sub statement of the query given.
-	// Meaning is specific to the different kinds of statements with sub statements, e.g. views, trigger definitions.
-	// For statements defined within a MySQL special comment (/*! */), we have to fudge the offset a bit because we won't
-	// get the final lexer position token until after the comment close.
-	SpecialCommentMode        bool
-	SubStatementPositionStart int
-	SubStatementPositionEnd   int
 	// SubStatementStr will have the sub statement as a string rather than having to slice the original query.
 	// If it's empty, then use the position start and end values to slice the sub statement out of the original query.
 	SubStatementStr string
 
+	// User is set for ALTER USER operations.
+	User AccountName
+
 	// FromViews is set if Action is DropStr.
-	FromViews TableNames
+	FromViews  TableNames
+	FromTables TableNames
+	ToTables   TableNames
+
+	SubStatementPositionStart int
+	SubStatementPositionEnd   int
 
 	// The following fields are set if a DDL was fully analyzed.
 	IfExists    bool
 	IfNotExists bool
 	OrReplace   bool
 
-	// TableSpec contains the full table spec in case of a create, or a single column in case of an add, drop, or alter.
-	TableSpec     *TableSpec
-	OptLike       *OptLike
-	PartitionSpec *PartitionSpec
-
-	// AutoIncSpec is set for AddAutoIncStr.
-	AutoIncSpec *AutoIncSpec
-
-	// IndexSpec is set for all ALTER operations on an index
-	IndexSpec *IndexSpec
-
-	// DefaultSpec is set for SET / DROP DEFAULT operations
-	DefaultSpec *DefaultSpec
-
-	// TriggerSpec is set for CREATE / ALTER / DROP trigger operations
-	TriggerSpec *TriggerSpec
-
-	// ProcedureSpec is set for CREATE PROCEDURE operations
-	ProcedureSpec *ProcedureSpec
-
-	// AlterCollationSpec is set for CHARACTER SET / COLLATE operations on ALTER statements
-	AlterCollationSpec *AlterCollationSpec
-
-	// AlterCommentSpec is set for COMMENT operations on ALTER statements
-	AlterCommentSpec *AlterCommentSpec
-
-	// EventSpec is set for CREATE EVENT operations
-	EventSpec *EventSpec
-
-	// NotNullSpec is set when adding or dropping a NOT NULL constraint on a column
-	NotNullSpec *NotNullSpec
-
-	// ColumnTypeSpec is set when altering a column's type, without specifying the full column definition
-	ColumnTypeSpec *ColumnTypeSpec
-
 	// Temporary is set for CREATE TEMPORARY TABLE operations.
-	Temporary bool
+	Temporary          bool
+	ConstraintIfExists bool
 
-	// OptSelect is set for CREATE TABLE <> AS SELECT operations.
-	OptSelect *OptSelect
-
-	// User is set for ALTER USER operations.
-	User          AccountName
-	AccountLimits *AccountLimits
-
-	// Authentication is set for ALTER USER operations.
-	Authentication *Authentication
-
-	// Auth handles authentication for the node itself.
-	Auth AuthInformation
+	// This exposes the start and end index of the string that makes up the sub statement of the query given.
+	// Meaning is specific to the different kinds of statements with sub statements, e.g. views, trigger definitions.
+	// For statements defined within a MySQL special comment (/*! */), we have to fudge the offset a bit because we won't
+	// get the final lexer position token until after the comment close.
+	SpecialCommentMode bool
 }
 
 var _ AuthNode = (*DDL)(nil)
 
 // ColumnOrder is used in some DDL statements to specify or change the order of a column in a schema.
 type ColumnOrder struct {
-	// First is true if this column should be first in the schema
-	First bool
-	// AfterColumn is set if this column should be after the one named
 	AfterColumn ColIdent
+	First       bool
 }
 
 // DDL strings.
@@ -2750,13 +2725,13 @@ func (node *OptSelect) walkSubtree(visit Visit) error {
 
 // PartitionSpec describe partition actions (for alter and create)
 type PartitionSpec struct {
+	Number         *SQLVal
+	TableName      TableName
 	Action         string
-	IsAll          bool
 	Names          Partitions
 	Definitions    []*PartitionDefinition
+	IsAll          bool
 	WithValidation bool
-	TableName      TableName
-	Number         *SQLVal
 }
 
 // Format formats the node.
@@ -2822,8 +2797,8 @@ func (node *PartitionSpec) walkSubtree(visit Visit) error {
 
 // PartitionDefinition describes a very minimal partition definition
 type PartitionDefinition struct {
-	Name     ColIdent
 	Limit    Expr
+	Name     ColIdent
 	Maxvalue bool
 }
 
@@ -2849,11 +2824,11 @@ func (node *PartitionDefinition) walkSubtree(visit Visit) error {
 
 // TableSpec describes the structure of a table from a CREATE TABLE statement
 type TableSpec struct {
+	PartitionOpt *PartitionOption
 	Columns      []*ColumnDefinition
 	Indexes      []*IndexDefinition
 	Constraints  []*ConstraintDefinition
 	TableOpts    []*TableOption
-	PartitionOpt *PartitionOption
 }
 
 // Format formats the node.
@@ -2959,51 +2934,55 @@ func (col *ColumnDefinition) walkSubtree(visit Visit) error {
 // ColumnType represents a sql type in a CREATE TABLE or ALTER TABLE statement
 // All optional fields are nil if not specified
 type ColumnType struct {
+	// The base type if it has already been resolved
+	ResolvedType any
+
+	Default       Expr
+	OnUpdate      Expr
+	GeneratedExpr Expr // The expression used to generate this column
+
+	// Check constraint specification
+	Constraint *ConstraintDefinition
+	// Foreign key specification
+	ForeignKeyDef *ForeignKeyDefinition
+
+	// For spatial types
+	SRID *SQLVal
+
+	// Numeric field options
+	Length *SQLVal
+	Scale  *SQLVal
+
+	Comment *SQLVal
+
+	// Enum values
+	EnumValues []string
+
 	// The base type string
 	Type string
 
-	// The base type if it has already been resolved
-	ResolvedType any
+	// Text field options
+	Charset string
+	Collate string
+
+	// Key specification
+	KeyOpt ColumnKeyOption
+
+	// More text field options
+	BinaryCollate bool
 
 	// Generic field options.
 	Null          BoolVal
 	NotNull       BoolVal
 	Autoincrement BoolVal
-	Default       Expr
-	OnUpdate      Expr
-	Comment       *SQLVal
 	sawnull       bool
 	sawai         bool
 
-	// Numeric field options
-	Length   *SQLVal
+	// More numeric field options
 	Unsigned BoolVal
 	Zerofill BoolVal
-	Scale    *SQLVal
 
-	// Text field options
-	Charset       string
-	Collate       string
-	BinaryCollate bool
-
-	// Enum values
-	EnumValues []string
-
-	// Key specification
-	KeyOpt ColumnKeyOption
-
-	// Foreign key specification
-	ForeignKeyDef *ForeignKeyDefinition
-
-	// Check constraint specification
-	Constraint *ConstraintDefinition
-
-	// Generated columns
-	GeneratedExpr Expr    // The expression used to generate this column
-	Stored        BoolVal // Default is Virtual (not stored)
-
-	// For spatial types
-	SRID *SQLVal
+	Stored BoolVal // Default is Virtual (not stored)
 }
 
 func (ct *ColumnType) merge(other ColumnType) error {
@@ -3376,8 +3355,8 @@ func (jte *JSONTableExpr) walkSubtree(visit Visit) error {
 
 // JSONTableSpec describes the structure of a table from a JSON_TABLE() statement
 type JSONTableSpec struct {
-	Columns []*JSONTableColDef
 	Path    string
+	Columns []*JSONTableColDef
 }
 
 // AddColumn appends the given column to the list in the spec
@@ -3414,10 +3393,10 @@ func (ts *JSONTableSpec) walkSubtree(visit Visit) error {
 
 // JSONTableColDef describes a column in a JSON_TABLE statement
 type JSONTableColDef struct {
-	Name ColIdent
-	Type ColumnType
-	Opts JSONTableColOpts
 	Spec *JSONTableSpec
+	Name ColIdent
+	Opts JSONTableColOpts
+	Type ColumnType
 }
 
 // Format formats the node.
@@ -3451,11 +3430,11 @@ func (col *JSONTableColDef) walkSubtree(visit Visit) error {
 
 // JSONTableColOpts describes the column options in a JSON_TABLE statement
 type JSONTableColOpts struct {
-	Path         string
 	ValOnEmpty   Expr
 	ValOnError   Expr
-	ErrorOnEmpty bool // TODO: not necessary, can be inferred from ValOnEmpty == nil
-	ErrorOnError bool // TODO: not necessary, can be inferred from ValOnError == nil
+	Path         string
+	ErrorOnEmpty bool
+	ErrorOnError bool
 	Exists       bool
 }
 
@@ -3688,14 +3667,14 @@ type TableOption struct {
 
 // PartitionOption describes a partition option in a CREATE TABLE statement
 type PartitionOption struct {
-	PartitionType string // HASH, KEY, RANGE, LIST
-	IsLinear      bool
-	KeyAlgorithm  string
-	ColList       Columns
 	Expr          Expr
 	Partitions    *SQLVal
 	SubPartition  *SubPartition
+	PartitionType string // HASH, KEY, RANGE, LIST
+	KeyAlgorithm  string
+	ColList       Columns
 	Definitions   []*PartitionDefinition
+	IsLinear      bool
 }
 
 // Format formats the node.
@@ -3734,12 +3713,12 @@ func (node *PartitionOption) Format(buf *TrackedBuffer) {
 
 // SubPartition describes subpartitions control
 type SubPartition struct {
-	PartitionType string
-	IsLinear      bool
-	KeyAlgorithm  string
-	ColList       Columns
 	Expr          Expr
 	SubPartitions *SQLVal
+	PartitionType string
+	KeyAlgorithm  string
+	ColList       Columns
+	IsLinear      bool
 }
 
 // Format formats the node.
@@ -3779,9 +3758,9 @@ const (
 
 // AutoIncSpec defines an autoincrement value for a ADD AUTO_INCREMENT statement
 type AutoIncSpec struct {
-	Column   ColIdent
-	Sequence TableName
 	Value    Expr
+	Sequence TableName
+	Column   ColIdent
 }
 
 // Format formats the node.
@@ -3840,9 +3819,9 @@ func (node *NotNullSpec) walkSubtree(visit Visit) error {
 
 // DefaultSpec defines a SET / DROP on a column for its default value.
 type DefaultSpec struct {
-	Action string
-	Column ColIdent
 	Value  Expr
+	Column ColIdent
+	Action string
 }
 
 var _ SQLNode = (*DefaultSpec)(nil)
@@ -3864,8 +3843,8 @@ func (node *DefaultSpec) walkSubtree(visit Visit) error {
 
 // ConstraintDefinition describes a constraint in a CREATE TABLE statement
 type ConstraintDefinition struct {
-	Name    string
 	Details ConstraintInfo
+	Name    string
 }
 
 // ConstraintInfo details a constraint in a CREATE TABLE statement
@@ -3920,10 +3899,10 @@ func (a ReferenceAction) Format(buf *TrackedBuffer) {
 
 // ForeignKeyDefinition describes a foreign key
 type ForeignKeyDefinition struct {
-	Source            Columns
 	ReferencedTable   TableName
-	ReferencedColumns Columns
 	Index             string
+	Source            Columns
+	ReferencedColumns Columns
 	OnDelete          ReferenceAction
 	OnUpdate          ReferenceAction
 }
@@ -3988,9 +3967,9 @@ const (
 // Explain represents an explain statement
 type Explain struct {
 	Statement     Statement
+	ExplainFormat string
 	Plan          bool
 	Analyze       bool
-	ExplainFormat string
 }
 
 // Format formats the node.
@@ -4023,19 +4002,19 @@ const (
 
 // Show represents a show statement.
 type Show struct {
-	Type                   string
-	Table                  TableName
-	Database               string
-	IfNotExists            bool
-	ShowTablesOpt          *ShowTablesOpt
-	Scope                  string
 	ShowCollationFilterOpt Expr
 	ShowIndexFilterOpt     Expr
 	Filter                 *ShowFilter
 	Limit                  *Limit
+	ShowTablesOpt          *ShowTablesOpt
+	Table                  TableName
+	Scope                  string
+	Database               string
+	Type                   string
+	Auth                   AuthInformation
+	IfNotExists            bool
 	CountStar              bool
 	Full                   bool
-	Auth                   AuthInformation
 }
 
 var _ AuthNode = (*Show)(nil)
@@ -4183,10 +4162,10 @@ func (node *Show) walkSubtree(visit Visit) error {
 
 // ShowTablesOpt is show tables option
 type ShowTablesOpt struct {
+	AsOf       Expr
+	Filter     *ShowFilter
 	DbName     string
 	SchemaName string
-	Filter     *ShowFilter
-	AsOf       Expr
 }
 
 // Format formats the node.
@@ -4221,8 +4200,8 @@ func (node *ShowTablesOpt) walkSubtree(visit Visit) error {
 
 // ShowFilter is show tables filter
 type ShowFilter struct {
-	Like   string
 	Filter Expr
+	Like   string
 }
 
 // Format formats the node.
@@ -4330,8 +4309,8 @@ type FlushOption struct {
 
 // PurgeBinaryLogs represents a PURGE BINARY LOGS statement.
 type PurgeBinaryLogs struct {
-	To     string
 	Before Expr
+	To     string
 }
 
 func (node *PurgeBinaryLogs) Format(buf *TrackedBuffer) {
@@ -4347,8 +4326,8 @@ func (node *PurgeBinaryLogs) Format(buf *TrackedBuffer) {
 
 // Flush represents a Flush statement.
 type Flush struct {
-	Type   string
 	Option *FlushOption
+	Type   string
 	Auth   AuthInformation
 }
 
@@ -4410,8 +4389,8 @@ func (node *Flush) SetExtra(extra any) {
 // ChangeReplicationSource represents a "CHANGE REPLICATION SOURCE TO" statement.
 // https://dev.mysql.com/doc/refman/8.0/en/change-replication-source-to.html
 type ChangeReplicationSource struct {
-	Options []*ReplicationOption
 	Auth    AuthInformation
+	Options []*ReplicationOption
 }
 
 var _ Statement = (*ChangeReplicationSource)(nil)
@@ -4459,8 +4438,8 @@ func (s *ChangeReplicationSource) SetExtra(extra any) {
 // ChangeReplicationFilter represents a "CHANGE REPLICATION FILTER" statement.
 // https://dev.mysql.com/doc/refman/8.0/en/change-replication-filter.html
 type ChangeReplicationFilter struct {
-	Options []*ReplicationOption
 	Auth    AuthInformation
+	Options []*ReplicationOption
 }
 
 var _ Statement = (*ChangeReplicationFilter)(nil)
@@ -4519,8 +4498,8 @@ func (c *ChangeReplicationFilter) SetExtra(extra any) {
 // ReplicationOption represents a single replication option name and value.
 // See https://dev.mysql.com/doc/refman/8.0/en/change-replication-source-to.html for available options.
 type ReplicationOption struct {
-	Name  string
 	Value interface{}
+	Name  string
 }
 
 // StartReplica represents a "START REPLICA" statement.
@@ -4606,8 +4585,8 @@ func (r *StopReplica) SetExtra(extra any) {
 // ResetReplica represents a "RESET REPLICA" statement.
 // https://dev.mysql.com/doc/refman/8.0/en/reset-replica.html
 type ResetReplica struct {
-	All  bool
 	Auth AuthInformation
+	All  bool
 }
 
 var _ Statement = (*ResetReplica)(nil)
@@ -4736,9 +4715,9 @@ func (node *StarExpr) walkSubtree(visit Visit) error {
 type AliasedExpr struct {
 	Expr            Expr
 	As              ColIdent
+	InputExpression string
 	StartParsePos   int
 	EndParsePos     int
-	InputExpression string
 }
 
 // Format formats the node.
@@ -4938,13 +4917,13 @@ func (TableFuncExpr) iTableExpr()     {}
 // coupled with an optional alias, AS OF expression, and index hints.
 // If As is empty, no alias was used.
 type AliasedTableExpr struct {
+	Auth       AuthInformation
 	Expr       SimpleTableExpr
-	Partitions Partitions
-	As         TableIdent
 	Hints      *IndexHints
 	AsOf       *AsOf
+	As         TableIdent
+	Partitions Partitions
 	Lateral    bool
-	Auth       AuthInformation
 }
 
 var _ AuthNode = (*AliasedTableExpr)(nil)
@@ -5102,13 +5081,12 @@ func (w *With) walkSubtree(visit Visit) error {
 }
 
 type Into struct {
-	Variables Variables
+	Fields    *Fields
+	Lines     *Lines
 	Dumpfile  string
-
-	Outfile string
-	Charset string
-	Fields  *Fields
-	Lines   *Lines
+	Outfile   string
+	Charset   string
+	Variables Variables
 }
 
 func (i *Into) Format(buf *TrackedBuffer) {
@@ -5535,8 +5513,8 @@ func (node *IndexHints) walkSubtree(visit Visit) error {
 
 // Where represents a WHERE or HAVING clause.
 type Where struct {
-	Type string
 	Expr Expr
+	Type string
 }
 
 // Where.Type
@@ -5792,9 +5770,10 @@ func (node *ParenExpr) replace(from, to Expr) bool {
 
 // ComparisonExpr represents a two-value comparison expression.
 type ComparisonExpr struct {
-	Operator    string
-	Left, Right Expr
-	Escape      Expr
+	Left     Expr
+	Right    Expr
+	Escape   Expr
+	Operator string
 }
 
 // ComparisonExpr.Operator
@@ -5868,9 +5847,10 @@ func (node *ComparisonExpr) IsImpossible() bool {
 
 // RangeCond represents a BETWEEN or a NOT BETWEEN expression.
 type RangeCond struct {
-	Operator string
 	Left     Expr
-	From, To Expr
+	From     Expr
+	To       Expr
+	Operator string
 }
 
 // RangeCond.Operator
@@ -5902,8 +5882,8 @@ func (node *RangeCond) replace(from, to Expr) bool {
 
 // IsExpr represents an IS ... or an IS NOT ... expression.
 type IsExpr struct {
-	Operator string
 	Expr     Expr
+	Operator string
 }
 
 // IsExpr.Operator
@@ -6006,8 +5986,8 @@ const (
 
 // SQLVal represents a single value.
 type SQLVal struct {
-	Type ValType
 	Val  []byte
+	Type ValType
 }
 
 // NewStrVal builds a new StrVal.
@@ -6118,11 +6098,9 @@ func (node BoolVal) replace(from, to Expr) bool {
 
 // ColName represents a column name.
 type ColName struct {
-	Name      ColIdent
-	Qualifier TableName
-
-	// Hacky solution for stored procedures
 	StoredProcVal Expr
+	Qualifier     TableName
+	Name          ColIdent
 }
 
 // NewColName returns a simple ColName with no table qualifier
@@ -6248,8 +6226,9 @@ func (node ListArg) replace(from, to Expr) bool {
 
 // BinaryExpr represents a binary value expression.
 type BinaryExpr struct {
-	Operator    string
-	Left, Right Expr
+	Left     Expr
+	Right    Expr
+	Operator string
 }
 
 // BinaryExpr.Operator
@@ -6289,8 +6268,8 @@ func (node *BinaryExpr) replace(from, to Expr) bool {
 
 // UnaryExpr represents a unary value expression.
 type UnaryExpr struct {
-	Operator string
 	Expr     Expr
+	Operator string
 }
 
 // UnaryExpr.Operator
@@ -6393,9 +6372,9 @@ func (node *IntervalExpr) replace(from, to Expr) bool {
 
 // ExtractFuncExpr represents the function and arguments for EXTRACT(<time_unit> from <expr>) functions.
 type ExtractFuncExpr struct {
+	Expr Expr
 	Name string
 	Unit string
-	Expr Expr
 }
 
 // Format formats the node.
@@ -6481,11 +6460,11 @@ func (node *CollateExpr) replace(from, to Expr) bool {
 
 // FuncExpr represents a function call.
 type FuncExpr struct {
-	Qualifier TableIdent
-	Name      ColIdent
-	Distinct  bool
-	Exprs     SelectExprs
 	Over      *Over
+	Name      ColIdent
+	Qualifier TableIdent
+	Exprs     SelectExprs
+	Distinct  bool
 }
 
 // Format formats the node.
@@ -6727,9 +6706,9 @@ func (node *TrimExpr) walkSubtree(visit Visit) error {
 // ConvertExpr represents a call to CONVERT(expr, type)
 // or its equivalent CAST(expr AS type). Both are rewritten to the former.
 type ConvertExpr struct {
-	Name string
 	Expr Expr
 	Type *ConvertType
+	Name string
 }
 
 // Format formats the node.
@@ -6783,8 +6762,8 @@ func (node *ConvertUsingExpr) replace(from, to Expr) bool {
 
 // CharExpr represents a call to CHAR(expr1, expr2, ... using charset)
 type CharExpr struct {
-	Exprs SelectExprs
 	Type  string
+	Exprs SelectExprs
 }
 
 // Format formats the node.
@@ -6839,9 +6818,9 @@ func (node *ConvertType) Format(buf *TrackedBuffer) {
 
 // MatchExpr represents a call to the MATCH function
 type MatchExpr struct {
-	Columns SelectExprs
 	Expr    Expr
 	Option  string
+	Columns SelectExprs
 }
 
 // MatchExpr.Option
@@ -6884,8 +6863,8 @@ func (node *MatchExpr) replace(from, to Expr) bool {
 // CaseExpr represents a CASE expression.
 type CaseExpr struct {
 	Expr  Expr
-	Whens []*When
 	Else  Expr
+	Whens []*When
 }
 
 // Format formats the node.
@@ -7057,8 +7036,8 @@ const (
 
 // Frame represents a window Frame clause.
 type Frame struct {
-	Unit   FrameUnit
 	Extent *FrameExtent
+	Unit   FrameUnit
 }
 
 // Format formats the node.
@@ -7165,13 +7144,14 @@ func (node *FrameBound) walkSubtree(visit Visit) error {
 
 // WindowDef represents a window clause definition
 type WindowDef struct {
+	Frame *Frame
 	// Name is used in WINDOW clauses
 	Name ColIdent
 	// NameRef is used in OVER clauses
-	NameRef     ColIdent
+	NameRef ColIdent
+
 	PartitionBy Exprs
 	OrderBy     OrderBy
-	Frame       *Frame
 }
 
 // Format formats the node.
@@ -7534,9 +7514,9 @@ func VarScope(nameParts ...string) (string, SetScope, string, error) {
 
 // SetVarExpr represents a set expression.
 type SetVarExpr struct {
-	Scope SetScope
-	Name  *ColName
 	Expr  Expr
+	Name  *ColName
+	Scope SetScope
 }
 
 // SetVarExpr.Expr, for SET TRANSACTION ... or START TRANSACTION
@@ -7717,8 +7697,8 @@ func (node *ColIdent) UnmarshalJSON(b []byte) error {
 
 type TableFuncExpr struct {
 	Name  string
-	Exprs SelectExprs
 	Alias TableIdent
+	Exprs SelectExprs
 }
 
 // Format formats the node.
@@ -7874,8 +7854,8 @@ const (
 // TableAndLockType contains table and lock association
 type TableAndLockType struct {
 	Table TableExpr
-	Lock  LockType
 	SQLNode
+	Lock LockType
 }
 
 func (node *TableAndLockType) Format(buf *TrackedBuffer) {
@@ -7896,8 +7876,8 @@ type TableAndLockTypes []*TableAndLockType
 
 // LockTables represents the lock statement
 type LockTables struct {
-	Tables TableAndLockTypes
 	SQLNode
+	Tables TableAndLockTypes
 }
 
 func (node *LockTables) Format(buf *TrackedBuffer) {
@@ -7942,9 +7922,9 @@ func (node *UnlockTables) walkSubtree(visit Visit) error {
 }
 
 type Kill struct {
-	Connection bool
 	ConnID     Expr
 	Auth       AuthInformation
+	Connection bool
 }
 
 var _ AuthNode = (*Kill)(nil)
@@ -8008,12 +7988,10 @@ func compliantName(in string) string {
 }
 
 type Analyze struct {
-	Tables TableNames
-	// UPDATE or DELETE
+	Using   Expr
 	Action  string
+	Tables  TableNames
 	Columns Columns
-	// JSON data for stats
-	Using Expr
 }
 
 func (*Analyze) iStatement() {}
@@ -8091,10 +8069,10 @@ func (node *Deallocate) Format(buf *TrackedBuffer) {
 
 type CreateSpatialRefSys struct {
 	SRID        *SQLVal
-	OrReplace   bool
-	IfNotExists bool
 	SrsAttr     *SrsAttribute
 	Auth        AuthInformation
+	OrReplace   bool
+	IfNotExists bool
 }
 
 var _ AuthNode = (*CreateSpatialRefSys)(nil)
@@ -8172,6 +8150,8 @@ type Injectable interface {
 // InjectedExpr allows bypassing AST analysis. This is used by projects that rely on Vitess, but may not implement
 // MySQL's dialect.
 type InjectedExpr struct {
+	// Auth contains the authentication information for the expression.
+	Auth AuthInformation
 	// Expression is an expression that implements the Expr interface. It can be any expression type.
 	Expression Injectable
 	// Children are the children of the expression, which can be any Expr type. This is a union type, and either this
@@ -8180,8 +8160,6 @@ type InjectedExpr struct {
 	// SelectExprChildren are the children of the expression, which can be any SelectExpr type. This is a union type,
 	// and either this or Children will be set.
 	SelectExprChildren SelectExprs
-	// Auth contains the authentication information for the expression.
-	Auth AuthInformation
 }
 
 var _ Expr = InjectedExpr{}
@@ -8250,9 +8228,9 @@ type OrderedInjectedExpr struct {
 // InjectedStatement allows bypassing AST analysis. This is used by projects that rely on Vitess, but may not implement
 // MySQL's dialect.
 type InjectedStatement struct {
+	Auth      AuthInformation
 	Statement Injectable
 	Children  Exprs
-	Auth      AuthInformation
 }
 
 var _ Statement = InjectedStatement{}

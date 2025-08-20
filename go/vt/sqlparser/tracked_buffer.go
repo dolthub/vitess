@@ -34,8 +34,8 @@ type NodeFormatter func(buf *TrackedBuffer, node SQLNode)
 // want to generate a query that's different from the default.
 type TrackedBuffer struct {
 	*strings.Builder
-	bindLocations []bindLocation
 	nodeFormatter NodeFormatter
+	bindLocations []bindLocation
 }
 
 // NewTrackedBuffer creates a new TrackedBuffer.
