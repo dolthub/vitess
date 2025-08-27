@@ -317,7 +317,7 @@ func tryCastStatement(v interface{}) Statement {
 %token <bytes> NVAR PASSWORD_LOCK
 
 %type <val> command
-%type <val> create_query_expression create_query_select_expression select_statement with_select select_or_set_op base_select base_select_no_cte select_statement_with_no_trailing_into view_select_statement values_select_statement
+%type <val> create_query_expression create_query_select_expression select_statement with_select select_or_set_op base_select base_select_no_cte select_statement_with_no_trailing_into values_select_statement
 %type <val> set_op intersect_stmt union_except_lhs union_except_rhs
 %type <val> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <val> create_statement rename_statement drop_statement truncate_statement call_statement
@@ -703,20 +703,11 @@ select_statement_with_no_trailing_into:
 | openb select_statement_with_no_trailing_into closeb
   {
     // Allow parenthesized SELECT statements in contexts that disallow INTO
+    // Enables INSERT INTO t (SELECT ...) for MySQL compatibility
     $$ = $2.(SelectStatement)
   }
 
-view_select_statement:
-  select_statement_with_no_trailing_into
-  {
-    $$ = $1.(SelectStatement)
-  }
-| openb view_select_statement closeb
-  {
-    // Unwrap parentheses recursively for CREATE VIEW MySQL compatibility
-    // Issue: https://github.com/dolthub/dolt/issues/9738
-    $$ = $2.(SelectStatement)
-  }
+
 
 stream_statement:
   STREAM comment_opt select_expression FROM table_name
@@ -1297,7 +1288,7 @@ create_statement:
       Auth: AuthInformation{AuthType: AuthType_IGNORE},
     }
   }
-| CREATE view_opts VIEW not_exists_opt table_name ins_column_list_opt AS lexer_position special_comment_mode view_select_statement lexer_position opt_with_check_option
+| CREATE view_opts VIEW not_exists_opt table_name ins_column_list_opt AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position opt_with_check_option
   {
     viewName := $5.(TableName)
     $2.(*ViewSpec).ViewName = viewName.ToViewName()
@@ -1318,7 +1309,7 @@ create_statement:
       },
     }
   }
-| CREATE OR REPLACE view_opts VIEW table_name ins_column_list_opt AS lexer_position special_comment_mode view_select_statement lexer_position opt_with_check_option
+| CREATE OR REPLACE view_opts VIEW table_name ins_column_list_opt AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position opt_with_check_option
   {
     viewName := $6.(TableName)
     $4.(*ViewSpec).ViewName = viewName.ToViewName()
@@ -10162,16 +10153,7 @@ insert_data_select:
   {
     $$ = &Insert{Columns: $2.(Columns), Rows: $4.(SelectStatement)}
   }
-| openb select_statement_with_no_trailing_into closeb
-  {
-    // Drop the redundant parenthesis.
-    $$ = &Insert{Rows: $2.(SelectStatement)}
-  }
-| openb ins_column_list closeb openb select_statement_with_no_trailing_into closeb
-  {
-    // Drop the redundant parenthesis.
-    $$ = &Insert{Columns: $2.(Columns), Rows: $5.(SelectStatement)}
-  }
+
 
 insert_data_values:
   value_or_values tuple_list

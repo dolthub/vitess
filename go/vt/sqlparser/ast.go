@@ -1713,7 +1713,13 @@ func (node *Insert) Format(buf *TrackedBuffer) {
 	if len(node.Partitions) > 0 {
 		buf.Myprintf(" partition (%v)", node.Partitions)
 	}
-	buf.Myprintf("%v %v%v", node.Columns, node.Rows, node.OnDup)
+	// Format the rows, but unwrap unnecessary ParenSelect for backward compatibility
+	if parenSelect, ok := node.Rows.(*ParenSelect); ok {
+		// In INSERT context, unwrap ParenSelect to maintain backward compatibility
+		buf.Myprintf("%v %v%v", node.Columns, parenSelect.Select, node.OnDup)
+	} else {
+		buf.Myprintf("%v %v%v", node.Columns, node.Rows, node.OnDup)
+	}
 	if len(node.Returning) > 0 {
 		buf.Myprintf(" returning %v", node.Returning)
 	}
@@ -5621,6 +5627,13 @@ func (*Default) iExpr()           {}
 // then to is returned.
 func ReplaceExpr(root, from, to Expr) Expr {
 	if root == from {
+		// Special case: if we're replacing a Subquery that contains a ParenSelect,
+		// wrap the replacement in a ParenExpr to preserve outer parentheses (dolt#9738)
+		if subq, ok := from.(*Subquery); ok {
+			if _, isParenSelect := subq.Select.(*ParenSelect); isParenSelect {
+				return &ParenExpr{Expr: to}
+			}
+		}
 		return to
 	}
 	root.replace(from, to)
