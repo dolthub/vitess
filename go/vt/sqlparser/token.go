@@ -48,7 +48,11 @@ type Tokenizer struct {
 	ParseTree            Statement
 	LastError            error
 	InStream             io.Reader
+	// stringLiteralQuotes holds the characters that are treated as string literal quotes. This always includes the
+	// single quote char. When ANSI_QUOTES SQL mode is NOT enabled, this also contains the double quote character.
 	stringLiteralQuotes  map[uint16]struct{}
+	// identifierQuotes holds the characters that are treated as identifier quotes. This always includes
+	// the backtick char. When the ANSI_QUOTES SQL mode is enabled, it also includes the double quote char.
 	identifierQuotes     map[uint16]struct{}
 	specialComment       *Tokenizer
 	digestedTokens       []tokenAndValue
@@ -66,6 +70,11 @@ type Tokenizer struct {
 	lastTyp              int
 	lastChar             uint16
 	stopped              bool
+	// If true, the parser should collaborate to set `stopped` on this
+	// tokenizer after a statement is parsed. From that point forward, the
+	// tokenizer will return EOF, instead of new tokens. `ParseOne` uses
+	// this to parse the first delimited statement and then return the
+	// trailer.
 	stopAfterFirstStmt   bool
 	potentialAccountName bool
 	multi                bool
