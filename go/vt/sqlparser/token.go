@@ -38,53 +38,48 @@ const (
 )
 
 type tokenAndValue struct {
-	token int
 	value []byte
+	token int
 }
 
 // Tokenizer is the struct used to generate SQL
 // tokens for the parser.
 type Tokenizer struct {
+	ParseTree            Statement
+	LastError            error
 	InStream             io.Reader
-	AllowComments        bool
-	SkipSpecialComments  bool
-	lastChar             uint16
+	// stringLiteralQuotes holds the characters that are treated as string literal quotes. This always includes the
+	// single quote char. When ANSI_QUOTES SQL mode is NOT enabled, this also contains the double quote character.
+	stringLiteralQuotes  map[uint16]struct{}
+	// identifierQuotes holds the characters that are treated as identifier quotes. This always includes
+	// the backtick char. When the ANSI_QUOTES SQL mode is enabled, it also includes the double quote char.
+	identifierQuotes     map[uint16]struct{}
+	specialComment       *Tokenizer
+	digestedTokens       []tokenAndValue
+	queryBuf             []byte
+	buf                  []byte
+	lastToken            []byte
+	lastNonNilToken      []byte
+	nesting              int
+	bufPos               int
+	bufSize              int
+	specialCommentEndPos int
+	posVarIndex          int
 	Position             int
 	OldPosition          int
-	lastToken            []byte
 	lastTyp              int
-	lastNonNilToken      []byte
-	LastError            error
-	posVarIndex          int
-	ParseTree            Statement
-	nesting              int
-	multi                bool
-	specialComment       *Tokenizer
-	specialCommentEndPos int
-	potentialAccountName bool
-	digestedTokens       []tokenAndValue
-
+	lastChar             uint16
+	stopped              bool
 	// If true, the parser should collaborate to set `stopped` on this
 	// tokenizer after a statement is parsed. From that point forward, the
 	// tokenizer will return EOF, instead of new tokens. `ParseOne` uses
 	// this to parse the first delimited statement and then return the
 	// trailer.
-	stopAfterFirstStmt bool
-	stopped            bool
-
-	buf     []byte
-	bufPos  int
-	bufSize int
-
-	// identifierQuotes holds the characters that are treated as identifier quotes. This always includes
-	// the backtick char. When the ANSI_QUOTES SQL mode is enabled, it also includes the double quote char.
-	identifierQuotes map[uint16]struct{}
-
-	// stringLiteralQuotes holds the characters that are treated as string literal quotes. This always includes the
-	// single quote char. When ANSI_QUOTES SQL mode is NOT enabled, this also contains the double quote character.
-	stringLiteralQuotes map[uint16]struct{}
-
-	queryBuf []byte
+	stopAfterFirstStmt   bool
+	potentialAccountName bool
+	multi                bool
+	SkipSpecialComments  bool
+	AllowComments        bool
 }
 
 var defaultIdQuotes = map[uint16]struct{}{backtickQuote: {}}
@@ -181,7 +176,7 @@ func (tkn *Tokenizer) Error(err string) {
 
 // digestToken stores a token and its value for later retrieval when necessary for additional look-ahead
 func (tkn *Tokenizer) digestToken(token int, value []byte) {
-	tkn.digestedTokens = append(tkn.digestedTokens, tokenAndValue{token, value})
+	tkn.digestedTokens = append(tkn.digestedTokens, tokenAndValue{token: token, value: value})
 }
 
 // digestedToken returns the first digested token and removes it from the list of digested tokens

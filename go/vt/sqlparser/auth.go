@@ -37,6 +37,8 @@ type AuthNode interface {
 // command. All information that could possibly be related to authorization should be stored here, rather than on the
 // node. This allows for integrators to consolidate their authorization logic.
 type AuthInformation struct {
+	// This allows for additional information to be added, which is completely up to the integrator.
+	Extra any
 	// This specifies the authorization "type". For example, a node representing a table query may use the "SELECT"
 	// type, while one that updates a table may use the "UPDATE" type. It is intended that these will relatively match
 	// the SQL statements that generated the node, however it is up to the integrator to interpret this field's use.
@@ -46,67 +48,65 @@ type AuthInformation struct {
 	// These are the names of the targets. For example, if the TargetType represents a table, then this could be the
 	// database and table name. It could also represent multiple table names, depending on the value of TargetType.
 	TargetNames []string
-	// This allows for additional information to be added, which is completely up to the integrator.
-	Extra any
 }
 
 // These AuthType_ enums are used as the AuthType in AuthInformation. However, these are only built-in suggestions that
 // will be used from the accompanying parser. Integrators may produce nodes through other means, therefore these are
 // only relevant for the parser's MySQL dialect.
 const (
-	AuthType_IGNORE = "IGNORE"
-	AuthType_ALTER = "ALTER"
-	AuthType_ALTER_ROUTINE = "ALTER_ROUTINE"
-	AuthType_ALTER_USER = "ALTER_USER"
-	AuthType_CALL = "CALL"
-	AuthType_CREATE = "CREATE"
-	AuthType_CREATE_ROLE = "CREATE_ROLE"
-	AuthType_CREATE_ROUTINE = "CREATE_ROUTINE"
-	AuthType_CREATE_TEMP = "CREATE_TEMP"
-	AuthType_CREATE_USER = "CREATE_USER"
-	AuthType_CREATE_VIEW = "CREATE_VIEW"
-	AuthType_DELETE = "DELETE"
-	AuthType_DROP = "DROP"
-	AuthType_DROP_ROLE = "DROP_ROLE"
-	AuthType_EVENT = "EVENT"
-	AuthType_FILE = "FILE"
-	AuthType_FOREIGN_KEY = "FOREIGN_KEY"
-	AuthType_GRANT_PRIVILEGE = "GRANT_PRIVILEGE"
-	AuthType_GRANT_PROXY = "GRANT_PROXY"
-	AuthType_GRANT_ROLE = "GRANT_ROLE"
-	AuthType_INDEX = "INDEX"
-	AuthType_INSERT = "INSERT"
-	AuthType_LOCK = "LOCK"
-	AuthType_PROCESS = "PROCESS"
-	AuthType_RELOAD = "RELOAD"
-	AuthType_RENAME = "RENAME"
-	AuthType_REPLACE = "REPLACE"
-	AuthType_REPLICATION = "REPLICATION"
-	AuthType_REPLICATION_CLIENT = "REPLICATION_CLIENT"
-	AuthType_REVOKE_ALL = "REVOKE_ALL"
-	AuthType_REVOKE_PRIVILEGE = "REVOKE_PRIVILEGE"
-	AuthType_REVOKE_PROXY = "REVOKE_PROXY"
-	AuthType_REVOKE_ROLE = "REVOKE_ROLE"
-	AuthType_SELECT = "SELECT"
-	AuthType_SHOW = "SHOW"
+	AuthType_IGNORE                = "IGNORE"
+	AuthType_ALTER                 = "ALTER"
+	AuthType_ALTER_ROUTINE         = "ALTER_ROUTINE"
+	AuthType_ALTER_USER            = "ALTER_USER"
+	AuthType_CALL                  = "CALL"
+	AuthType_CREATE                = "CREATE"
+	AuthType_CREATE_ROLE           = "CREATE_ROLE"
+	AuthType_CREATE_ROUTINE        = "CREATE_ROUTINE"
+	AuthType_CREATE_TEMP           = "CREATE_TEMP"
+	AuthType_CREATE_USER           = "CREATE_USER"
+	AuthType_CREATE_VIEW           = "CREATE_VIEW"
+	AuthType_DELETE                = "DELETE"
+	AuthType_DROP                  = "DROP"
+	AuthType_DROP_ROLE             = "DROP_ROLE"
+	AuthType_EVENT                 = "EVENT"
+	AuthType_FILE                  = "FILE"
+	AuthType_FOREIGN_KEY           = "FOREIGN_KEY"
+	AuthType_GRANT_PRIVILEGE       = "GRANT_PRIVILEGE"
+	AuthType_GRANT_PROXY           = "GRANT_PROXY"
+	AuthType_GRANT_ROLE            = "GRANT_ROLE"
+	AuthType_INDEX                 = "INDEX"
+	AuthType_INSERT                = "INSERT"
+	AuthType_LOCK                  = "LOCK"
+	AuthType_PROCESS               = "PROCESS"
+	AuthType_RELOAD                = "RELOAD"
+	AuthType_RENAME                = "RENAME"
+	AuthType_REPLACE               = "REPLACE"
+	AuthType_REPLICATION           = "REPLICATION"
+	AuthType_REPLICATION_CLIENT    = "REPLICATION_CLIENT"
+	AuthType_REVOKE_ALL            = "REVOKE_ALL"
+	AuthType_REVOKE_PRIVILEGE      = "REVOKE_PRIVILEGE"
+	AuthType_REVOKE_PROXY          = "REVOKE_PROXY"
+	AuthType_REVOKE_ROLE           = "REVOKE_ROLE"
+	AuthType_SELECT                = "SELECT"
+	AuthType_SHOW                  = "SHOW"
 	AuthType_SHOW_CREATE_PROCEDURE = "SHOW_CREATE_PROCEDURE"
-	AuthType_SUPER = "SUPER"
-	AuthType_TRIGGER = "TRIGGER"
-	AuthType_UPDATE = "UPDATE"
-	AuthType_VISIBLE = "VISIBLE"
+	AuthType_SUPER                 = "SUPER"
+	AuthType_TRIGGER               = "TRIGGER"
+	AuthType_UPDATE                = "UPDATE"
+	AuthType_VISIBLE               = "VISIBLE"
 )
 
 // These AuthTargetType_ enums are used as the TargetType in AuthInformation. However, these are only built-in
 // suggestions that will be used from the accompanying parser. Integrators may produce nodes through other means,
 // therefore these are only relevant for the parser's MySQL dialect.
 const (
-	AuthTargetType_Ignore = "IGNORE"
-	AuthTargetType_DatabaseIdentifiers = "DB_IDENTS"
-	AuthTargetType_Global = "GLOBAL"
+	AuthTargetType_Ignore                   = "IGNORE"
+	AuthTargetType_DatabaseIdentifiers      = "DB_IDENTS"
+	AuthTargetType_Global                   = "GLOBAL"
 	AuthTargetType_MultipleTableIdentifiers = "DB_TABLE_IDENTS"
-	AuthTargetType_SingleTableIdentifier = "DB_TABLE_IDENT"
-	AuthTargetType_TableColumn = "DB_TABLE_COLUMN_IDENT"
-	AuthTargetType_TODO = "TODO"
+	AuthTargetType_SingleTableIdentifier    = "DB_TABLE_IDENT"
+	AuthTargetType_TableColumn              = "DB_TABLE_COLUMN_IDENT"
+	AuthTargetType_TODO                     = "TODO"
 )
 
 // SetAuthType sets the AuthType on the given node (if it's an AuthNode), as well as recursively setting the AuthType on

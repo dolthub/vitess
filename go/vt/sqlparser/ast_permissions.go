@@ -55,10 +55,10 @@ func (ar *AccountRename) String() string {
 
 // Authentication represents an account's authentication.
 type Authentication struct {
-	RandomPassword bool
 	Password       string
 	Identity       string
 	Plugin         string
+	RandomPassword bool
 }
 
 // String returns this Authentication as a formatted string.
@@ -82,11 +82,11 @@ func (auth *Authentication) String() string {
 
 // AccountWithAuth represents a new account with all of its authentication information.
 type AccountWithAuth struct {
-	AccountName
 	Auth1       *Authentication
 	Auth2       *Authentication
 	Auth3       *Authentication
 	AuthInitial *Authentication
+	AccountName
 }
 
 // String returns AccountWithAuth as a formatted string.
@@ -124,17 +124,17 @@ const (
 
 // TLSOptionItem represents one of the available TLS options.
 type TLSOptionItem struct {
-	TLSOptionItemType
 	ItemData string
+	TLSOptionItemType
 }
 
 // TLSOptions represents a new user's TLS options.
 type TLSOptions struct {
-	SSL     bool
-	X509    bool
 	Cipher  string
 	Issuer  string
 	Subject string
+	SSL     bool
+	X509    bool
 }
 
 // NewTLSOptions returns a new TLSOptions from the given items.
@@ -210,8 +210,8 @@ const (
 
 // AccountLimitItem represents one of the available account limitations.
 type AccountLimitItem struct {
-	AccountLimitItemType
 	Count *SQLVal
+	AccountLimitItemType
 }
 
 // AccountLimits represents a new user's maximum limits.
@@ -281,19 +281,18 @@ const (
 
 // PassLockItem represents one of the available password or account options.
 type PassLockItem struct {
-	PassLockItemType
 	Value *SQLVal
+	PassLockItemType
 }
 
 // PasswordOptions represents which options may be given to new user account on how to handle passwords.
 type PasswordOptions struct {
+	ExpirationTime         *SQLVal
+	History                *SQLVal
+	ReuseInterval          *SQLVal
+	FailedAttempts         *SQLVal
+	LockTime               *SQLVal
 	RequireCurrentOptional bool
-
-	ExpirationTime *SQLVal // nil represents the default
-	History        *SQLVal // nil represents the default
-	ReuseInterval  *SQLVal // nil represents the default
-	FailedAttempts *SQLVal // will always be set
-	LockTime       *SQLVal // nil represents an unbounded lock time
 }
 
 // NewPasswordOptionsWithLock returns a new PasswordOptions, along with whether to lock the account, from the given items.
@@ -453,9 +452,9 @@ func (p *PrivilegeLevel) String() string {
 
 // Privilege specifies a privilege to be used in a GRANT or REVOKE statement.
 type Privilege struct {
-	Type        PrivilegeType
 	DynamicName string
 	Columns     []string
+	Type        PrivilegeType
 }
 
 // String returns the Privilege as a formatted string.
@@ -546,9 +545,9 @@ func (p *Privilege) String() string {
 
 // GrantUserAssumption represents the target user that the user executing the GRANT statement will assume the identity of.
 type GrantUserAssumption struct {
-	Type  GrantUserAssumptionType
 	User  AccountName
 	Roles []AccountName
+	Type  GrantUserAssumptionType
 }
 
 // String returns this GrantUserAssumption as a formatted string.
@@ -587,15 +586,15 @@ func (gau *GrantUserAssumption) String() string {
 
 // CreateUser represents the CREATE USER statement.
 type CreateUser struct {
-	IfNotExists     bool
-	Users           []AccountWithAuth
-	DefaultRoles    []AccountName
+	Auth            AuthInformation
 	TLSOptions      *TLSOptions
 	AccountLimits   *AccountLimits
 	PasswordOptions *PasswordOptions
-	Locked          bool
 	Attribute       string
-	Auth            AuthInformation
+	Users           []AccountWithAuth
+	DefaultRoles    []AccountName
+	IfNotExists     bool
+	Locked          bool
 }
 
 var _ Statement = (*CreateUser)(nil)
@@ -672,8 +671,8 @@ func (c *CreateUser) SetExtra(extra any) {
 
 // RenameUser represents the RENAME USER statement.
 type RenameUser struct {
-	Accounts []AccountRename
 	Auth     AuthInformation
+	Accounts []AccountRename
 }
 
 var _ Statement = (*RenameUser)(nil)
@@ -720,9 +719,9 @@ func (r *RenameUser) SetExtra(extra any) {
 
 // DropUser represents the DROP USER statement.
 type DropUser struct {
-	IfExists     bool
-	AccountNames []AccountName
 	Auth         AuthInformation
+	AccountNames []AccountName
+	IfExists     bool
 }
 
 var _ Statement = (*DropUser)(nil)
@@ -773,9 +772,9 @@ func (d *DropUser) SetExtra(extra any) {
 
 // CreateRole represents the CREATE ROLE statement.
 type CreateRole struct {
-	IfNotExists bool
-	Roles       []AccountName
 	Auth        AuthInformation
+	Roles       []AccountName
+	IfNotExists bool
 }
 
 var _ Statement = (*CreateRole)(nil)
@@ -826,9 +825,9 @@ func (c *CreateRole) SetExtra(extra any) {
 
 // DropRole represents the DROP ROLE statement.
 type DropRole struct {
-	IfExists bool
-	Roles    []AccountName
 	Auth     AuthInformation
+	Roles    []AccountName
+	IfExists bool
 }
 
 var _ Statement = (*DropRole)(nil)
@@ -879,13 +878,13 @@ func (d *DropRole) SetExtra(extra any) {
 
 // GrantPrivilege represents the GRANT...ON...TO statement.
 type GrantPrivilege struct {
-	Privileges      []Privilege
-	ObjectType      GrantObjectType
-	PrivilegeLevel  PrivilegeLevel
-	To              []AccountName
-	WithGrantOption bool
-	As              *GrantUserAssumption
 	Auth            AuthInformation
+	As              *GrantUserAssumption
+	PrivilegeLevel  PrivilegeLevel
+	Privileges      []Privilege
+	To              []AccountName
+	ObjectType      GrantObjectType
+	WithGrantOption bool
 }
 
 var _ Statement = (*GrantPrivilege)(nil)
@@ -956,10 +955,10 @@ func (g *GrantPrivilege) SetExtra(extra any) {
 
 // GrantRole represents the GRANT...TO statement.
 type GrantRole struct {
+	Auth            AuthInformation
 	Roles           []AccountName
 	To              []AccountName
 	WithAdminOption bool
-	Auth            AuthInformation
 }
 
 var _ Statement = (*GrantRole)(nil)
@@ -1016,10 +1015,10 @@ func (g *GrantRole) SetExtra(extra any) {
 
 // GrantProxy represents the GRANT PROXY statement.
 type GrantProxy struct {
+	Auth            AuthInformation
 	On              AccountName
 	To              []AccountName
 	WithGrantOption bool
-	Auth            AuthInformation
 }
 
 var _ Statement = (*GrantProxy)(nil)
@@ -1069,11 +1068,11 @@ func (g *GrantProxy) SetExtra(extra any) {
 
 // RevokePrivilege represents the REVOKE...ON...FROM statement.
 type RevokePrivilege struct {
-	Privileges        []Privilege
-	ObjectType        GrantObjectType
-	PrivilegeLevel    PrivilegeLevel
-	From              []AccountName
 	Auth              AuthInformation
+	PrivilegeLevel    PrivilegeLevel
+	Privileges        []Privilege
+	From              []AccountName
+	ObjectType        GrantObjectType
 	IfExists          bool
 	IgnoreUnknownUser bool
 }
@@ -1146,9 +1145,9 @@ func (r *RevokePrivilege) SetExtra(extra any) {
 
 // RevokeRole represents the REVOKE...FROM statement.
 type RevokeRole struct {
+	Auth              AuthInformation
 	Roles             []AccountName
 	From              []AccountName
-	Auth              AuthInformation
 	IfExists          bool
 	IgnoreUnknownUser bool
 }
@@ -1210,10 +1209,9 @@ func (r *RevokeRole) SetExtra(extra any) {
 
 // RevokeProxy represents the REVOKE PROXY statement.
 type RevokeProxy struct {
-	On   AccountName
-	From []AccountName
-	Auth AuthInformation
-
+	Auth              AuthInformation
+	On                AccountName
+	From              []AccountName
 	IfExists          bool
 	IgnoreUnknownUser bool
 }
@@ -1269,10 +1267,10 @@ func (r *RevokeProxy) SetExtra(extra any) {
 
 // ShowGrants represents the SHOW GRANTS statement.
 type ShowGrants struct {
-	CurrentUser bool
+	Auth        AuthInformation
 	For         *AccountName
 	Using       []AccountName
-	Auth        AuthInformation
+	CurrentUser bool
 }
 
 var _ Statement = (*ShowGrants)(nil)
