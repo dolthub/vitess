@@ -2583,8 +2583,14 @@ func (node *DDL) walkSubtree(visit Visit) error {
 	}
 
 	if node.ViewSpec != nil {
-		err := Walk(visit, node.ViewSpec.ViewExpr)
-		return err
+		if err := Walk(visit, node.ViewSpec.ViewExpr); err != nil {
+			return err
+		}
+	}
+	if node.OptSelect != nil {
+		if err := Walk(visit, node.OptSelect.Select); err != nil {
+			return err
+		}
 	}
 	// TODO: add missing nodes that are walkable
 	return nil
