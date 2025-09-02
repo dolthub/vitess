@@ -905,7 +905,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 	wg.Wait()
 
 	if fatalError != "" {
-		t.Fatalf(fatalError)
+		t.Fatalf(SingleStringElementFormatString, fatalError)
 	}
 }
 

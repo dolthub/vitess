@@ -62,6 +62,9 @@ const (
 	ephemeralRead
 )
 
+// SingleStringElementFormatString is a template string that formats a single string element. 
+const SingleStringElementFormatString = "%s"
+
 // A Getter has a Get()
 type Getter interface {
 	Get() *querypb.VTGateCallerID
@@ -654,7 +657,7 @@ func (c *Conn) writeComQuit() error {
 	data := c.startEphemeralPacket(1)
 	data[0] = ComQuit
 	if err := c.writeEphemeralPacket(); err != nil {
-		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
+		return NewSQLError(CRServerGone, SSUnknownSQLState, SingleStringElementFormatString, err.Error())
 	}
 	return nil
 }
