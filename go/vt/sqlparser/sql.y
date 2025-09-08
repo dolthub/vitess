@@ -9148,9 +9148,9 @@ value_expression:
     $$ = &IntervalExpr{Expr: tryCastExpr($2), Unit: $3.(ColIdent).String()}
   }
 | argument_expression '|' '|' argument_expression
-   {
+  {
      $$ = &FuncExpr{Name: NewColIdent("CONCAT"), Exprs: append($1.(SelectExpr), $4.(SelectExpr))}
-   }
+  }
 | function_call_generic
 | function_call_keyword
 | function_call_nonkeyword
