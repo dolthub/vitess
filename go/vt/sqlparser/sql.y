@@ -9149,7 +9149,7 @@ value_expression:
   }
 | value_expression '|' '|' value_expression
   {
-     $$ = &FuncExpr{Name: NewColIdent("CONCAT"), Exprs: append($1.(SelectExpr), $4.(SelectExpr))}
+     $$ = &FuncExpr{Name: NewColIdent("CONCAT"), Exprs: []SelectExpr{&AliasedExpr{Expr: tryCastExpr($1)}, &AliasedExpr{Expr: tryCastExpr($4)}}}
   }
 | function_call_generic
 | function_call_keyword

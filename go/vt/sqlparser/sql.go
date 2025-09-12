@@ -23392,7 +23392,7 @@ yydefault:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:9151
 		{
-			yyVAL.val = &FuncExpr{Name: NewColIdent("CONCAT"), Exprs: append(yyDollar[1].val.(SelectExpr), yyDollar[4].val.(SelectExpr))}
+			yyVAL.val = &FuncExpr{Name: NewColIdent("CONCAT"), Exprs: []SelectExpr{&AliasedExpr{Expr: tryCastExpr(yyDollar[1].val)}, &AliasedExpr{Expr: tryCastExpr(yyDollar[4].val)}}}
 		}
 	case 1528:
 		yyDollar = yyS[yypt-5 : yypt+1]
