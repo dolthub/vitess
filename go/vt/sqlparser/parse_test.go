@@ -5037,6 +5037,41 @@ end`,
 			output: "select `\"\"\"foo\"\"\"`",
 		},
 	}
+
+	validPipesAsConcatSQL = []parseTest{
+		{
+			input:  "SELECT 'Hello' || 'World' as result",
+			output: "select CONCAT('Hello', 'World') as result",
+		},
+		{
+			input:  "select first_name || ' ' || last_name as full_name from t",
+			output: "select CONCAT(CONCAT(first_name, ' '), last_name) as full_name from t",
+		},
+		{
+			input:  "select 'abc' || 123",
+			output: "select CONCAT('abc', 123)",
+		},
+		{
+			input:  "select 1 + 2 || 3 + 4",
+			output: "select 1 + CONCAT(2, 3) + 4",
+		},
+		{
+			input:  "select (1 || 2) || (3 || 4)",
+			output: "select CONCAT((CONCAT(1, 2)), (CONCAT(3, 4)))",
+		},
+		{
+			input:  "select (1 + 2) || (3 + 4)",
+			output: "select CONCAT((1 + 2), (3 + 4))",
+		},
+		{
+			input:  "select ((1 || 2) || 3) || 4",
+			output: "select CONCAT((CONCAT((CONCAT(1, 2)), 3)), 4)",
+		},
+		{
+			input:  "select ((1 + 2) || 3) + 4",
+			output: "select (CONCAT((1 + 2), 3)) + 4",
+		},
+	}
 )
 
 // TestSingleSQL is a helper function to test a single SQL statement.
@@ -5071,6 +5106,13 @@ func TestAnsiQuotesMode(t *testing.T) {
 			require.NotNil(t, err)
 			assert.Equal(t, tcase.output, err.Error())
 		})
+	}
+}
+
+func TestPipesAsConcatMode(t *testing.T) {
+	parserOptions := ParserOptions{PipesAsConcat: true}
+	for _, tcase := range validPipesAsConcatSQL {
+		runParseTestCaseWithParserOptions(t, tcase, parserOptions)
 	}
 }
 

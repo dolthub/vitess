@@ -45,12 +45,12 @@ type tokenAndValue struct {
 // Tokenizer is the struct used to generate SQL
 // tokens for the parser.
 type Tokenizer struct {
-	ParseTree            Statement
-	LastError            error
-	InStream             io.Reader
+	ParseTree Statement
+	LastError error
+	InStream  io.Reader
 	// stringLiteralQuotes holds the characters that are treated as string literal quotes. This always includes the
 	// single quote char. When ANSI_QUOTES SQL mode is NOT enabled, this also contains the double quote character.
-	stringLiteralQuotes  map[uint16]struct{}
+	stringLiteralQuotes map[uint16]struct{}
 	// identifierQuotes holds the characters that are treated as identifier quotes. This always includes
 	// the backtick char. When the ANSI_QUOTES SQL mode is enabled, it also includes the double quote char.
 	identifierQuotes     map[uint16]struct{}
@@ -80,6 +80,7 @@ type Tokenizer struct {
 	multi                bool
 	SkipSpecialComments  bool
 	AllowComments        bool
+	PipesAsConcat        bool
 }
 
 var defaultIdQuotes = map[uint16]struct{}{backtickQuote: {}}
@@ -303,6 +304,9 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		case '|':
 			if tkn.lastChar == '|' {
 				tkn.next()
+				if tkn.PipesAsConcat {
+					return CONCAT, nil
+				}
 				return OR, nil
 			}
 			return int(ch), nil

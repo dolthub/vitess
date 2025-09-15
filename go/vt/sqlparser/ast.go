@@ -103,6 +103,9 @@ type ParserOptions struct {
 	// be used to quote identifiers, regardless of whether AnsiQuotes is enabled or not. For
 	// more info, see: https://dev.mysql.com/doc/refman/8.0/en/sql-mode.html#sqlmode_ansi_quotes
 	AnsiQuotes bool
+	// PipesAsConcat turns double pipes into a CONCAT token. Otherwise, double pipes are synonymous with OR.
+	// PipesAsConcat mode is disabled by default.
+	PipesAsConcat bool
 }
 
 // Parse parses the SQL in full and returns a Statement, which
@@ -124,6 +127,7 @@ func ParseWithOptions(ctx context.Context, sql string, options ParserOptions) (S
 	if options.AnsiQuotes {
 		tokenizer = NewStringTokenizerForAnsiQuotes(sql)
 	}
+	tokenizer.PipesAsConcat = options.PipesAsConcat
 	return parseTokenizer(sql, tokenizer)
 }
 
@@ -145,6 +149,7 @@ func ParseOneWithOptions(ctx context.Context, sql string, options ParserOptions)
 	if options.AnsiQuotes {
 		tokenizer = NewStringTokenizerForAnsiQuotes(sql)
 	}
+	tokenizer.PipesAsConcat = options.PipesAsConcat
 	tokenizer.stopAfterFirstStmt = true
 	tree, err := parseTokenizer(sql, tokenizer)
 	if err != nil {
