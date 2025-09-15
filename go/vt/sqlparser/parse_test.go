@@ -5051,6 +5051,18 @@ end`,
 			input:  "select 'abc' || 123",
 			output: "select CONCAT('abc', 123)",
 		},
+		{
+			input:  "select 1 + 2 || 3 + 4",
+			output: "select 1 + CONCAT(2, 3) + 4",
+		},
+		{
+			input:  "select (1 || 2) || (3 || 4)",
+			output: "select CONCAT((CONCAT(1, 2)), (CONCAT(3, 4)))",
+		},
+		{
+			input:  "select ((1 || 2) || 3) || 4",
+			output: "select CONCAT((CONCAT((CONCAT(1, 2)), 3)), 4)",
+		},
 	}
 )
 

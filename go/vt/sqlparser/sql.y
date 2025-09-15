@@ -134,6 +134,7 @@ func tryCastStatement(v interface{}) Statement {
 %left <bytes> SHIFT_LEFT SHIFT_RIGHT
 %left <bytes> '+' '-'
 %left <bytes> '*' '/' DIV '%' MOD
+%left <bytes> CONCAT
 %left <bytes> '^'
 %right <bytes> '~' UNARY
 %left <bytes> COLLATE
@@ -9147,9 +9148,9 @@ value_expression:
     // will be non-trivial because of grammar conflicts.
     $$ = &IntervalExpr{Expr: tryCastExpr($2), Unit: $3.(ColIdent).String()}
   }
-| value_expression '|' '|' value_expression
+| value_expression CONCAT value_expression
   {
-     $$ = &FuncExpr{Name: NewColIdent("CONCAT"), Exprs: []SelectExpr{&AliasedExpr{Expr: tryCastExpr($1)}, &AliasedExpr{Expr: tryCastExpr($4)}}}
+     $$ = &FuncExpr{Name: NewColIdent("CONCAT"), Exprs: []SelectExpr{&AliasedExpr{Expr: tryCastExpr($1)}, &AliasedExpr{Expr: tryCastExpr($3)}}}
   }
 | function_call_generic
 | function_call_keyword

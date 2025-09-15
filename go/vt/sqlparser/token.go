@@ -303,10 +303,11 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 			return int(ch), nil
 		case '|':
 			if tkn.lastChar == '|' {
-				if !tkn.PipesAsConcat {
-					tkn.next()
-					return OR, nil
+				tkn.next()
+				if tkn.PipesAsConcat {
+					return CONCAT, nil
 				}
+				return OR, nil
 			}
 			return int(ch), nil
 		case '?':
