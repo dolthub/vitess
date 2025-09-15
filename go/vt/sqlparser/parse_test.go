@@ -5060,8 +5060,16 @@ end`,
 			output: "select CONCAT((CONCAT(1, 2)), (CONCAT(3, 4)))",
 		},
 		{
+			input:  "select (1 + 2) || (3 + 4)",
+			output: "select CONCAT((1 + 2), (3 + 4))",
+		},
+		{
 			input:  "select ((1 || 2) || 3) || 4",
 			output: "select CONCAT((CONCAT((CONCAT(1, 2)), 3)), 4)",
+		},
+		{
+			input:  "select ((1 + 2) || 3) + 4",
+			output: "select (CONCAT((1 + 2), 3)) + 4",
 		},
 	}
 )
