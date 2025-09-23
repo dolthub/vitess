@@ -5072,6 +5072,69 @@ end`,
 			output: "select (CONCAT((1 + 2), 3)) + 4",
 		},
 	}
+
+	validTextWithLengthSQL = []parseTest{
+		{
+			input:  "CREATE TABLE t1 (col1 TEXT(100))",
+			output: "create table t1 (\n\tcol1 TEXT(100)\n)",
+		},
+		{
+			input:  "CREATE TABLE t1 (col1 TEXT(255))",
+			output: "create table t1 (\n\tcol1 TEXT(255)\n)",
+		},
+		{
+			input:  "CREATE TABLE t1 (col1 TEXT(65535))",
+			output: "create table t1 (\n\tcol1 TEXT(65535)\n)",
+		},
+		{
+			input:  "CREATE TABLE t1 (col1 TEXT(1))",
+			output: "create table t1 (\n\tcol1 TEXT(1)\n)",
+		},
+		{
+			input:  "ALTER TABLE t1 ADD COLUMN col1 TEXT(500)",
+			output: "alter table t1 add column (\n\tcol1 TEXT(500)\n)",
+		},
+		{
+			input:  "ALTER TABLE t1 MODIFY COLUMN col1 TEXT(1000)",
+			output: "alter table t1 modify column col1 (\n\tcol1 TEXT(1000)\n)",
+		},
+		{
+			input:  "ALTER TABLE t1 CHANGE COLUMN old_col new_col TEXT(2000)",
+			output: "alter table t1 change column old_col (\n\tnew_col TEXT(2000)\n)",
+		},
+		{
+			input:  "CREATE TABLE t1 (col1 TEXT(100), col2 TEXT(200), col3 TEXT(300))",
+			output: "create table t1 (\n\tcol1 TEXT(100),\n\tcol2 TEXT(200),\n\tcol3 TEXT(300)\n)",
+		},
+		{
+			input:  "CREATE TABLE t1 (col1 TEXT(100) NOT NULL)",
+			output: "create table t1 (\n\tcol1 TEXT(100) not null\n)",
+		},
+		{
+			input:  "CREATE TABLE t1 (col1 TEXT(100) DEFAULT 'default_value')",
+			output: "create table t1 (\n\tcol1 TEXT(100) default 'default_value'\n)",
+		},
+		{
+			input:  "CREATE TABLE t1 (col1 TEXT(100) CHARACTER SET utf8mb4)",
+			output: "create table t1 (\n\tcol1 TEXT(100) character set utf8mb4\n)",
+		},
+		{
+			input:  "CREATE TABLE t1 (col1 TEXT(100) COLLATE utf8mb4_unicode_ci)",
+			output: "create table t1 (\n\tcol1 TEXT(100) collate utf8mb4_unicode_ci\n)",
+		},
+		{
+			input:  "CREATE TABLE t1 (col1 TEXT(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci)",
+			output: "create table t1 (\n\tcol1 TEXT(100) character set utf8mb4 collate utf8mb4_unicode_ci\n)",
+		},
+		{
+			input:  "CREATE TABLE t1 (col1 TEXT(100) NOT NULL DEFAULT 'test' CHARACTER SET utf8mb4)",
+			output: "create table t1 (\n\tcol1 TEXT(100) character set utf8mb4 not null default 'test'\n)",
+		},
+		{
+			input:  "CREATE TABLE t1 (col1 TEXT(100) COMMENT 'test comment')",
+			output: "create table t1 (\n\tcol1 TEXT(100) comment 'test comment'\n)",
+		},
+	}
 )
 
 // TestSingleSQL is a helper function to test a single SQL statement.
@@ -5113,6 +5176,12 @@ func TestPipesAsConcatMode(t *testing.T) {
 	parserOptions := ParserOptions{PipesAsConcat: true}
 	for _, tcase := range validPipesAsConcatSQL {
 		runParseTestCaseWithParserOptions(t, tcase, parserOptions)
+	}
+}
+
+func TestTextWithLength(t *testing.T) {
+	for _, tcase := range validTextWithLengthSQL {
+		runParseTestCase(t, tcase)
 	}
 }
 
