@@ -5134,6 +5134,14 @@ end`,
 			input:  "CREATE TABLE t1 (col1 TEXT(100) COMMENT 'test comment')",
 			output: "create table t1 (\n\tcol1 TEXT(100) comment 'test comment'\n)",
 		},
+		{
+			input:  "CREATE TABLE t1 (col1 TEXT)",
+			output: "create table t1 (\n\tcol1 TEXT\n)",
+		},
+		{
+			input:  "ALTER TABLE t1 ADD COLUMN col1 TEXT",
+			output: "alter table t1 add column (\n\tcol1 TEXT\n)",
+		},
 	}
 )
 
