@@ -5073,7 +5073,7 @@ end`,
 		},
 	}
 
-	validTextWithLengthSQL = []parseTest{
+	validTextWithLength = []parseTest{
 		{
 			input:  "CREATE TABLE t1 (col1 TEXT(100))",
 			output: "create table t1 (\n\tcol1 TEXT(100)\n)",
@@ -5180,7 +5180,7 @@ func TestPipesAsConcatMode(t *testing.T) {
 }
 
 func TestTextWithLength(t *testing.T) {
-	for _, tcase := range validTextWithLengthSQL {
+	for _, tcase := range validTextWithLength {
 		runParseTestCase(t, tcase)
 	}
 }
