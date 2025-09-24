@@ -3883,9 +3883,9 @@ char_type:
   {
     $$ = ColumnType{Type: string($1), Length: $2.(*SQLVal)}
   }
-| TEXT
+| TEXT char_length_opt
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = ColumnType{Type: string($1), Length: $2.(*SQLVal)}
   }
 | TINYTEXT
   {
