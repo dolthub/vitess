@@ -10142,6 +10142,33 @@ lock_opt:
   {
     $$ = ForUpdateNowaitStr
   }
+| FOR UPDATE OF table_name_list
+  {
+    tables := $4.(TableNames)
+    var tableNames []string
+    for _, t := range tables {
+      tableNames = append(tableNames, t.String())
+    }
+    $$ = ForUpdateOfStr + " " + strings.Join(tableNames, ", ")
+  }
+| FOR UPDATE OF table_name_list SKIP LOCKED
+  {
+    tables := $4.(TableNames)
+    var tableNames []string
+    for _, t := range tables {
+      tableNames = append(tableNames, t.String())
+    }
+    $$ = ForUpdateOfStr + " " + strings.Join(tableNames, ", ") + " skip locked"
+  }
+| FOR UPDATE OF table_name_list NOWAIT
+  {
+    tables := $4.(TableNames)
+    var tableNames []string
+    for _, t := range tables {
+      tableNames = append(tableNames, t.String())
+    }
+    $$ = ForUpdateOfStr + " " + strings.Join(tableNames, ", ") + " nowait"
+  }
 | LOCK IN SHARE MODE
   {
     $$ = ShareModeStr

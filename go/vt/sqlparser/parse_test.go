@@ -5143,6 +5143,29 @@ end`,
 			output: "alter table t1 add column (\n\tcol1 TEXT\n)",
 		},
 	}
+
+	// FOR UPDATE OF syntax tests
+	forUpdateOfTests = []parseTest{
+		{
+			input:  "select /* for update of */ 1 from t for update of t",
+			output: "select /* for update of */ 1 from t for update of t",
+		}, {
+			input:  "select /* for update of skip locked */ 1 from t for update of t skip locked",
+			output: "select /* for update of skip locked */ 1 from t for update of t skip locked",
+		}, {
+			input:  "select /* for update of nowait */ 1 from t for update of t nowait",
+			output: "select /* for update of nowait */ 1 from t for update of t nowait",
+		}, {
+			input:  "select /* for update of multiple tables */ 1 from t1, t2 for update of t1, t2",
+			output: "select /* for update of multiple tables */ 1 from t1, t2 for update of t1, t2",
+		}, {
+			input:  "select /* for update of multiple tables skip locked */ 1 from t1, t2 for update of t1, t2 skip locked",
+			output: "select /* for update of multiple tables skip locked */ 1 from t1, t2 for update of t1, t2 skip locked",
+		}, {
+			input:  "select /* for update of multiple tables nowait */ 1 from t1, t2 for update of t1, t2 nowait",
+			output: "select /* for update of multiple tables nowait */ 1 from t1, t2 for update of t1, t2 nowait",
+		},
+	}
 )
 
 // TestSingleSQL is a helper function to test a single SQL statement.
@@ -5177,6 +5200,12 @@ func TestAnsiQuotesMode(t *testing.T) {
 			require.NotNil(t, err)
 			assert.Equal(t, tcase.output, err.Error())
 		})
+	}
+}
+
+func TestForUpdateOf(t *testing.T) {
+	for _, tcase := range forUpdateOfTests {
+		runParseTestCase(t, tcase)
 	}
 }
 
