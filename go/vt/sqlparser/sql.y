@@ -649,7 +649,7 @@ select_statement:
     s := $1.(SelectStatement)
     s.SetOrderBy($2.(OrderBy))
     s.SetLimit($3.(*Limit))
-    s.SetLock($4.(string))
+    s.SetLock($4)
     if err := s.SetInto($5.(*Into)); err != nil {
     	yylex.Error(err.Error())
     	return 1
@@ -10149,7 +10149,11 @@ lock_opt:
     for _, t := range tables {
       tableNames = append(tableNames, t.String())
     }
-    $$ = ForUpdateOfStr + " " + strings.Join(tableNames, ", ")
+    lockStr := ForUpdateOfStr + " " + strings.Join(tableNames, ", ")
+    $$ = &Lock{
+      Type: lockStr,
+      Tables: tables,
+    }
   }
 | FOR UPDATE OF table_name_list SKIP LOCKED
   {
@@ -10158,7 +10162,11 @@ lock_opt:
     for _, t := range tables {
       tableNames = append(tableNames, t.String())
     }
-    $$ = ForUpdateOfStr + " " + strings.Join(tableNames, ", ") + " skip locked"
+    lockStr := ForUpdateOfStr + " " + strings.Join(tableNames, ", ") + " skip locked"
+    $$ = &Lock{
+      Type: lockStr,
+      Tables: tables,
+    }
   }
 | FOR UPDATE OF table_name_list NOWAIT
   {
@@ -10167,7 +10175,11 @@ lock_opt:
     for _, t := range tables {
       tableNames = append(tableNames, t.String())
     }
-    $$ = ForUpdateOfStr + " " + strings.Join(tableNames, ", ") + " nowait"
+    lockStr := ForUpdateOfStr + " " + strings.Join(tableNames, ", ") + " nowait"
+    $$ = &Lock{
+      Type: lockStr,
+      Tables: tables,
+    }
   }
 | LOCK IN SHARE MODE
   {

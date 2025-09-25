@@ -170,10 +170,10 @@ const (
 // Cursor Types. They are received on COM_STMT_EXECUTE()
 // See https://dev.mysql.com/doc/dev/mysql-server/9.3.0/mysql__com_8h.html#a3e5e9e744ff6f7b989a604fd669977da
 const (
-	NoCursor uint8 = 0x00
-	ReadOnly uint8 = 0x01
-	ForUpdate uint8 = 0x02
-	Scrollable uint8 = 0x04
+	NoCursor                uint8 = 0x00
+	ReadOnly                uint8 = 0x01
+	ForUpdate               uint8 = 0x02
+	Scrollable              uint8 = 0x04
 	ParameterCountAvailable uint8 = 0x08
 )
 
@@ -554,6 +554,7 @@ const (
 
 	ErrCantCreateGeometryObject      = 1416
 	ErrGISDataWrongEndianess         = 3055
+	ErrUnresolvedTableLock           = 3568
 	ErrNotImplementedForCartesianSRS = 3704
 	ErrNotImplementedForProjectedSRS = 3705
 	ErrNonPositiveRadius             = 3706
