@@ -493,7 +493,7 @@ type SelectStatement interface {
 	iInsertRows()
 	AddOrder(*Order)
 	SetLimit(*Limit)
-	SetLock(string)
+	SetLock(interface{})
 	SetOrderBy(OrderBy)
 	SetWith(*With)
 	SetInto(*Into) error
@@ -558,6 +558,12 @@ func (q *QueryOpts) Format(buf *TrackedBuffer) {
 	}
 }
 
+// Lock represents a lock clause
+type Lock struct {
+	Type   string     // The lock type string (e.g., " for update", " for update of t1, t2 skip locked")
+	Tables TableNames // Table names for FOR UPDATE OF clause (empty for regular FOR UPDATE)
+}
+
 // Select represents a SELECT statement.
 type Select struct {
 	Into        *Into
@@ -565,7 +571,7 @@ type Select struct {
 	Limit       *Limit
 	Having      *Where
 	Where       *Where
-	Lock        string
+	Lock        *Lock
 	GroupBy     GroupBy
 	Comments    Comments
 	Window      Window
@@ -591,6 +597,7 @@ const (
 	ShareModeStr           = " lock in share mode"
 	ForUpdateSkipLockedStr = " for update skip locked"
 	ForUpdateNowaitStr     = " for update nowait"
+	ForUpdateOfStr         = " for update of"
 )
 
 // AddOrder adds an order by element
@@ -606,8 +613,15 @@ func (node *Select) SetWith(w *With) {
 	node.With = w
 }
 
-func (node *Select) SetLock(lock string) {
-	node.Lock = lock
+func (node *Select) SetLock(lock interface{}) {
+	switch v := lock.(type) {
+	case string:
+		node.Lock = &Lock{Type: v}
+	case *Lock:
+		node.Lock = v
+	default:
+		node.Lock = nil
+	}
 }
 
 func (node *Select) SetInto(into *Into) error {
@@ -644,9 +658,13 @@ func (node *Select) Format(buf *TrackedBuffer) {
 		buf.Myprintf(" from %v", node.From)
 	}
 
+	lockStr := ""
+	if node.Lock != nil {
+		lockStr = node.Lock.Type
+	}
 	buf.Myprintf("%v%v%v%v%v%v%s%v",
 		node.Where, node.GroupBy, node.Having, node.Window,
-		node.OrderBy, node.Limit, node.Lock, node.Into)
+		node.OrderBy, node.Limit, lockStr, node.Into)
 }
 
 func (node *Select) walkSubtree(visit Visit) error {
@@ -730,7 +748,7 @@ func (node *ParenSelect) SetWith(w *With) {
 	panic("unreachable")
 }
 
-func (node *ParenSelect) SetLock(lock string) {
+func (node *ParenSelect) SetLock(lock interface{}) {
 	panic("unreachable")
 }
 
@@ -791,7 +809,7 @@ type SetOp struct {
 	Limit   *Limit
 	Into    *Into
 	Type    string
-	Lock    string
+	Lock    *Lock
 	OrderBy OrderBy
 }
 
@@ -826,8 +844,15 @@ func (node *SetOp) SetLimit(limit *Limit) {
 	node.Limit = limit
 }
 
-func (node *SetOp) SetLock(lock string) {
-	node.Lock = lock
+func (node *SetOp) SetLock(lock interface{}) {
+	switch v := lock.(type) {
+	case string:
+		node.Lock = &Lock{Type: v}
+	case *Lock:
+		node.Lock = v
+	default:
+		node.Lock = nil
+	}
 }
 
 func (node *SetOp) SetInto(into *Into) error {
@@ -851,8 +876,12 @@ func (node *SetOp) GetInto() *Into {
 
 // Format formats the node.
 func (node *SetOp) Format(buf *TrackedBuffer) {
+	lockStr := ""
+	if node.Lock != nil {
+		lockStr = node.Lock.Type
+	}
 	buf.Myprintf("%v%v %s %v%v%v%s%v", node.With, node.Left, node.Type, node.Right,
-		node.OrderBy, node.Limit, node.Lock, node.Into)
+		node.OrderBy, node.Limit, lockStr, node.Into)
 }
 
 func (node *SetOp) walkSubtree(visit Visit) error {
