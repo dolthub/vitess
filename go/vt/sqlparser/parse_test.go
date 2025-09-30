@@ -41,6 +41,30 @@ type parseTest struct {
 var (
 	validSQL = []parseTest{
 		{
+			input:  "SHOW FULL TABLES FROM versioning;",
+			output: "show full tables from versioning",
+		},
+		{
+			input:  "SELECT versioning FROM t;",
+			output: "select `versioning` from t",
+		},
+		{
+			input:  "CREATE TABLE versioning (id INT);",
+			output: "create table `versioning` (\n\tid INT\n)",
+		},
+		{
+			input:  "INSERT INTO versioning (id) VALUES (1);",
+			output: "insert into `versioning`(id) values (1)",
+		},
+		{
+			input:  "UPDATE versioning SET id = 2;",
+			output: "update `versioning` set id = 2",
+		},
+		{
+			input:  "DELETE FROM versioning WHERE id = 2;",
+			output: "delete from `versioning` where id = 2",
+		},
+		{
 			input:  "SELECT * FROM base.version;",
 			output: "select * from base.`version`",
 		},
