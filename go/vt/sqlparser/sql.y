@@ -11462,6 +11462,7 @@ non_reserved_keyword:
 | AVG_ROW_LENGTH
 | BEGIN
 | SERIAL
+| BINLOG
 | BIT
 | BOOL
 | BOOLEAN

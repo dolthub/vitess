@@ -175,7 +175,7 @@ func StripComments(sql string) string {
 		if start == -1 {
 			break
 		}
-		end := strings.Index(sql[start:], "*/")
+		end := strings.Index(sql, "*/")
 		if end <= 1 {
 			break
 		}
