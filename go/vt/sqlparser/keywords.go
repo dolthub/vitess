@@ -102,6 +102,7 @@ var keywords = map[string]int{
 	"between":                       BETWEEN,
 	"bigint":                        BIGINT,
 	"binary":                        BINARY,
+	"binlog":                        BINLOG,
 	"binlog_admin":                  BINLOG_ADMIN,
 	"binlog_encryption_admin":       BINLOG_ENCRYPTION_ADMIN,
 	"bit":                           BIT,

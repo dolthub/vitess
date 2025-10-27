@@ -326,9 +326,18 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 				tkn.next()
 				return tkn.scanCommentType1("//")
 			case '*':
+				if tkn.SkipSpecialComments {
+					return tkn.scanCommentType2()
+				}
 				tkn.next()
-				if tkn.lastChar == '!' && !tkn.SkipSpecialComments {
+				switch tkn.lastChar {
+				case '!':
 					return tkn.scanMySQLSpecificComment()
+				case 'M':
+					tkn.next()
+					if tkn.lastChar == '!' {
+						return tkn.scanMariaDBSpecificComment()
+					}
 				}
 				return tkn.scanCommentType2()
 			default:
@@ -754,12 +763,13 @@ func (tkn *Tokenizer) scanCommentType2() (int, []byte) {
 	return COMMENT, buffer.Bytes()
 }
 
-func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
+// scanExecutableComment parses executable comments with optional version numbers.
+// Used for both MySQL (/*!) and MariaDB (/*M!) specific comments.
+func (tkn *Tokenizer) scanExecutableComment(prefix string) (int, []byte) {
 	buffer := &bytes2.Buffer{}
-	buffer.WriteString("/*!")
+	buffer.WriteString(prefix)
 	tkn.next()
 
-	foundStartPos := false
 	startOffset := 0
 	digitCount := 0
 
@@ -776,40 +786,47 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 		if tkn.lastChar == eofChar {
 			return LEX_ERROR, buffer.Bytes()
 		}
+
+		// Track position after optional version number (up to 5 digits)
+		if digitCount < 5 && isDigit(tkn.lastChar) {
+			digitCount++
+		} else if digitCount > 0 && startOffset == 0 && !unicode.IsSpace(rune(tkn.lastChar)) {
+			// Found first non-space after version - mark SQL start
+			startOffset = tkn.Position - 1
+		}
+
 		tkn.consumeNext(buffer)
-
-		// Already found special comment starting point
-		if foundStartPos {
-			continue
-		}
-
-		// Haven't reached character count
-		if digitCount < 5 {
-			if isDigit(tkn.lastChar) {
-				// Increase digit count
-				digitCount++
-				continue
-			} else {
-				// Provided less than 5 digits, but force this to move on
-				digitCount = 5
-			}
-		}
-
-		// If no longer counting digits, ignore spaces until first non-space character
-		if unicode.IsSpace(rune(tkn.lastChar)) {
-			continue
-		}
-
-		// Found start of subexpression
-		startOffset = tkn.Position - 1
-		foundStartPos = true
 	}
-	_, sql := ExtractMysqlComment(buffer.String())
 
-	tkn.specialComment = NewStringTokenizer(sql)
+	// Extract SQL from comment
+	commentStr := buffer.String()
+	prefixLen := len(prefix)
+	suffixLen := 2 // */
+	sql := commentStr[prefixLen : len(commentStr)-suffixLen]
+
+	// Skip optional version number and spaces
+	innerSQL := strings.TrimLeftFunc(sql, func(c rune) bool {
+		return unicode.IsDigit(c) || unicode.IsSpace(c)
+	})
+
+	// If comment is empty, treat as regular comment (not executable)
+	if len(innerSQL) == 0 {
+		return COMMENT, buffer.Bytes()
+	}
+
+	tkn.specialComment = NewStringTokenizer(innerSQL)
 	tkn.specialComment.Position = startOffset
 
+	// For non-empty executable comments, scan the SQL content
 	return tkn.Scan()
+}
+
+func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
+	return tkn.scanExecutableComment("/*!")
+}
+
+func (tkn *Tokenizer) scanMariaDBSpecificComment() (int, []byte) {
+	return tkn.scanExecutableComment("/*M!")
 }
 
 func (tkn *Tokenizer) consumeNext(buffer *bytes2.Buffer) {

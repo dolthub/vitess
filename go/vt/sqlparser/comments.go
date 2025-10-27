@@ -184,22 +184,6 @@ func StripComments(sql string) string {
 	return sql
 }
 
-// ExtractMysqlComment extracts the version and SQL from a comment-only query
-// such as /*!50708 sql here */
-func ExtractMysqlComment(sql string) (version string, innerSQL string) {
-	sql = sql[3 : len(sql)-2]
-
-	digitCount := 0
-	endOfVersionIndex := strings.IndexFunc(sql, func(c rune) bool {
-		digitCount++
-		return !unicode.IsDigit(c) || digitCount == 6
-	})
-	version = sql[0:endOfVersionIndex]
-	innerSQL = strings.TrimFunc(sql[endOfVersionIndex:], unicode.IsSpace)
-
-	return version, innerSQL
-}
-
 const commentDirectivePreamble = "/*vt+"
 
 // CommentDirectives is the parsed representation for execution directives
@@ -209,7 +193,7 @@ type CommentDirectives map[string]interface{}
 // ExtractCommentDirectives parses the comment list for any execution directives
 // of the form:
 //
-//     /*vt+ OPTION_ONE=1 OPTION_TWO OPTION_THREE=abcd */
+//	/*vt+ OPTION_ONE=1 OPTION_TWO OPTION_THREE=abcd */
 //
 // It returns the map of the directive values or nil if there aren't any.
 func ExtractCommentDirectives(comments Comments) CommentDirectives {

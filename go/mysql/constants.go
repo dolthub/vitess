@@ -417,12 +417,15 @@ const (
 	EROptionPreventsStatement       = 1290
 	ERDuplicatedValueInType         = 1291
 	ERSPDoesNotExist                = 1305
-	ERNoDefaultForField             = 1364
-	ErSPNotVarArg                   = 1414
-	ERRowIsReferenced2              = 1451
-	ErNoReferencedRow2              = 1452
-	ERDupIndex                      = 1831
-	ERInnodbReadOnly                = 1874
+	ERNoDefaultForField                                  = 1364
+	ERBase64DecodeError                                  = 1373
+	ErSPNotVarArg                                        = 1414
+	ERNoFormatDescriptionEventBeforeBinlogStatement      = 1403
+	ERRowIsReferenced2                                   = 1451
+	ErNoReferencedRow2                                   = 1452
+	EROnlyFDAndRBREventsAllowedInBinlogStatement         = 1512
+	ERDupIndex                                           = 1831
+	ERInnodbReadOnly                                     = 1874
 
 	// already exists
 	ERDbCreateExists = 1007

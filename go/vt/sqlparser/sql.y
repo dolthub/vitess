@@ -184,7 +184,7 @@ func tryCastStatement(v interface{}) Statement {
 %token <bytes> SSL X509 CIPHER ISSUER SUBJECT ACCOUNT EXPIRE NEVER OPTION OPTIONAL ADMIN PRIVILEGES
 %token <bytes> MAX_QUERIES_PER_HOUR MAX_UPDATES_PER_HOUR MAX_CONNECTIONS_PER_HOUR MAX_USER_CONNECTIONS FLUSH
 %token <bytes> FAILED_LOGIN_ATTEMPTS PASSWORD_LOCK_TIME UNBOUNDED REQUIRE PROXY ROUTINE TABLESPACE CLIENT SLAVE
-%token <bytes> EXECUTE FILE RELOAD REPLICATION SHUTDOWN SUPER USAGE LOGS ENGINE ERROR GENERAL HOSTS
+%token <bytes> EXECUTE FILE RELOAD REPLICATION SHUTDOWN SUPER USAGE LOGS ENGINE ERROR GENERAL HOSTS BINLOG
 %token <bytes> OPTIMIZER_COSTS RELAY SLOW USER_RESOURCES NO_WRITE_TO_BINLOG CHANNEL UNKNOWN
 
 // Dynamic Privilege Tokens
@@ -326,7 +326,7 @@ func tryCastStatement(v interface{}) Statement {
 %type <val> begin_end_block declare_statement resignal_statement open_statement close_statement fetch_statement
 %type <val> loop_statement leave_statement iterate_statement repeat_statement while_statement return_statement
 %type <val> savepoint_statement rollback_savepoint_statement release_savepoint_statement purge_binary_logs_statement
-%type <val> lock_statement unlock_statement kill_statement grant_statement revoke_statement flush_statement replication_statement
+%type <val> lock_statement unlock_statement kill_statement grant_statement revoke_statement flush_statement replication_statement binlog_statement
 %type <val> ignore_unknown_user_opt
 %type <bytes> thread_type_opt
 %type <val> statement_list
@@ -607,7 +607,8 @@ command:
 | replication_statement
 | flush_statement
 | purge_binary_logs_statement
-| /*empty*/
+| binlog_statement
+| comment_list
 {
   setParseTree(yylex, nil)
 }
@@ -10857,6 +10858,19 @@ kill_statement:
       },
     }
   }
+
+binlog_statement:
+	BINLOG STRING
+	{
+		$$ = &Binlog{
+			Base64Str: string($2),
+			Auth: AuthInformation{
+				AuthType: AuthType_BINLOG,
+				TargetType: AuthTargetType_Global,
+			},
+		}
+	}
+
 
 /*
   Reserved keywords are keywords that MUST be backtick quoted to be used as an identifier. They cannot

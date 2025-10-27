@@ -17,9 +17,10 @@ limitations under the License.
 package sqlparser
 
 import (
-	"github.com/stretchr/testify/require"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestSplitComments(t *testing.T) {
@@ -171,6 +172,9 @@ func TestStripLeadingComments(t *testing.T) {
 		input:  "/*!*/",
 		outSQL: "/*!*/",
 	}, {
+		input:  "/*M!*/",
+		outSQL: "/*M!*/",
+	}, {
 		input:  "/*!a*/",
 		outSQL: "/*!a*/",
 	}, {
@@ -247,6 +251,9 @@ func TestRemoveComments(t *testing.T) {
 		input:  "/*!*/",
 		outSQL: "",
 	}, {
+		input:  "/*M!*/",
+		outSQL: "",
+	}, {
 		input:  "/*!a*/",
 		outSQL: "",
 	}, {
@@ -292,32 +299,31 @@ a`,
 	}
 }
 
-func TestExtractMysqlComment(t *testing.T) {
+func TestExecutableComments(t *testing.T) {
 	var testCases = []struct {
-		input, outSQL, outVersion string
+		input  string
+		outSQL string
 	}{{
-		input:      "/*!50708SET max_execution_time=5000 */",
-		outSQL:     "SET max_execution_time=5000",
-		outVersion: "50708",
+		input:  "/*!50708 SET max_execution_time=5000 */",
+		outSQL: "set max_execution_time = 5000",
 	}, {
-		input:      "/*!50708 SET max_execution_time=5000*/",
-		outSQL:     "SET max_execution_time=5000",
-		outVersion: "50708",
+		input:  "/*! SET max_execution_time=5000*/",
+		outSQL: "set max_execution_time = 5000",
 	}, {
-		input:      "/*!50708* from*/",
-		outSQL:     "* from",
-		outVersion: "50708",
+		input:  "/*M!100101 SET @@session.skip_parallel_replication=0*/",
+		outSQL: "set session skip_parallel_replication = 0",
 	}, {
-		input:      "/*! SET max_execution_time=5000*/",
-		outSQL:     "SET max_execution_time=5000",
-		outVersion: "",
+		input:  "/*M! SET @@session.gtid_domain_id=0*/",
+		outSQL: "set session gtid_domain_id = 0",
 	}}
 	for _, testCase := range testCases {
-		gotVersion, gotSQL := ExtractMysqlComment(testCase.input)
-
-		if gotVersion != testCase.outVersion {
-			t.Errorf("test input: '%s', got version\n%+v, want\n%+v", testCase.input, gotVersion, testCase.outVersion)
+		stmt, err := Parse(testCase.input)
+		if err != nil {
+			t.Errorf("test input: '%s', parse error: %v", testCase.input, err)
+			continue
 		}
+
+		gotSQL := String(stmt)
 		if gotSQL != testCase.outSQL {
 			t.Errorf("test input: '%s', got SQL\n%+v, want\n%+v", testCase.input, gotSQL, testCase.outSQL)
 		}

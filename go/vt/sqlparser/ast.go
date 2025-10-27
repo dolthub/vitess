@@ -480,6 +480,7 @@ func (*RollbackSavepoint) iStatement() {}
 func (*ReleaseSavepoint) iStatement()  {}
 func (*LockTables) iStatement()        {}
 func (*UnlockTables) iStatement()      {}
+func (*Binlog) iStatement()            {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
@@ -8323,4 +8324,35 @@ func (d InjectedStatement) SetAuthTargetNames(targetNames []string) {
 // SetExtra implements the AuthNode interface.
 func (d InjectedStatement) SetExtra(extra any) {
 	d.Auth.Extra = extra
+}
+
+type Binlog struct {
+	Base64Str string
+	Auth      AuthInformation
+}
+
+var _ AuthNode = (*Binlog)(nil)
+
+func (node *Binlog) Format(buf *TrackedBuffer) {
+	buf.Myprintf("binlog '%s'", node.Base64Str)
+}
+
+func (node *Binlog) GetAuthInformation() AuthInformation {
+	return node.Auth
+}
+
+func (node *Binlog) SetAuthType(authType string) {
+	node.Auth.AuthType = authType
+}
+
+func (node *Binlog) SetAuthTargetType(targetType string) {
+	node.Auth.TargetType = targetType
+}
+
+func (node *Binlog) SetAuthTargetNames(targetNames []string) {
+	node.Auth.TargetNames = targetNames
+}
+
+func (node *Binlog) SetExtra(extra any) {
+	node.Auth.Extra = extra
 }
