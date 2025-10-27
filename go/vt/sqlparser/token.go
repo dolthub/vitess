@@ -770,9 +770,6 @@ func (tkn *Tokenizer) scanExecutableComment(prefix string) (int, []byte) {
 	buffer.WriteString(prefix)
 	tkn.next()
 
-	startOffset := 0
-	digitCount := 0
-
 	for {
 		if tkn.lastChar == '*' {
 			tkn.consumeNext(buffer)
@@ -787,14 +784,6 @@ func (tkn *Tokenizer) scanExecutableComment(prefix string) (int, []byte) {
 			return LEX_ERROR, buffer.Bytes()
 		}
 
-		// Track position after optional version number (up to 5 digits)
-		if digitCount < 5 && isDigit(tkn.lastChar) {
-			digitCount++
-		} else if digitCount > 0 && startOffset == 0 && !unicode.IsSpace(rune(tkn.lastChar)) {
-			// Found first non-space after version - mark SQL start
-			startOffset = tkn.Position - 1
-		}
-
 		tkn.consumeNext(buffer)
 	}
 
@@ -804,10 +793,23 @@ func (tkn *Tokenizer) scanExecutableComment(prefix string) (int, []byte) {
 	suffixLen := 2 // */
 	sql := commentStr[prefixLen : len(commentStr)-suffixLen]
 
-	// Skip optional version number and spaces
-	innerSQL := strings.TrimLeftFunc(sql, func(c rune) bool {
-		return unicode.IsDigit(c) || unicode.IsSpace(c)
-	})
+	// Skip optional version number (up to 5 digits) and spaces
+	// We need to limit to 5 version digits to avoid trimming actual SQL content like /*!401011 from*/
+	// where 40101 is the version and "1 from" is the SQL
+	innerSQL := sql
+	trimmedDigits := 0
+	for i, c := range sql {
+		if trimmedDigits < 5 && unicode.IsDigit(c) {
+			trimmedDigits++
+		} else if unicode.IsSpace(c) {
+			// Continue skipping spaces after version digits
+			continue
+		} else {
+			// Found first non-space, non-version-digit character
+			innerSQL = sql[i:]
+			break
+		}
+	}
 
 	// If comment is empty, treat as regular comment (not executable)
 	if len(innerSQL) == 0 {
@@ -815,7 +817,10 @@ func (tkn *Tokenizer) scanExecutableComment(prefix string) (int, []byte) {
 	}
 
 	tkn.specialComment = NewStringTokenizer(innerSQL)
-	tkn.specialComment.Position = startOffset
+	// Calculate position where innerSQL starts in the original buffer
+	// specialCommentEndPos points just after the closing */, go back through the suffix and innerSQL
+	// Subtract 1 more to convert from 1-indexed Position to 0-indexed string index
+	tkn.specialComment.Position = tkn.specialCommentEndPos - suffixLen - len(innerSQL) - 1
 
 	// For non-empty executable comments, scan the SQL content
 	return tkn.Scan()

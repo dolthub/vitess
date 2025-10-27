@@ -138,8 +138,11 @@ func StripLeadingComments(sql string) string {
 			if index <= 1 {
 				return sql
 			}
-			// don't strip /*! ... */ or /*!50700 ... */
+			// don't strip /*! ... */ or /*!50700 ... */ (MySQL) or /*M! ... */ (MariaDB)
 			if len(sql) > 2 && sql[2] == '!' {
+				return sql
+			}
+			if len(sql) > 3 && sql[2] == 'M' && sql[3] == '!' {
 				return sql
 			}
 			sql = sql[index+2:]
@@ -172,7 +175,7 @@ func StripComments(sql string) string {
 		if start == -1 {
 			break
 		}
-		end := strings.Index(sql, "*/")
+		end := strings.Index(sql[start:], "*/")
 		if end <= 1 {
 			break
 		}
