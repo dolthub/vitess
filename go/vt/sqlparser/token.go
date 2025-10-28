@@ -787,31 +787,43 @@ func (tkn *Tokenizer) scanExecutableComment(prefix string) (int, []byte) {
 		tkn.consumeNext(buffer)
 	}
 
-	// Extract SQL from comment
 	commentStr := buffer.String()
 	prefixLen := len(prefix)
-	suffixLen := 2 // */
+	suffixLen := 2
 	sql := commentStr[prefixLen : len(commentStr)-suffixLen]
 
-	// Skip optional version number (up to 5 digits) and spaces
-	// We need to limit to 5 version digits to avoid trimming actual SQL content like /*!401011 from*/
-	// where 40101 is the version and "1 from" is the SQL
 	innerSQL := sql
-	trimmedDigits := 0
+	digitCount := 0
+
 	for i, c := range sql {
-		if trimmedDigits < 5 && unicode.IsDigit(c) {
-			trimmedDigits++
-		} else if unicode.IsSpace(c) {
-			// Continue skipping spaces after version digits
-			continue
+		if unicode.IsDigit(c) {
+			digitCount++
 		} else {
-			// Found first non-space, non-version-digit character
-			innerSQL = sql[i:]
+			break
+		}
+		if i >= 5 {
 			break
 		}
 	}
 
-	// If comment is empty, treat as regular comment (not executable)
+	var versionDigits int
+	if prefix == "/*M!" && digitCount >= 6 && len(sql) > 6 && unicode.IsSpace(rune(sql[6])) {
+		versionDigits = 6
+	} else if digitCount >= 5 {
+		versionDigits = 5
+	} else if digitCount > 0 && digitCount < 5 {
+		return COMMENT, buffer.Bytes()
+	} else {
+		// TODO: MySQL treats comments that begin with fewer than 5 digits as normal comments.
+		versionDigits = 0
+	}
+
+	skipIndex := versionDigits
+	for skipIndex < len(sql) && unicode.IsSpace(rune(sql[skipIndex])) {
+		skipIndex++
+	}
+	innerSQL = sql[skipIndex:]
+
 	if len(innerSQL) == 0 {
 		return COMMENT, buffer.Bytes()
 	}

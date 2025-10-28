@@ -310,11 +310,14 @@ func TestExecutableComments(t *testing.T) {
 		input:  "/*! SET max_execution_time=5000*/",
 		outSQL: "set max_execution_time = 5000",
 	}, {
-		input:  "/*M!10010 SET @@session.skip_parallel_replication=0*/",
+		input:  "/*M!100101 SET @@session.skip_parallel_replication=0*/",
 		outSQL: "set session skip_parallel_replication = 0",
 	}, {
 		input:  "/*M! SET @@session.gtid_domain_id=0*/",
 		outSQL: "set session gtid_domain_id = 0",
+	}, {
+		input:  "/*M!100101 SET @@session.skip_parallel_replication=0*/",
+		outSQL: "set session skip_parallel_replication = 0",
 	}}
 	for _, testCase := range testCases {
 		stmt, err := Parse(testCase.input)
