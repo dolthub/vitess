@@ -763,8 +763,8 @@ func (tkn *Tokenizer) scanCommentType2() (int, []byte) {
 	return COMMENT, buffer.Bytes()
 }
 
-// scanExecutableComment parses executable comments with optional version numbers.
-// Used for both MySQL (/*!) and MariaDB (/*M!) specific comments.
+// scanExecutableComment scans executable comments with version-gated SQL content.
+// Handles MySQL (/*!) with 5-digit versions and MariaDB (/*M!) with 5 or 6-digit versions.
 func (tkn *Tokenizer) scanExecutableComment(prefix string) (int, []byte) {
 	buffer := &bytes2.Buffer{}
 	buffer.WriteString(prefix)
@@ -838,14 +838,17 @@ func (tkn *Tokenizer) scanExecutableComment(prefix string) (int, []byte) {
 	return tkn.Scan()
 }
 
+// scanMySQLSpecificComment scans MySQL executable comments with /*! prefix.
 func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 	return tkn.scanExecutableComment("/*!")
 }
 
+// scanMariaDBSpecificComment scans MariaDB executable comments with /*M! prefix.
 func (tkn *Tokenizer) scanMariaDBSpecificComment() (int, []byte) {
 	return tkn.scanExecutableComment("/*M!")
 }
 
+// consumeNext writes current character to buffer and advances to next character.
 func (tkn *Tokenizer) consumeNext(buffer *bytes2.Buffer) {
 	if tkn.lastChar == eofChar {
 		// This should never happen.
@@ -855,6 +858,7 @@ func (tkn *Tokenizer) consumeNext(buffer *bytes2.Buffer) {
 	tkn.next()
 }
 
+// next advances to the next character in the input stream.
 func (tkn *Tokenizer) next() {
 	if tkn.bufPos >= tkn.bufSize && tkn.InStream != nil {
 		// Try and refill the buffer

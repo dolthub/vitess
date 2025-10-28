@@ -8326,6 +8326,7 @@ func (d InjectedStatement) SetExtra(extra any) {
 	d.Auth.Extra = extra
 }
 
+// Binlog represents a BINLOG statement that executes base64-encoded binary log events.
 type Binlog struct {
 	Base64Str string
 	Auth      AuthInformation
@@ -8333,26 +8334,32 @@ type Binlog struct {
 
 var _ AuthNode = (*Binlog)(nil)
 
+// Format formats the node.
 func (node *Binlog) Format(buf *TrackedBuffer) {
 	buf.Myprintf("binlog '%s'", node.Base64Str)
 }
 
+// GetAuthInformation returns the authorization information for this node.
 func (node *Binlog) GetAuthInformation() AuthInformation {
 	return node.Auth
 }
 
+// SetAuthType sets the authorization type.
 func (node *Binlog) SetAuthType(authType string) {
 	node.Auth.AuthType = authType
 }
 
+// SetAuthTargetType sets the authorization target type.
 func (node *Binlog) SetAuthTargetType(targetType string) {
 	node.Auth.TargetType = targetType
 }
 
+// SetAuthTargetNames sets the authorization target names.
 func (node *Binlog) SetAuthTargetNames(targetNames []string) {
 	node.Auth.TargetNames = targetNames
 }
 
+// SetExtra sets extra authorization information.
 func (node *Binlog) SetExtra(extra any) {
 	node.Auth.Extra = extra
 }
