@@ -2471,7 +2471,7 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 					buf.Myprintf("%s%s table%s %v %v%v", node.Action, temporary, notExists, node.Table, node.TableSpec, node.OptSelect)
 				}
 			} else if node.OptSelect != nil {
-				buf.Myprintf("%s%s table%s %v %v", node.Action, temporary, notExists, node.Table, node.OptSelect)
+				buf.Myprintf("%s%s table%s %v%v", node.Action, temporary, notExists, node.Table, node.OptSelect)
 			} else {
 				buf.Myprintf("%s%s table%s %v", node.Action, temporary, notExists, node.Table)
 			}
@@ -2753,7 +2753,7 @@ type OptSelect struct {
 
 // Format formats the node.
 func (node *OptSelect) Format(buf *TrackedBuffer) {
-	buf.Myprintf("as %v", node.Select) // purposely display the AS
+	buf.Myprintf(" as %v", node.Select) // purposely display the AS
 }
 
 func (node *OptSelect) walkSubtree(visit Visit) error {
@@ -2874,18 +2874,30 @@ type TableSpec struct {
 // Format formats the node.
 func (ts *TableSpec) Format(buf *TrackedBuffer) {
 	buf.Myprintf("(\n")
+	emptyList := true
 	for i, col := range ts.Columns {
 		if i == 0 {
 			buf.Myprintf("\t%v", col)
 		} else {
 			buf.Myprintf(",\n\t%v", col)
 		}
+		emptyList = false
 	}
 	for _, idx := range ts.Indexes {
-		buf.Myprintf(",\n\t%v", idx)
+		if emptyList {
+			buf.Myprintf("\t%v", idx)
+			emptyList = false
+		} else {
+			buf.Myprintf(",\n\t%v", idx)
+		}
 	}
 	for _, c := range ts.Constraints {
-		buf.Myprintf(",\n\t%v", c)
+		if emptyList {
+			buf.Myprintf("\t%v", c)
+			emptyList = true
+		} else {
+			buf.Myprintf(",\n\t%v", c)
+		}
 	}
 	buf.Myprintf("\n)")
 	for _, tblOpt := range ts.TableOpts {

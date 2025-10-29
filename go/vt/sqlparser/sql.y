@@ -1232,7 +1232,24 @@ create_statement:
     }
     $$ = $1.(*DDL)
   }
-  // TODO: Allow for table specs to be parsed here
+| create_table_prefix table_spec AS create_query_expression
+  {
+    $1.(*DDL).TableSpec = $2.(*TableSpec)
+    $1.(*DDL).OptSelect = &OptSelect{Select: $4.(SelectStatement)}
+    if len($1.(*DDL).TableSpec.Constraints) > 0 {
+      $1.(*DDL).ConstraintAction = AddStr
+    }
+    $$ = $1.(*DDL)
+  }
+| create_table_prefix table_spec create_query_select_expression
+  {
+    $1.(*DDL).TableSpec = $2.(*TableSpec)
+    $1.(*DDL).OptSelect = &OptSelect{Select: $3.(SelectStatement)}
+    if len($1.(*DDL).TableSpec.Constraints) > 0 {
+      $1.(*DDL).ConstraintAction = AddStr
+    }
+    $$ = $1.(*DDL)
+  }
 | create_table_prefix AS create_query_expression
   {
     $1.(*DDL).OptSelect = &OptSelect{Select: $3.(SelectStatement)}
@@ -3364,6 +3381,16 @@ table_column_list:
     $$.(*TableSpec).AddColumn($1.(*ColumnDefinition))
   }
 | check_constraint_definition
+  {
+    $$ = &TableSpec{}
+    $$.(*TableSpec).AddConstraint($1.(*ConstraintDefinition))
+  }
+| index_definition
+  {
+    $$ = &TableSpec{}
+    $$.(*TableSpec).AddIndex($1.(*IndexDefinition))
+  }
+| foreign_key_definition
   {
     $$ = &TableSpec{}
     $$.(*TableSpec).AddConstraint($1.(*ConstraintDefinition))
