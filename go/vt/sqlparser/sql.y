@@ -1232,7 +1232,24 @@ create_statement:
     }
     $$ = $1.(*DDL)
   }
-  // TODO: Allow for table specs to be parsed here
+| create_table_prefix table_spec AS create_query_expression
+  {
+    $1.(*DDL).TableSpec = $2.(*TableSpec)
+    $1.(*DDL).OptSelect = &OptSelect{Select: $4.(SelectStatement)}
+    if len($1.(*DDL).TableSpec.Constraints) > 0 {
+      $1.(*DDL).ConstraintAction = AddStr
+    }
+    $$ = $1.(*DDL)
+  }
+| create_table_prefix table_spec create_query_select_expression
+  {
+    $1.(*DDL).TableSpec = $2.(*TableSpec)
+    $1.(*DDL).OptSelect = &OptSelect{Select: $3.(SelectStatement)}
+    if len($1.(*DDL).TableSpec.Constraints) > 0 {
+      $1.(*DDL).ConstraintAction = AddStr
+    }
+    $$ = $1.(*DDL)
+  }
 | create_table_prefix AS create_query_expression
   {
     $1.(*DDL).OptSelect = &OptSelect{Select: $3.(SelectStatement)}
@@ -3368,6 +3385,16 @@ table_column_list:
     $$ = &TableSpec{}
     $$.(*TableSpec).AddConstraint($1.(*ConstraintDefinition))
   }
+| index_definition
+  {
+    $$ = &TableSpec{}
+    $$.(*TableSpec).AddIndex($1.(*IndexDefinition))
+  }
+| foreign_key_definition
+  {
+    $$ = &TableSpec{}
+    $$.(*TableSpec).AddConstraint($1.(*ConstraintDefinition))
+  }
 | table_column_list ',' column_definition_for_create
   {
     $$.(*TableSpec).AddColumn($3.(*ColumnDefinition))
@@ -4613,11 +4640,11 @@ index_info:
   // key is always named 'PRIMARY'
   PRIMARY KEY name_opt
   {
-    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
+    $$ = &IndexInfo{Type: "primary key", Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
   }
 | CONSTRAINT name_opt PRIMARY KEY name_opt
   {
-    $$ = &IndexInfo{Type: string($3) + " " + string($4), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
+    $$ = &IndexInfo{Type: "primary key", Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
   }
 | SPATIAL index_or_key name_opt
   {
@@ -4882,11 +4909,11 @@ table_option:
   }
 | default_keyword_opt CHARSET equal_opt charset
   {
-    $$ = &TableOption{Name: "CHARACTER SET", Value: $4.(string)}
+    $$ = &TableOption{Name: "character set", Value: $4.(string)}
   }
 | default_keyword_opt CHARACTER SET equal_opt charset
   {
-    $$ = &TableOption{Name: string($2) + " " + string($3), Value: $5.(string)}
+    $$ = &TableOption{Name: "character set", Value: $5.(string)}
   }
 | CHECKSUM equal_opt coericble_to_integral
   {
