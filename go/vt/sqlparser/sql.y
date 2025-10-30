@@ -10862,8 +10862,13 @@ kill_statement:
 binlog_statement:
 	BINLOG STRING
 	{
+		base64Str := string($2)
+		if base64Str == "" {
+			yylex.Error("You have an error in your SQL syntax")
+			return 1
+		}
 		$$ = &Binlog{
-			Base64Str: string($2),
+			Base64Str: base64Str,
 			Auth: AuthInformation{
 				AuthType: AuthType_BINLOG,
 				TargetType: AuthTargetType_Global,

@@ -127,6 +127,9 @@ type BinlogEvent interface {
 
 	// Bytes returns the binary representation of the event
 	Bytes() []byte
+
+	// TypeName returns a human-readable name for the event type.
+	TypeName() string
 }
 
 // BinlogFormat contains relevant data from the FORMAT_DESCRIPTION_EVENT.

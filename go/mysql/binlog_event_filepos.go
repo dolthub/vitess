@@ -114,6 +114,10 @@ func (ev filePosQueryEvent) StripChecksum(f BinlogFormat) (BinlogEvent, []byte, 
 	return ev, nil, nil
 }
 
+func (ev filePosQueryEvent) TypeName() string {
+	return "Query"
+}
+
 //----------------------------------------------------------------------------
 
 // filePosFakeEvent is the base class for fake events.
@@ -251,6 +255,10 @@ func (ev filePosGTIDEvent) IsGTID() bool {
 
 func (ev filePosGTIDEvent) StripChecksum(f BinlogFormat) (BinlogEvent, []byte, error) {
 	return ev, nil, nil
+}
+
+func (ev filePosGTIDEvent) TypeName() string {
+	return "Gtid"
 }
 
 func (ev filePosGTIDEvent) GTID(BinlogFormat) (GTID, bool, error) {
