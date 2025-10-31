@@ -8184,29 +8184,54 @@ func TestCreateTableSelect(t *testing.T) {
 	}, {
 		input:  "create table `t` select pk from `foo`",
 		output: "create table t as select pk from foo",
+	}, {
+		input: "create table t (pk int) select val from foo",
+		output: "create table t (\n" +
+			"\tpk int\n" +
+			") as select val from foo",
+	}, {
+		input: "create table t (pk int) as select val from foo",
+		output: "create table t (\n" +
+			"\tpk int\n" +
+			") as select val from foo",
+	}, {
+		// CREATE TABLE with only indexes (no columns) and SELECT
+		input: "CREATE TEMPORARY TABLE t (INDEX my_index_name (tag, time), UNIQUE my_unique_index_name (order_number)) SELECT * FROM my_big_table WHERE my_val = 1",
+		output: "create temporary table t (\n" +
+			"\tINDEX my_index_name (tag, `time`),\n" +
+			"\tUNIQUE my_unique_index_name (order_number)\n" +
+			") as select * from my_big_table where my_val = 1",
+	}, {
+		// CREATE TABLE with columns, indexes, and SELECT with ENGINE option
+		input: `CREATE TEMPORARY TABLE core.my_tmp_table (id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, value BIGINT UNSIGNED NOT NULL DEFAULT 0 UNIQUE, location VARCHAR(20) DEFAULT "NEEDS TO BE SET", country CHAR(2) DEFAULT "XX" COMMENT "Two-letter country code", INDEX my_index_name (location)) ENGINE=MyISAM SELECT * FROM core.my_big_table`,
+		output: "create temporary table core.my_tmp_table (\n" +
+			"\tid INT unsigned not null auto_increment primary key,\n" +
+			"\t`value` BIGINT unsigned not null default 0 unique,\n" +
+			"\tlocation VARCHAR(20) default 'NEEDS TO BE SET',\n" +
+			"\tcountry CHAR(2) default 'XX' comment 'Two-letter country code',\n" +
+			"\tINDEX my_index_name (location)\n" +
+			") ENGINE MyISAM as select * from core.my_big_table",
+	}, {
+		// CREATE TABLE with column type override for SELECT column
+		input: "CREATE TABLE foo (a TINYINT NOT NULL) SELECT b+1 AS a FROM bar",
+		output: "create table foo (\n" +
+			"\ta TINYINT not null\n" +
+			") as select b + 1 a from bar",
+	}, {
+		// CREATE TABLE with columns from both spec and SELECT (disjoint)
+		input: "CREATE TABLE bar (m INT) SELECT n FROM foo",
+		output: "create table bar (\n" +
+			"\tm INT\n" +
+			") as select n from foo",
+	}, {
+		// CREATE TABLE with KEY shorthand
+		input: "CREATE TABLE test (a INT NOT NULL AUTO_INCREMENT, PRIMARY KEY (a), KEY(b)) ENGINE=InnoDB SELECT b,c FROM test2",
+		output: "create table test (\n" +
+			"\ta INT not null auto_increment,\n" +
+			"\tPRIMARY KEY (a),\n" +
+			"\tKEY (b)\n" +
+			") ENGINE InnoDB as select b, c from test2",
 	}}
-	// TODO: Table Specs with CREATE SELECT need to be fixed
-	//{
-	//	input: "create table t (pk int) select val from foo",
-	//	output: "create table t (\n" +
-	//			"\tpk int\n" +
-	//		    ") as select val from foo",
-	//}, {
-	//	input: "CREATE TEMPORARY TABLE t (INDEX my_index_name (tag, time), UNIQUE my_unique_index_name (order_number)) SELECT * FROM my_big_table WHERE my_val = 1",
-	//	output: "create table t(\n" +
-	//			"\tINDEX my_index_name (tag, time)\n" +
-	//		    "\tUNIQUE my_unique_index_name (order_number)\n" +
-	//			") as SELECT * FROM my_big_table WHERE my_val = 1",
-	//}, {
-	//	input: `CREATE TEMPORARY TABLE core.my_tmp_table (id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, value BIGINT UNSIGNED NOT NULL DEFAULT 0 UNIQUE, location VARCHAR(20) DEFAULT "NEEDS TO BE SET", country CHAR(2) DEFAULT "XX" COMMENT "Two-letter country code", INDEX my_index_name (location)) ENGINE=MyISAM SELECT * FROM core.my_big_table`,
-	//	output: "create temporary table core.my_tmp_table (id\n" +
-	//		    "\tint unsigned not null auto_increment primary key,\n" +
-	//			"\tvalue bigint unsigned not null default 0 unique,\n" +
-	//		    "\tlocation varchar(20) default \"need to be set\",\n" +
-	//			"\tcountry char(2) default \"XX\" comment \"Two-letter country code\",\n" +
-	//			"index my_index_name (location)\n" +
-	//			")engine=MyISAM SELECT * FROM core.my_big_table",
-	//},
 	for _, tcase := range testCases {
 		tree, err := Parse(tcase.input)
 		if err != nil {
