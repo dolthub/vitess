@@ -3150,6 +3150,9 @@ var (
 			input:  "CREATE USER UserName@localhost REQUIRE X509",
 			output: "create user `UserName`@`localhost` require X509",
 		}, {
+			input:  "CREATE USER UserName@localhost REQUIRE SSL",
+			output: "create user `UserName`@`localhost` require SSL",
+		}, {
 			input:  "CREATE USER UserName@localhost REQUIRE SUBJECT 'some_subject' AND ISSUER 'some_issuer'",
 			output: "create user `UserName`@`localhost` require issuer 'some_issuer' and subject 'some_subject'",
 		}, {
@@ -3173,6 +3176,9 @@ var (
 		}, {
 			input:  "CREATE USER 'UserName'@'%' IDENTIFIED WITH 'caching_sha2_password' AS 'xyz0123'",
 			output: "create user `UserName`@`%` identified with caching_sha2_password as 'xyz0123'",
+		}, {
+			input:  "CREATE USER 'UserName'@'%' IDENTIFIED WITH 'caching_sha2_password' AS 'xyz0123' REQUIRE X509",
+			output: "create user `UserName`@`%` identified with caching_sha2_password as 'xyz0123' require X509",
 		},
 		{
 			input:  "ALTER USER IF EXISTS foo@bar IDENTIFIED BY 'password1';",
