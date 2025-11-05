@@ -5652,7 +5652,7 @@ func TestDDLSelectPosition(t *testing.T) {
 			query: "create view a as select /* comment */ 2 + 2 from dual",
 			sel:   "select /* comment */ 2 + 2 from dual",
 		}, {
-			query: "/*! create view a as select 2 from dual */",
+			query: "/*!  create view a as select 2 from dual */",
 			sel:   "select 2 from dual",
 		}, {
 			query: "/*! create view a as select 2 from dual */  ",
@@ -5664,7 +5664,7 @@ func TestDDLSelectPosition(t *testing.T) {
 			query: "/*!12345 create view a as select 2 from dual */",
 			sel:   "select 2 from dual",
 		}, {
-			query: "/*!50001 CREATE VIEW `some_view` as SELECT 1 AS `x`*/",
+			query: "/*!50001  CREATE VIEW `some_view` as SELECT 1 AS `x`*/",
 			sel:   "SELECT 1 AS `x`",
 		}, {
 			query: "create or replace view a as select current_timestamp()",

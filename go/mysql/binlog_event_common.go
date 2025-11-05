@@ -19,6 +19,7 @@ package mysql
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 
 	binlogdatapb "github.com/dolthub/vitess/go/vt/proto/binlogdata"
 	"github.com/dolthub/vitess/go/vt/proto/vtrpc"
@@ -79,6 +80,40 @@ func (ev binlogEvent) Bytes() []byte {
 // Type returns the type_code field from the header.
 func (ev binlogEvent) Type() byte {
 	return ev.Bytes()[4]
+}
+
+// TypeName returns a human-readable name for the event type.
+// This matches MariaDB's Log_event::get_type_str() function for consistency.
+func (ev binlogEvent) TypeName() string {
+	eventType := ev.Type()
+	switch eventType {
+	case eQueryEvent:
+		return "Query"
+	case eRotateEvent:
+		return "Rotate"
+	case eFormatDescriptionEvent:
+		return "Format_desc"
+	case eXIDEvent:
+		return "Xid"
+	case eTableMapEvent:
+		return "Table_map"
+	case eWriteRowsEventV1:
+		return "Write_rows_v1"
+	case eUpdateRowsEventV1:
+		return "Update_rows_v1"
+	case eDeleteRowsEventV1:
+		return "Delete_rows_v1"
+	case eWriteRowsEventV2:
+		return "Write_rows"
+	case eUpdateRowsEventV2:
+		return "Update_rows"
+	case eDeleteRowsEventV2:
+		return "Delete_rows"
+	case eMariaGTIDEvent:
+		return "Gtid"
+	default:
+		return fmt.Sprintf("Unknown (type %d)", eventType)
+	}
 }
 
 // Flags returns the flags field from the header.

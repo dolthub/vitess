@@ -58,6 +58,7 @@ const (
 	AuthType_ALTER                 = "ALTER"
 	AuthType_ALTER_ROUTINE         = "ALTER_ROUTINE"
 	AuthType_ALTER_USER            = "ALTER_USER"
+	AuthType_BINLOG                = "BINLOG"
 	AuthType_CALL                  = "CALL"
 	AuthType_CREATE                = "CREATE"
 	AuthType_CREATE_ROLE           = "CREATE_ROLE"

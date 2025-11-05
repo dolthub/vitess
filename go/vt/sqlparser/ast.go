@@ -480,6 +480,7 @@ func (*RollbackSavepoint) iStatement() {}
 func (*ReleaseSavepoint) iStatement()  {}
 func (*LockTables) iStatement()        {}
 func (*UnlockTables) iStatement()      {}
+func (*Binlog) iStatement()            {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
@@ -8323,4 +8324,42 @@ func (d InjectedStatement) SetAuthTargetNames(targetNames []string) {
 // SetExtra implements the AuthNode interface.
 func (d InjectedStatement) SetExtra(extra any) {
 	d.Auth.Extra = extra
+}
+
+// Binlog represents a BINLOG statement that executes base64-encoded binary log events.
+type Binlog struct {
+	Base64Str string
+	Auth      AuthInformation
+}
+
+var _ AuthNode = (*Binlog)(nil)
+
+// Format formats the node.
+func (node *Binlog) Format(buf *TrackedBuffer) {
+	buf.Myprintf("binlog '%s'", node.Base64Str)
+}
+
+// GetAuthInformation returns the authorization information for this node.
+func (node *Binlog) GetAuthInformation() AuthInformation {
+	return node.Auth
+}
+
+// SetAuthType sets the authorization type.
+func (node *Binlog) SetAuthType(authType string) {
+	node.Auth.AuthType = authType
+}
+
+// SetAuthTargetType sets the authorization target type.
+func (node *Binlog) SetAuthTargetType(targetType string) {
+	node.Auth.TargetType = targetType
+}
+
+// SetAuthTargetNames sets the authorization target names.
+func (node *Binlog) SetAuthTargetNames(targetNames []string) {
+	node.Auth.TargetNames = targetNames
+}
+
+// SetExtra sets extra authorization information.
+func (node *Binlog) SetExtra(extra any) {
+	node.Auth.Extra = extra
 }
