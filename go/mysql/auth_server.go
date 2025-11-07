@@ -24,7 +24,6 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/subtle"
-	"crypto/x509"
 	"encoding/hex"
 	"net"
 	"strings"
@@ -132,7 +131,7 @@ const (
 // such a hash based on the salt and auth response provided here after retrieving
 // the hashed password from the storage.
 type HashStorage interface {
-	UserEntryWithHash(userCerts []*x509.Certificate, salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, error)
+	UserEntryWithHash(conn *Conn, salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, error)
 }
 
 // PlainTextStorage describes an object that is suitable to retrieve user information
@@ -146,7 +145,7 @@ type HashStorage interface {
 // When comparing plain text passwords directly, please ensure to use `subtle.ConstantTimeCompare`
 // to prevent timing based attacks on the password.
 type PlainTextStorage interface {
-	UserEntryWithPassword(userCerts []*x509.Certificate, user string, password string, remoteAddr net.Addr) (Getter, error)
+	UserEntryWithPassword(conn *Conn, user string, password string, remoteAddr net.Addr) (Getter, error)
 }
 
 // CachingStorage describes an object that is suitable to retrieve user information
@@ -159,7 +158,7 @@ type PlainTextStorage interface {
 // such a hash based on the salt and auth response provided here after retrieving
 // the hashed password from the cache.
 type CachingStorage interface {
-	UserEntryWithCacheHash(userCerts []*x509.Certificate, salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, CacheState, error)
+	UserEntryWithCacheHash(conn *Conn, salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, CacheState, error)
 }
 
 // NewMysqlNativeAuthMethod will create a new AuthMethod that implements the
@@ -507,7 +506,7 @@ func (n *mysqlNativePasswordAuthMethod) HandleAuthPluginData(conn *Conn, user st
 		return nil, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 	salt := serverAuthPluginData[:len(serverAuthPluginData)-1]
-	return n.storage.UserEntryWithHash(conn.GetTLSClientCerts(), salt, user, clientAuthPluginData, remoteAddr)
+	return n.storage.UserEntryWithHash(conn, salt, user, clientAuthPluginData, remoteAddr)
 }
 
 type mysqlClearAuthMethod struct {
@@ -532,7 +531,7 @@ func (n *mysqlClearAuthMethod) HandleAuthPluginData(conn *Conn, user string, ser
 	if len(clientAuthPluginData) > 0 {
 		password = string(clientAuthPluginData[:len(clientAuthPluginData)-1])
 	}
-	return n.storage.UserEntryWithPassword(conn.GetTLSClientCerts(), user, password, remoteAddr)
+	return n.storage.UserEntryWithPassword(conn, user, password, remoteAddr)
 }
 
 type mysqlDialogAuthMethod struct {
@@ -557,7 +556,7 @@ func (n *mysqlDialogAuthMethod) AuthPluginData() ([]byte, error) {
 	return result, nil
 }
 func (n *mysqlDialogAuthMethod) HandleAuthPluginData(conn *Conn, user string, serverAuthPluginData []byte, clientAuthPluginData []byte, remoteAddr net.Addr) (Getter, error) {
-	return n.storage.UserEntryWithPassword(conn.GetTLSClientCerts(), user, string(clientAuthPluginData[:len(clientAuthPluginData)-1]), remoteAddr)
+	return n.storage.UserEntryWithPassword(conn, user, string(clientAuthPluginData[:len(clientAuthPluginData)-1]), remoteAddr)
 }
 
 type mysqlCachingSha2AuthMethod struct {
@@ -594,7 +593,7 @@ func (n *mysqlCachingSha2AuthMethod) HandleAuthPluginData(c *Conn, user string, 
 		return nil, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 	salt := serverAuthPluginData[:len(serverAuthPluginData)-1]
-	result, cacheState, err := n.cache.UserEntryWithCacheHash(c.GetTLSClientCerts(), salt, user, clientAuthPluginData, remoteAddr)
+	result, cacheState, err := n.cache.UserEntryWithCacheHash(c, salt, user, clientAuthPluginData, remoteAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -638,7 +637,7 @@ func (n *mysqlCachingSha2AuthMethod) HandleAuthPluginData(c *Conn, user string, 
 	if err != nil {
 		return nil, err
 	}
-	return n.storage.UserEntryWithPassword(c.GetTLSClientCerts(), user, password, remoteAddr)
+	return n.storage.UserEntryWithPassword(c, user, password, remoteAddr)
 }
 
 // ScrambleMysqlNativePassword computes the hash of the password using 4.1+ method.
