@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"runtime"
 	"strconv"
 	"testing"
 
@@ -486,6 +487,7 @@ func TestNullsafeAdd(t *testing.T) {
 		v1, v2 Value
 		out    Value
 		err    error
+		skip   bool
 	}{{
 		// All nulls.
 		v1:  NULL,
@@ -521,6 +523,14 @@ func TestNullsafeAdd(t *testing.T) {
 		v1:  NewInt64(-1),
 		v2:  NewUint64(2),
 		out: NewInt64(-9223372036854775808),
+		// This test relies on float64 -> int64 conversion, where the float64 is larger than the maximum int64.
+		// According to the Golang spec:
+		//
+		// > In all non-constant conversions involving floating-point or complex values, if the result
+		// type cannot represent the value the conversion succeeds but the result value is implementation-dependent.
+		//
+		// And indeed, the test fails on arm64 but passes on amd64 because the computed conversion is different.
+		skip: runtime.GOARCH != "amd64",
 	}, {
 		// Make sure underlying error is returned while converting.
 		v1:  NewFloat64(1),
@@ -528,6 +538,9 @@ func TestNullsafeAdd(t *testing.T) {
 		out: NewInt64(3),
 	}}
 	for _, tcase := range tcases {
+		if tcase.skip {
+			t.SkipNow()
+		}
 		got := NullsafeAdd(tcase.v1, tcase.v2, Int64)
 
 		if !reflect.DeepEqual(got, tcase.out) {

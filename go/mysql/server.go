@@ -93,10 +93,17 @@ type Handler interface {
 	// ConnectionClosed is called when a connection is closed.
 	ConnectionClosed(c *Conn)
 
+	// ConnectionAuthenticated is called when a connection is authenticated.
+	// Always called after NewConnection and before ConnectionClosed.
+	ConnectionAuthenticated(*Conn) error
+
 	// ConnectionAborted is called when a new connection cannot be fully established. For
 	// example, if a client connects to the server, but fails authentication, or can't
 	// negotiate an authentication handshake, this method will be called to let integrators
 	// know about the failed connection attempt.
+	//
+	// ConnectionClosed will still be called for the connection after ConnectionAborted is
+	// called.
 	ConnectionAborted(c *Conn, reason string) error
 
 	// ComInitDB is called once at the beginning to set db name,
@@ -558,6 +565,13 @@ func (l *Listener) handle(ctx context.Context, conn net.Conn, connectionID uint3
 	if c.User != "" {
 		connCountPerUser.Add(c.User, 1)
 		defer connCountPerUser.Add(c.User, -1)
+	}
+
+	if err = l.handler.ConnectionAuthenticated(c); err != nil {
+		log.Errorf("failed to register the connection as authenticated %s: %v", c, err)
+
+		c.writeErrorPacketFromError(err)
+		return
 	}
 
 	// Set initial db name.
