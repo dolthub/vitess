@@ -3802,7 +3802,7 @@ REAL float_length_opt
   }
 | FLOAT8 float_length_opt
   {
-    ct := ColumnType{Type: string($1)}
+    ct := ColumnType{Type: "double"}
     ct.Length = $2.(LengthScaleOption).Length
     ct.Scale = $2.(LengthScaleOption).Scale
     $$ = ct
