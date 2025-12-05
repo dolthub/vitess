@@ -9837,7 +9837,7 @@ convert_type:
   }
 | FLOAT8
   {
-    $$ = &ConvertType{Type: string($1)}
+    $$ = &ConvertType{Type: "double"}
   }
 | REAL
   {
