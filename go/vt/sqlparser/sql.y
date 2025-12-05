@@ -3814,6 +3814,13 @@ REAL float_length_opt
     ct.Scale = $2.(LengthScaleOption).Scale
     $$ = ct
   }
+| FLOAT4 float_length_opt
+  {
+    ct := ColumnType{Type: string($1)}
+    ct.Length = $2.(LengthScaleOption).Length
+    ct.Scale = $2.(LengthScaleOption).Scale
+    $$ = ct
+  }
 | DECIMAL decimal_length_opt
   {
     ct := ColumnType{Type: string($1)}
@@ -9837,6 +9844,10 @@ convert_type:
     $$ = &ConvertType{Type: string($1)}
   }
 | FLOAT_TYPE
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| FLOAT4
   {
     $$ = &ConvertType{Type: string($1)}
   }
