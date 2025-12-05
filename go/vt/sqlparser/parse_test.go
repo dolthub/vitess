@@ -3975,6 +3975,9 @@ var (
 			input:  "CREATE TABLE t (col1 BIGINT PRIMARY KEY, col2 DOUBLE DEFAULT -1.1)",
 			output: "create table t (\n\tcol1 BIGINT primary key,\n\tcol2 DOUBLE default -1.1\n)",
 		}, {
+			input:  "CREATE TABLE t (col1 BIGINT PRIMARY KEY, col2 FLOAT8 DEFAULT -1.1)",
+			output: "create table t (\n\tcol1 BIGINT primary key,\n\tcol2 FLOAT8 default -1.1\n)",
+		}, {
 			input:  "CREATE TABLE t (col1 BIGINT PRIMARY KEY, col2 BIGINT DEFAULT -1)",
 			output: "create table t (\n\tcol1 BIGINT primary key,\n\tcol2 BIGINT default -1\n)",
 		}, {
@@ -6853,6 +6856,10 @@ func TestFunctionCalls(t *testing.T) {
 		{
 			input:  "SELECT CAST(foo AS DOUBLE PRECISION)",
 			output: "select CAST(foo as DOUBLE)",
+		},
+		{
+			input:  "SELECT CAST(foo AS FLOAT8)",
+			output: "select CAST(foo as FLOAT8)",
 		},
 		{
 			input:  "SELECT CAST(foo AS REAL)",

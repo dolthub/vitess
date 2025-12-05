@@ -3357,6 +3357,7 @@ func (ct ColumnType) SQLType() querypb.Type {
 		return sqltypes.Float32
 	case keywordStrings[DOUBLE],
 		keywordStrings[REAL],
+		keywordStrings[FLOAT8],
 		"double precision":
 		return sqltypes.Float64
 	case keywordStrings[DECIMAL],
