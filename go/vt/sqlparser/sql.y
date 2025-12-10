@@ -3769,6 +3769,10 @@ int_type:
   {
     $$ = ColumnType{Type: "mediumint"}
   }
+| MIDDLEINT
+  {
+    $$ = ColumnType{Type: "mediumint"}
+  }
 | INT4
   {
     $$ = ColumnType{Type: "int"}
@@ -3800,9 +3804,23 @@ REAL float_length_opt
     ct.Scale = $3.(LengthScaleOption).Scale
     $$ = ct
   }
+| FLOAT8 float_length_opt
+  {
+    ct := ColumnType{Type: "double"}
+    ct.Length = $2.(LengthScaleOption).Length
+    ct.Scale = $2.(LengthScaleOption).Scale
+    $$ = ct
+  }
 | FLOAT_TYPE decimal_length_opt
   {
     ct := ColumnType{Type: string($1)}
+    ct.Length = $2.(LengthScaleOption).Length
+    ct.Scale = $2.(LengthScaleOption).Scale
+    $$ = ct
+  }
+| FLOAT4 float_length_opt
+  {
+    ct := ColumnType{Type: "float"}
     ct.Length = $2.(LengthScaleOption).Length
     ct.Scale = $2.(LengthScaleOption).Scale
     $$ = ct
@@ -3816,7 +3834,7 @@ REAL float_length_opt
   }
 | NUMERIC decimal_length_opt
   {
-    ct := ColumnType{Type: string($1)}
+    ct := ColumnType{Type: "decimal"}
     ct.Length = $2.(LengthScaleOption).Length
     ct.Scale = $2.(LengthScaleOption).Scale
     $$ = ct
@@ -3929,11 +3947,15 @@ char_type:
   }
 | LONG
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = ColumnType{Type: "mediumtext"}
   }
 | LONG VARCHAR
   {
-    $$ = ColumnType{Type: string($1) + " " + string($2)}
+    $$ = ColumnType{Type: "mediumtext"}
+  }
+| LONG VARBINARY
+  {
+    $$ = ColumnType{Type: "mediumblob"}
   }
 | BLOB
   {
@@ -9821,6 +9843,10 @@ convert_type:
   {
     $$ = &ConvertType{Type: string($1)}
   }
+| FLOAT8
+  {
+    $$ = &ConvertType{Type: "double"}
+  }
 | REAL
   {
     $$ = &ConvertType{Type: string($1)}
@@ -9828,6 +9854,10 @@ convert_type:
 | FLOAT_TYPE
   {
     $$ = &ConvertType{Type: string($1)}
+  }
+| FLOAT4
+  {
+    $$ = &ConvertType{Type: "float"}
   }
 | JSON
   {

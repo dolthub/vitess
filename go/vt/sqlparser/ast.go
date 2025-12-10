@@ -3321,7 +3321,8 @@ func (ct ColumnType) SQLType() querypb.Type {
 	case keywordStrings[BLOB],
 		keywordStrings[TINYBLOB],
 		keywordStrings[MEDIUMBLOB],
-		keywordStrings[LONGBLOB]:
+		keywordStrings[LONGBLOB],
+		"long varbinary":
 		return sqltypes.Blob
 	case keywordStrings[CHAR],
 		keywordStrings[CHARACTER],
@@ -3353,10 +3354,12 @@ func (ct ColumnType) SQLType() querypb.Type {
 		return sqltypes.Timestamp
 	case keywordStrings[YEAR]:
 		return sqltypes.Year
-	case keywordStrings[FLOAT_TYPE]:
+	case keywordStrings[FLOAT_TYPE],
+		keywordStrings[FLOAT4]:
 		return sqltypes.Float32
 	case keywordStrings[DOUBLE],
 		keywordStrings[REAL],
+		keywordStrings[FLOAT8],
 		"double precision":
 		return sqltypes.Float64
 	case keywordStrings[DECIMAL],

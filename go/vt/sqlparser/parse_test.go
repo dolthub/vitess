@@ -3052,10 +3052,35 @@ var (
 			output: "alter table t alter column foo drop default",
 		}, {
 			input: "alter table t alter column foo drop default",
-		}, {
+		}, 		{
 			input: "alter table t modify value float(53) not null",
 			output: "alter table t modify column `value` (\n" +
 				"\t`value` float(53) not null\n" +
+				")",
+		}, {
+			input: "alter table t modify col LONG VARBINARY not null",
+			output: "alter table t modify column col (\n" +
+				"\tcol mediumblob not null\n" +
+				")",
+		}, {
+			input: "alter table t modify col LONG VARCHAR not null",
+			output: "alter table t modify column col (\n" +
+				"\tcol mediumtext not null\n" +
+				")",
+		}, {
+			input: "alter table t modify col LONG not null",
+			output: "alter table t modify column col (\n" +
+				"\tcol mediumtext not null\n" +
+				")",
+		}, {
+			input: "alter table t modify col MIDDLEINT not null",
+			output: "alter table t modify column col (\n" +
+				"\tcol mediumint not null\n" +
+				")",
+		}, {
+			input: "alter table t modify col NUMERIC(10, 2) not null",
+			output: "alter table t modify column col (\n" +
+				"\tcol decimal(10,2) not null\n" +
 				")",
 		}, {
 			input:  "delete a.*, b.* from tbl_a a, tbl_b b where a.id = b.id and b.name = 'test'",
@@ -3975,8 +4000,29 @@ var (
 			input:  "CREATE TABLE t (col1 BIGINT PRIMARY KEY, col2 DOUBLE DEFAULT -1.1)",
 			output: "create table t (\n\tcol1 BIGINT primary key,\n\tcol2 DOUBLE default -1.1\n)",
 		}, {
+			input:  "CREATE TABLE t (col1 BIGINT PRIMARY KEY, col2 FLOAT8 DEFAULT -1.1)",
+			output: "create table t (\n\tcol1 BIGINT primary key,\n\tcol2 double default -1.1\n)",
+		}, {
+			input:  "CREATE TABLE t (col1 BIGINT PRIMARY KEY, col2 FLOAT4 DEFAULT -1.1)",
+			output: "create table t (\n\tcol1 BIGINT primary key,\n\tcol2 float default -1.1\n)",
+		}, {
 			input:  "CREATE TABLE t (col1 BIGINT PRIMARY KEY, col2 BIGINT DEFAULT -1)",
 			output: "create table t (\n\tcol1 BIGINT primary key,\n\tcol2 BIGINT default -1\n)",
+		}, {
+			input:  "CREATE TABLE t (col1 BIGINT PRIMARY KEY, col2 LONG VARBINARY)",
+			output: "create table t (\n\tcol1 BIGINT primary key,\n\tcol2 mediumblob\n)",
+		}, {
+			input:  "CREATE TABLE t (col1 BIGINT PRIMARY KEY, col2 LONG VARCHAR)",
+			output: "create table t (\n\tcol1 BIGINT primary key,\n\tcol2 mediumtext\n)",
+		}, {
+			input:  "CREATE TABLE t (col1 BIGINT PRIMARY KEY, col2 LONG)",
+			output: "create table t (\n\tcol1 BIGINT primary key,\n\tcol2 mediumtext\n)",
+		}, {
+			input:  "CREATE TABLE t (col1 BIGINT PRIMARY KEY, col2 MIDDLEINT DEFAULT 0)",
+			output: "create table t (\n\tcol1 BIGINT primary key,\n\tcol2 mediumint default 0\n)",
+		}, {
+			input:  "CREATE TABLE t (col1 BIGINT PRIMARY KEY, col2 NUMERIC(10, 2) DEFAULT 0.00)",
+			output: "create table t (\n\tcol1 BIGINT primary key,\n\tcol2 decimal(10,2) default 0.00\n)",
 		}, {
 			input:  "CREATE TABLE `dual` (id int)",
 			output: "create table `dual` (\n\tid int\n)",
@@ -5127,6 +5173,26 @@ end`,
 		{
 			input:  "ALTER TABLE t1 MODIFY COLUMN col1 TEXT(1000)",
 			output: "alter table t1 modify column col1 (\n\tcol1 TEXT(1000)\n)",
+		},
+		{
+			input:  "ALTER TABLE t1 MODIFY COLUMN col1 LONG VARBINARY",
+			output: "alter table t1 modify column col1 (\n\tcol1 mediumblob\n)",
+		},
+		{
+			input:  "ALTER TABLE t1 MODIFY COLUMN col1 LONG VARCHAR",
+			output: "alter table t1 modify column col1 (\n\tcol1 mediumtext\n)",
+		},
+		{
+			input:  "ALTER TABLE t1 MODIFY COLUMN col1 LONG",
+			output: "alter table t1 modify column col1 (\n\tcol1 mediumtext\n)",
+		},
+		{
+			input:  "ALTER TABLE t1 MODIFY COLUMN col1 MIDDLEINT",
+			output: "alter table t1 modify column col1 (\n\tcol1 mediumint\n)",
+		},
+		{
+			input:  "ALTER TABLE t1 MODIFY COLUMN col1 NUMERIC(10, 2)",
+			output: "alter table t1 modify column col1 (\n\tcol1 decimal(10,2)\n)",
 		},
 		{
 			input:  "ALTER TABLE t1 CHANGE COLUMN old_col new_col TEXT(2000)",
@@ -6468,6 +6534,8 @@ func TestFunctionCalls(t *testing.T) {
 		"select CONVERT('abc', binary) from dual",
 		"select CONVERT(foo, DOUBLE)",
 		"select CONVERT(foo, FLOAT)",
+		"select CONVERT(foo, double)",
+		"select CONVERT(foo, float)",
 		"select CONVERT_TZ() from dual",
 		"select COS() from dual",
 		"select COT() from dual",
@@ -6855,6 +6923,14 @@ func TestFunctionCalls(t *testing.T) {
 			output: "select CAST(foo as DOUBLE)",
 		},
 		{
+			input:  "SELECT CAST(foo AS FLOAT8)",
+			output: "select CAST(foo as double)",
+		},
+		{
+			input:  "SELECT CAST(foo AS FLOAT4)",
+			output: "select CAST(foo as float)",
+		},
+		{
 			input:  "SELECT CAST(foo AS REAL)",
 			output: "select CAST(foo as REAL)",
 		},
@@ -7003,6 +7079,14 @@ func TestConvert(t *testing.T) {
 		{
 			input:  "select convert('abc', unsigned) from t",
 			output: "select convert('abc', unsigned) from t",
+		},
+		{
+			input:  "select convert('abc', FLOAT8) from t",
+			output: "select convert('abc', double) from t",
+		},
+		{
+			input:  "select convert('abc', FLOAT4) from t",
+			output: "select convert('abc', float) from t",
 		},
 		{
 			input: "select convert('abc', decimal(3, 4)) from t",
@@ -7164,9 +7248,9 @@ var sampleColumns = []string{
 	"	col_fixed fixed",
 	"	col_fixed2 fixed(2)",
 	"	col_fixed3 fixed(2,3)",
-	"	col_numeric numeric",
-	"	col_numeric2 numeric(2)",
-	"	col_numeric3 numeric(2,3)",
+	"	col_numeric decimal",
+	"	col_numeric2 decimal(2)",
+	"	col_numeric3 decimal(2,3)",
 	"	col_date date",
 	"	col_time time",
 	"	col_timestamp timestamp",
@@ -7216,8 +7300,8 @@ var sampleColumns = []string{
 	"	col_tinytext tinytext",
 	"	col_text text",
 	"	col_mediumtext mediumtext",
-	"	col_long long",
-	"	col_long_varchar long varchar",
+	"	col_long mediumtext",
+	"	col_long_varchar mediumtext",
 	"	col_longtext longtext",
 	"	col_text text character set ascii collate ascii_bin",
 	"	col_json json",
