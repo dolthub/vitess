@@ -3976,10 +3976,16 @@ var (
 			output: "create table t (\n\tcol1 BIGINT primary key,\n\tcol2 DOUBLE default -1.1\n)",
 		}, {
 			input:  "CREATE TABLE t (col1 BIGINT PRIMARY KEY, col2 FLOAT8 DEFAULT -1.1)",
-			output: "create table t (\n\tcol1 BIGINT primary key,\n\tcol2 FLOAT8 default -1.1\n)",
+			output: "create table t (\n\tcol1 BIGINT primary key,\n\tcol2 double default -1.1\n)",
+		}, {
+			input:  "CREATE TABLE t (col1 BIGINT PRIMARY KEY, col2 FLOAT4 DEFAULT -1.1)",
+			output: "create table t (\n\tcol1 BIGINT primary key,\n\tcol2 float default -1.1\n)",
 		}, {
 			input:  "CREATE TABLE t (col1 BIGINT PRIMARY KEY, col2 BIGINT DEFAULT -1)",
 			output: "create table t (\n\tcol1 BIGINT primary key,\n\tcol2 BIGINT default -1\n)",
+		}, {
+			input:  "CREATE TABLE t (col1 BIGINT PRIMARY KEY, col2 LONG VARBINARY)",
+			output: "create table t (\n\tcol1 BIGINT primary key,\n\tcol2 mediumblob\n)",
 		}, {
 			input:  "CREATE TABLE `dual` (id int)",
 			output: "create table `dual` (\n\tid int\n)",
@@ -6471,6 +6477,8 @@ func TestFunctionCalls(t *testing.T) {
 		"select CONVERT('abc', binary) from dual",
 		"select CONVERT(foo, DOUBLE)",
 		"select CONVERT(foo, FLOAT)",
+		"select CONVERT(foo, double)",
+		"select CONVERT(foo, float)",
 		"select CONVERT_TZ() from dual",
 		"select COS() from dual",
 		"select COT() from dual",
@@ -6859,7 +6867,11 @@ func TestFunctionCalls(t *testing.T) {
 		},
 		{
 			input:  "SELECT CAST(foo AS FLOAT8)",
-			output: "select CAST(foo as FLOAT8)",
+			output: "select CAST(foo as double)",
+		},
+		{
+			input:  "SELECT CAST(foo AS FLOAT4)",
+			output: "select CAST(foo as float)",
 		},
 		{
 			input:  "SELECT CAST(foo AS REAL)",
@@ -7010,6 +7022,14 @@ func TestConvert(t *testing.T) {
 		{
 			input:  "select convert('abc', unsigned) from t",
 			output: "select convert('abc', unsigned) from t",
+		},
+		{
+			input:  "select convert('abc', FLOAT8) from t",
+			output: "select convert('abc', double) from t",
+		},
+		{
+			input:  "select convert('abc', FLOAT4) from t",
+			output: "select convert('abc', float) from t",
 		},
 		{
 			input: "select convert('abc', decimal(3, 4)) from t",

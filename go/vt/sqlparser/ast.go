@@ -3321,7 +3321,8 @@ func (ct ColumnType) SQLType() querypb.Type {
 	case keywordStrings[BLOB],
 		keywordStrings[TINYBLOB],
 		keywordStrings[MEDIUMBLOB],
-		keywordStrings[LONGBLOB]:
+		keywordStrings[LONGBLOB],
+		"long varbinary":
 		return sqltypes.Blob
 	case keywordStrings[CHAR],
 		keywordStrings[CHARACTER],

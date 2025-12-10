@@ -3949,6 +3949,10 @@ char_type:
   {
     $$ = ColumnType{Type: string($1) + " " + string($2)}
   }
+| LONG VARBINARY
+  {
+    $$ = ColumnType{Type: "mediumblob"}
+  }
 | BLOB
   {
     $$ = ColumnType{Type: string($1)}
