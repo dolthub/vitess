@@ -8643,8 +8643,10 @@ natural_join:
   {
     if $2.(string) == LeftJoinStr {
       $$ = NaturalLeftJoinStr
-    } else {
+    } else if $2.(string) == RightJoinStr {
       $$ = NaturalRightJoinStr
+    } else if $2.(string) == FullOuterJoinStr {
+      $$ = NaturalFullJoinStr
     }
   }
 
