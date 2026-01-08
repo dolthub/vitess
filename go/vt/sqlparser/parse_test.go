@@ -744,19 +744,52 @@ var (
 		}, {
 			input:  "select /* right outer join */ 1 from t1 right outer join t2 using (a)",
 			output: "select /* right outer join */ 1 from t1 right join t2 using (a)",
-		}, {
-			input: "select /* natural join */ 1 from t1 natural join t2",
-		}, {
-			input: "select /* natural left join */ 1 from t1 natural left join t2",
-		}, {
+		},
+		{
+			input:  "select /* natural join */ 1 from t1 natural join t2",
+			output: "select /* natural join */ 1 from t1 natural join t2",
+		},
+		{
+			input:  "select /* natural left join */ 1 from t1 natural left join t2",
+			output: "select /* natural left join */ 1 from t1 natural left join t2",
+		},
+		{
 			input:  "select /* natural left outer join */ 1 from t1 natural left join t2",
 			output: "select /* natural left outer join */ 1 from t1 natural left join t2",
-		}, {
-			input: "select /* natural right join */ 1 from t1 natural right join t2",
-		}, {
+		},
+		{
+			input:  "select /* natural right join */ 1 from t1 natural right join t2",
+			output: "select /* natural right join */ 1 from t1 natural right join t2",
+		},
+		{
 			input:  "select /* natural right outer join */ 1 from t1 natural right join t2",
 			output: "select /* natural right outer join */ 1 from t1 natural right join t2",
-		}, {
+		},
+		{
+			input:  "select * from t1 natural left join t2",
+			output: "select * from t1 natural left join t2",
+		},
+		{
+			input:  "select * from t1 natural left outer join t2",
+			output: "select * from t1 natural left join t2",
+		},
+		{
+			input:  "select * from t1 natural right join t2",
+			output: "select * from t1 natural right join t2",
+		},
+		{
+			input:  "select * from t1 natural right outer join t2",
+			output: "select * from t1 natural right join t2",
+		},
+		{
+			input:  "select * from t1 natural full join t2",
+			output: "select * from t1 natural full join t2",
+		},
+		{
+			input:  "select * from t1 natural full outer join t2",
+			output: "select * from t1 natural full join t2",
+		},
+		{
 			input: "select /* full outer join */ * from a full outer join b on a.x = b.x",
 		}, {
 			input:  "select /* full outer join */ * from a full join b on a.x = b.x",
@@ -3052,7 +3085,7 @@ var (
 			output: "alter table t alter column foo drop default",
 		}, {
 			input: "alter table t alter column foo drop default",
-		}, 		{
+		}, {
 			input: "alter table t modify value float(53) not null",
 			output: "alter table t modify column `value` (\n" +
 				"\t`value` float(53) not null\n" +
@@ -6128,6 +6161,10 @@ func TestInvalid(t *testing.T) {
 		},
 		{
 			input: "insert into t (a) values (1) returning",
+			err:   "syntax error",
+		},
+		{
+			input: "select * from t1 natural invalid join t2",
 			err:   "syntax error",
 		},
 	}
