@@ -5511,6 +5511,7 @@ const (
 	NaturalJoinStr      = "natural join"
 	NaturalLeftJoinStr  = "natural left join"
 	NaturalRightJoinStr = "natural right join"
+	NaturalFullJoinStr  = "natural full join"
 	FullOuterJoinStr    = "full outer join"
 )
 
