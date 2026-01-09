@@ -510,6 +510,7 @@ func (*ValuesStatement) iSelectStatement() {}
 type QueryOpts struct {
 	All              bool
 	Distinct         bool
+	DistinctOn       Exprs
 	StraightJoinHint bool
 	SQLCalcFoundRows bool
 	SQLCache         bool
@@ -519,6 +520,7 @@ type QueryOpts struct {
 func (q *QueryOpts) merge(other QueryOpts) error {
 	q.All = q.All || other.All
 	q.Distinct = q.Distinct || other.Distinct
+	q.DistinctOn = append(q.DistinctOn, other.DistinctOn...)
 	q.StraightJoinHint = q.StraightJoinHint || other.StraightJoinHint
 	q.SQLCalcFoundRows = q.SQLCalcFoundRows || other.SQLCalcFoundRows
 	q.SQLCache = q.SQLCache || other.SQLCache
