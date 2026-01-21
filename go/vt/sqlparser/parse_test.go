@@ -2020,7 +2020,7 @@ var (
 			output: "alter table a rename column a to b",
 		}, {
 			input:  "create table t1 (id serial primary key, c1 text not null);",
-			output: "create table t1 (\n\tid bigint not null auto_increment primary key,\n\tc1 text not null\n)",
+			output: "create table t1 (\n\tid bigint unsigned not null auto_increment primary key,\n\tc1 text not null\n)",
 		}, {
 			input:  "create table t1 (id int primary key unique, c1 varchar(111) not null);",
 			output: "create table t1 (\n\tid int primary key,\n\tc1 varchar(111) not null\n)",
@@ -6184,58 +6184,84 @@ func TestInvalid(t *testing.T) {
 	invalidDDL := []struct {
 		input string
 		err   string
-	}{{
-		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' fulltext key primary key)",
-		err:   "cannot include more than one key option for a column definition at position 136 near 'key'",
-	}, {
-		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique comment 'another')",
-		err:   "cannot include more than one comment for a column definition at position 136 near 'another'",
-	}, {
-		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique auto_increment)",
-		err:   "cannot include AUTO_INCREMENT more than once at position 133 near 'auto_increment'",
-	}, {
-		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique on update utc_timestamp())",
-		err:   "syntax error at position 142 near 'utc_timestamp'",
-	}, {
-		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique default 1)",
-		err:   "cannot include DEFAULT more than once at position 128",
-	}, {
-		input: "create table t (c not null int default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
-		err:   "syntax error at position 22 near 'not'",
-	}, {
-		input: "create table t (c default 0 int on update current_timestamp() auto_increment comment 'a comment here' unique)",
-		err:   "syntax error at position 26 near 'default'",
-	}, {
-		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' fulltext key primary key)",
-		err:   "cannot include more than one key option for a column definition at position 139 near 'key'",
-	}, {
-		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique comment 'another')",
-		err:   "cannot include more than one comment for a column definition at position 139 near 'another'",
-	}, {
-		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique auto_increment)",
-		err:   "cannot include AUTO_INCREMENT more than once at position 136 near 'auto_increment'",
-	}, {
-		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique on update utc_timestamp())",
-		err:   "syntax error at position 145 near 'utc_timestamp'",
-	}, {
-		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique default 1)",
-		err:   "cannot include DEFAULT more than once at position 131",
-	}, {
-		input: "alter table t add (c not null int default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
-		err:   "syntax error at position 25 near 'not'",
-	}, {
-		input: "alter table t add (c default 0 int on update current_timestamp() auto_increment comment 'a comment here' unique)",
-		err:   "syntax error at position 29 near 'default'",
-	}, {
-		input: "create role ''@localhost",
-		err:   "the anonymous user is not a valid role name",
-	}, {
-		input: "CREATE USER UserName@localhost REQUIRE SUBJECT 'some_subject1' AND SUBJECT 'some_subject2'",
-		err:   "invalid tls options",
-	}, {
-		input: "CREATE USER UserName@localhost REQUIRE SSL AND X509",
-		err:   "invalid tls options",
-	}}
+	}{
+		{
+			input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' fulltext key primary key)",
+			err:   "cannot include more than one key option for a column definition at position 136 near 'key'",
+		},
+		{
+			input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique comment 'another')",
+			err:   "cannot include more than one comment for a column definition at position 136 near 'another'",
+		},
+		{
+			input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique auto_increment)",
+			err:   "cannot include AUTO_INCREMENT more than once at position 133 near 'auto_increment'",
+		},
+		{
+			input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique on update utc_timestamp())",
+			err:   "syntax error at position 142 near 'utc_timestamp'",
+		},
+		{
+			input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique default 1)",
+			err:   "cannot include DEFAULT more than once at position 128",
+		},
+		{
+			input: "create table t (c not null int default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
+			err:   "syntax error at position 22 near 'not'",
+		},
+		{
+			input: "create table s(i serial signed)",
+			err:   "syntax error at position 31 near 'signed'",
+		},
+		{
+			input: "create table s(i serial unsigned)",
+			err:   "syntax error at position 33 near 'unsigned'",
+		},
+		{
+			input: "create table t (c default 0 int on update current_timestamp() auto_increment comment 'a comment here' unique)",
+			err:   "syntax error at position 26 near 'default'",
+		},
+		{
+			input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' fulltext key primary key)",
+			err:   "cannot include more than one key option for a column definition at position 139 near 'key'",
+		},
+		{
+			input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique comment 'another')",
+			err:   "cannot include more than one comment for a column definition at position 139 near 'another'",
+		},
+		{
+			input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique auto_increment)",
+			err:   "cannot include AUTO_INCREMENT more than once at position 136 near 'auto_increment'",
+		},
+		{
+			input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique on update utc_timestamp())",
+			err:   "syntax error at position 145 near 'utc_timestamp'",
+		},
+		{
+			input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique default 1)",
+			err:   "cannot include DEFAULT more than once at position 131",
+		},
+		{
+			input: "alter table t add (c not null int default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
+			err:   "syntax error at position 25 near 'not'",
+		},
+		{
+			input: "alter table t add (c default 0 int on update current_timestamp() auto_increment comment 'a comment here' unique)",
+			err:   "syntax error at position 29 near 'default'",
+		},
+		{
+			input: "create role ''@localhost",
+			err:   "the anonymous user is not a valid role name",
+		},
+		{
+			input: "CREATE USER UserName@localhost REQUIRE SUBJECT 'some_subject1' AND SUBJECT 'some_subject2'",
+			err:   "invalid tls options",
+		},
+		{
+			input: "CREATE USER UserName@localhost REQUIRE SSL AND X509",
+			err:   "invalid tls options",
+		},
+	}
 	for _, tcase := range invalidDDL {
 		_, err := Parse(tcase.input)
 		if err == nil {
@@ -7637,7 +7663,7 @@ func TestCreateTable(t *testing.T) {
 		{
 			// generated by serial
 			input: "create table t (\n" +
-				"	id bigint not null auto_increment unique,\n" +
+				"	id bigint unsigned not null auto_increment unique,\n" +
 				"	a bigint not null\n" +
 				")",
 		},
@@ -7885,7 +7911,7 @@ func TestCreateTable(t *testing.T) {
 				"	a bigint not null\n" +
 				")",
 			output: "create table t (\n" +
-				"	id bigint not null auto_increment unique,\n" +
+				"	id bigint unsigned not null auto_increment unique,\n" +
 				"	a bigint not null\n" +
 				")",
 		},
