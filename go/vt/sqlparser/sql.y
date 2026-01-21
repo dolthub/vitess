@@ -3700,6 +3700,10 @@ column_type:
     ct.Zerofill = $3.(BoolVal)
     $$ = ct
   }
+| SERIAL
+  {
+    $$ = ColumnType{Type: "bigint", Unsigned: true, NotNull: true, Autoincrement: true, KeyOpt: colKeyUnique}
+  }
 | char_type
 | time_type
 | spatial_type
@@ -3752,10 +3756,6 @@ int_type:
 | BIGINT
   {
     $$ = ColumnType{Type: string($1)}
-  }
-| SERIAL
-  {
-    $$ = ColumnType{Type: "bigint", Unsigned: true, NotNull: true, Autoincrement: true, KeyOpt: colKeyUnique}
   }
 | INT1
   {
