@@ -1299,6 +1299,35 @@ create_statement:
       Auth: AuthInformation{AuthType: AuthType_IGNORE},
     }
   }
+| CREATE key_type_opt INDEX not_exists_opt sql_id using_opt ON table_name openb openb value_expression closeb closeb index_option_list_opt
+    {
+      // For consistency, we always return AlterTable for any ALTER TABLE-equivalent statements
+      tableName := $8.(TableName)
+      ddl := &DDL{
+        Action: AlterStr,
+        Table: tableName,
+        IfNotExists: $4.(int) != 0,
+        IndexSpec: &IndexSpec{
+          Action: CreateStr,
+          ToName: $5.(ColIdent),
+          Using: $6.(ColIdent),
+          Type: $2.(string),
+          Options: $14.([]*IndexOption),
+          Expression: tryCastExpr($11),
+          ifNotExists: $4.(int) != 0,
+        },
+        Auth: AuthInformation{
+          AuthType: AuthType_INDEX,
+          TargetType: AuthTargetType_SingleTableIdentifier,
+          TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+        },
+      }
+      $$ = &AlterTable{
+        Table: $8.(TableName),
+        Statements: []*DDL{ddl},
+        Auth: AuthInformation{AuthType: AuthType_IGNORE},
+      }
+    }
 | CREATE view_opts VIEW not_exists_opt table_name ins_column_list_opt AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position opt_with_check_option
   {
     viewName := $5.(TableName)

@@ -2070,6 +2070,18 @@ var (
 			output: "alter table dolt_test.a add index c (b) VISIBLE",
 		},
 		{
+			input:  "CREATE INDEX a on b ((id + val))",
+			output: "alter table b add index a ((id + val))",
+		},
+		{
+			input:  "CREATE INDEX a on b ((upper(id)))",
+			output: "alter table b add index a ((upper(id)))",
+		},
+		{
+			input:  "CREATE INDEX a on b ((case when id = `value` then upper(id) else lower(id) end))",
+			output: "alter table b add index a ((case when id = `value` then upper(id) else lower(id) end))",
+		},
+		{
 			input:  "create unique index a on b (id)",
 			output: "alter table b add unique index a (id)",
 		},
