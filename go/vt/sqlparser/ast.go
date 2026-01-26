@@ -3573,7 +3573,7 @@ func (idx *IndexSpec) Format(buf *TrackedBuffer) {
 		buf.Myprintf("(")
 
 		if idx.Expression != nil {
-			buf.Myprintf("%v", idx.Expression)
+			buf.Myprintf("(%v)", idx.Expression)
 		} else {
 			for i, col := range idx.Columns {
 				if i != 0 {
