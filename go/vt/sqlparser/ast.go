@@ -3534,6 +3534,8 @@ type IndexSpec struct {
 	// Options contains the index options when creating an index
 	Options []*IndexOption
 	// Expression contains the expression when creating a functional index
+	// TODO: Not fully implemented. Parser should support expressions for ALTER TABLE and CREATE TABLE statements
+	// TODO: Also needs to support mixes of columns and expressions.
 	Expression Expr
 
 	// ifExists and ifNotExists states whether `IF [NOT] EXISTS` was present in query
