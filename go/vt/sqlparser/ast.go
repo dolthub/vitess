@@ -3533,6 +3533,10 @@ type IndexSpec struct {
 	Columns []*IndexColumn
 	// Options contains the index options when creating an index
 	Options []*IndexOption
+	// Expression contains the expression when creating a functional index
+	// TODO: Not fully implemented. Parser should support expressions for ALTER TABLE and CREATE TABLE statements
+	// TODO: Also needs to support mixes of columns and expressions.
+	Expression Expr
 
 	// ifExists and ifNotExists states whether `IF [NOT] EXISTS` was present in query
 	//   This is solely for printing purposes; we rely on the one in ast.DDL for actual logic
@@ -3569,19 +3573,25 @@ func (idx *IndexSpec) Format(buf *TrackedBuffer) {
 		}
 
 		buf.Myprintf("(")
-		for i, col := range idx.Columns {
-			if i != 0 {
-				buf.Myprintf(", %s", col.Column.val)
-			} else {
-				buf.Myprintf("%s", col.Column.val)
-			}
-			if col.Length != nil {
-				buf.Myprintf("(%v)", col.Length)
-			}
-			if col.Order != AscScr {
-				buf.Myprintf(" %s", col.Order)
+
+		if idx.Expression != nil {
+			buf.Myprintf("(%v)", idx.Expression)
+		} else {
+			for i, col := range idx.Columns {
+				if i != 0 {
+					buf.Myprintf(", %s", col.Column.val)
+				} else {
+					buf.Myprintf("%s", col.Column.val)
+				}
+				if col.Length != nil {
+					buf.Myprintf("(%v)", col.Length)
+				}
+				if col.Order != AscScr {
+					buf.Myprintf(" %s", col.Order)
+				}
 			}
 		}
+
 		buf.Myprintf(")")
 		for _, opt := range idx.Options {
 			buf.Myprintf(" %s", opt.Name)
