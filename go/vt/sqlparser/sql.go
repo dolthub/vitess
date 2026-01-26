@@ -13698,7 +13698,7 @@ yydefault:
 					Using:       yyDollar[6].val.(ColIdent),
 					Type:        yyDollar[2].val.(string),
 					Options:     yyDollar[14].val.([]*IndexOption),
-					Expression:  &ParenExpr{tryCastExpr(yyDollar[11].val)},
+					Expression:  tryCastExpr(yyDollar[11].val),
 					ifNotExists: yyDollar[4].val.(int) != 0,
 				},
 				Auth: AuthInformation{
