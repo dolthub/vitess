@@ -18,6 +18,7 @@ package mysql
 
 import (
 	"encoding/binary"
+	"fmt"
 	"hash/crc32"
 )
 
@@ -364,9 +365,143 @@ func NewMySQLGTIDEvent(f BinlogFormat, m BinlogEventMetadata, gtid Mysql56GTID, 
 	return NewMysql56BinlogEvent(ev)
 }
 
-// NewTableMapEvent returns a TableMap event.
+// TableMap optional metadata field types. These identifiers are used in the wire protocol to indicate
+// different sections of data in the optional table map metadata.
+const (
+	TableMapOptMetaColumnCharset  = 0x03
+	TableMapOptMetaColumnName     = 0x04
+	TableMapOptMetaSetValues      = 0x05
+	TableMapOptMetaEnumValues     = 0x06
+	TableMapOptMetaEnumSetCharset = 0x0b
+)
+
+// buildOptionalTableMapMetadata takes the optional metadata (e.g. column names, column collation IDs, enum and
+// set names, and enum and set collation IDs) from |tableMap| and encodes it into the binary format needed to
+// transmit this metadata to a remote MySQL replica.
+func buildOptionalTableMapMetadata(tableMap *TableMap) ([]byte, error) {
+	columnNames := tableMap.OptionalColumnNames
+	columnCollationIds := tableMap.OptionalColumnCollations
+
+	if len(columnNames) == 0 || len(columnCollationIds) == 0 {
+		return nil, nil
+	}
+
+	if len(columnNames) != len(columnCollationIds) {
+		return nil, fmt.Errorf("len mismatch: %d columnNames vs %d collationIDs", len(columnNames), len(columnCollationIds))
+	}
+
+	// 1) Build COLUMN_CHARSET payload
+	var charsetPayload []byte
+	for _, coll := range columnCollationIds {
+		charsetPayload = append(charsetPayload, encodeLenEncInt(coll)...)
+	}
+
+	// 2) Build COLUMN_NAME payload
+	var namePayload []byte
+	for _, n := range columnNames {
+		if len(n) > 255 {
+			return nil, fmt.Errorf("column name too long (>255): %q", n)
+		}
+		namePayload = append(namePayload, byte(len(n)))
+		namePayload = append(namePayload, []byte(n)...)
+	}
+
+	// 3) Build ENUM VALUES payload
+	var enumValuesPayload []byte
+	for _, enumValues := range tableMap.OptionalEnumValues {
+		enumValuesPayload = append(enumValuesPayload, encodeLenEncInt(uint64(len(enumValues)))...)
+		for _, enumValue := range enumValues {
+			enumValuesPayload = append(enumValuesPayload, encodeLenEncInt(uint64(len(enumValue)))...)
+			enumValuesPayload = append(enumValuesPayload, []byte(enumValue)...)
+		}
+	}
+
+	// 4) Build SET VALUES payload
+	var setValuesPayload []byte
+	for _, setValues := range tableMap.OptionalSetValues {
+		setValuesPayload = append(setValuesPayload, encodeLenEncInt(uint64(len(setValues)))...)
+		for _, setValue := range setValues {
+			setValuesPayload = append(setValuesPayload, encodeLenEncInt(uint64(len(setValue)))...)
+			setValuesPayload = append(setValuesPayload, []byte(setValue)...)
+		}
+	}
+
+	// 5) Build ENUM/SET CHARSET payload
+	var enumSetCharsetPayload []byte
+	for _, coll := range tableMap.OptionalEnumAndSetCollations {
+		enumSetCharsetPayload = append(enumSetCharsetPayload, encodeLenEncInt(coll)...)
+	}
+
+	// 6) Wrap each payload as an optional metadata block: [type][lenenc-int][payload]
+	var out []byte
+	out = append(out, buildOptMetaBlock(TableMapOptMetaColumnCharset, charsetPayload)...)
+	out = append(out, buildOptMetaBlock(TableMapOptMetaColumnName, namePayload)...)
+	out = append(out, buildOptMetaBlock(TableMapOptMetaEnumValues, enumValuesPayload)...)
+	out = append(out, buildOptMetaBlock(TableMapOptMetaSetValues, setValuesPayload)...)
+	out = append(out, buildOptMetaBlock(TableMapOptMetaEnumSetCharset, enumSetCharsetPayload)...)
+
+	return out, nil
+}
+
+// buildOptMetaBlock constructs a single optional metadata block in the MySQL
+// binlog row event format.
+//
+// The block is encoded as:
+//
+//	[type][length][payload]
+//
+// where:
+//   - type is a one-byte identifier indicating the metadata subtype,
+//   - length is a length-encoded integer representing the size of payload in bytes,
+//   - payload is the raw metadata content for that subtype.
+//
+// The returned byte slice contains the fully encoded metadata block and is suitable
+// for concatenation with other optional metadata blocks when building the
+// optional_metadata section of a binlog event.
+func buildOptMetaBlock(typ byte, payload []byte) []byte {
+	var b []byte
+	b = append(b, typ)
+	b = append(b, encodeLenEncInt(uint64(len(payload)))...)
+	b = append(b, payload...)
+	return b
+}
+
+// encodeLenEncInt encodes MySQL "length-encoded integer" (a.k.a. lenenc-int).
+//
+// Encoding:
+//   - < 251: 1 byte
+//   - < 2^16: 0xFC + 2 bytes little-endian
+//   - < 2^24: 0xFD + 3 bytes little-endian
+//   - else:   0xFE + 8 bytes little-endian
+func encodeLenEncInt(x uint64) []byte {
+	switch {
+	case x < 251:
+		return []byte{byte(x)}
+	case x < 1<<16:
+		b := make([]byte, 3)
+		b[0] = 0xFC
+		binary.LittleEndian.PutUint16(b[1:], uint16(x))
+		return b
+	case x < 1<<24:
+		// 0xFD + 3 bytes little endian
+		return []byte{0xFD, byte(x), byte(x >> 8), byte(x >> 16)}
+	default:
+		b := make([]byte, 9)
+		b[0] = 0xFE
+		binary.LittleEndian.PutUint64(b[1:], x)
+		return b
+	}
+}
+
+// NewTableMapEvent returns a TableMap event. If any errors are encountered while building the
+// event bytes, an error is returned.
 // Only works with post_header_length=8.
-func NewTableMapEvent(f BinlogFormat, m BinlogEventMetadata, tableID uint64, tm *TableMap) BinlogEvent {
+func NewTableMapEvent(f BinlogFormat, m BinlogEventMetadata, tableID uint64, tm *TableMap) (BinlogEvent, error) {
+	optionalMetadata, err := buildOptionalTableMapMetadata(tm)
+	if err != nil {
+		return nil, err
+	}
+
 	if f.HeaderSize(eTableMapEvent) != 8 {
 		panic("Not implemented, post_header_length!=8")
 	}
@@ -385,7 +520,9 @@ func NewTableMapEvent(f BinlogFormat, m BinlogEventMetadata, tableID uint64, tm 
 		len(tm.Types) +
 		lenEncIntSize(uint64(metadataLength)) + // lenenc-str column-meta-def
 		metadataLength +
-		len(tm.CanBeNull.data)
+		len(tm.CanBeNull.data) +
+		len(optionalMetadata)
+
 	data := make([]byte, length)
 
 	data[0] = byte(tableID)
@@ -397,9 +534,11 @@ func NewTableMapEvent(f BinlogFormat, m BinlogEventMetadata, tableID uint64, tm 
 	data[6] = byte(tm.Flags)
 	data[7] = byte(tm.Flags >> 8)
 	data[8] = byte(len(tm.Database))
+
 	pos := 6 + 2 + 1 + copy(data[9:], tm.Database)
 	data[pos] = 0
 	pos++
+
 	data[pos] = byte(len(tm.Name))
 	pos += 1 + copy(data[pos+1:], tm.Name)
 	data[pos] = 0
@@ -414,12 +553,15 @@ func NewTableMapEvent(f BinlogFormat, m BinlogEventMetadata, tableID uint64, tm 
 	}
 
 	pos += copy(data[pos:], tm.CanBeNull.data)
+	pos += copy(data[pos:], optionalMetadata)
+
 	if pos != len(data) {
-		panic("bad encoding")
+		return nil, fmt.Errorf("bad table map encoding; calculated position (%v) "+
+			"does not match length of data (%v)", pos, len(data))
 	}
 
 	ev := packetize(f, eTableMapEvent, 0, data, m)
-	return NewMariadbBinlogEvent(ev)
+	return NewMariadbBinlogEvent(ev), nil
 }
 
 // NewWriteRowsEvent returns a WriteRows event. Uses v2.
