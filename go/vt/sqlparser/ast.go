@@ -4970,6 +4970,7 @@ func (*JSONTableExpr) iTableExpr()    {}
 func (*CommonTableExpr) iTableExpr()  {}
 func (*ValuesStatement) iTableExpr()  {}
 func (TableFuncExpr) iTableExpr()     {}
+func (*RowsFromExpr) iTableExpr()     {}
 
 // AliasedTableExpr represents a table expression
 // coupled with an optional alias, AS OF expression, and index hints.
@@ -7812,6 +7813,55 @@ func (node *TableFuncExpr) walkSubtree(visit Visit) error {
 	return Walk(
 		visit,
 		node.Exprs)
+}
+
+// RowsFromExpr represents a ROWS FROM table expression.
+// This is PostgreSQL syntax: ROWS FROM(func1(...), func2(...), ...)
+// It executes multiple set-returning functions in parallel and zips their results.
+type RowsFromExpr struct {
+	// Exprs contains the function expressions (each should be a FuncExpr or similar)
+	Exprs SelectExprs
+	// WithOrdinality when true, adds an ordinality column to the result
+	WithOrdinality bool
+	// Alias is the table alias
+	Alias TableIdent
+	// Columns are optional column aliases
+	Columns Columns
+}
+
+// Format formats the node.
+func (node *RowsFromExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("ROWS FROM(")
+	for i, expr := range node.Exprs {
+		if i > 0 {
+			buf.Myprintf(", ")
+		}
+		buf.Myprintf("%v", expr)
+	}
+	buf.Myprintf(")")
+	if node.WithOrdinality {
+		buf.Myprintf(" WITH ORDINALITY")
+	}
+	if !node.Alias.IsEmpty() {
+		buf.Myprintf(" AS %v", node.Alias)
+		if len(node.Columns) > 0 {
+			buf.Myprintf("(")
+			for i, col := range node.Columns {
+				if i > 0 {
+					buf.Myprintf(", ")
+				}
+				buf.Myprintf("%v", col)
+			}
+			buf.Myprintf(")")
+		}
+	}
+}
+
+func (node *RowsFromExpr) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(visit, node.Exprs)
 }
 
 // TableIdent is a case sensitive SQL identifier. It will be escaped with
