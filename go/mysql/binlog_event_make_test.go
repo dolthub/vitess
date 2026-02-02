@@ -326,7 +326,8 @@ func TestTableMapEvent(t *testing.T) {
 	tm.CanBeNull.Set(5, true)
 	tm.CanBeNull.Set(9, true)
 
-	event := NewTableMapEvent(f, m, 0x102030405060, tm)
+	event, err := NewTableMapEvent(f, m, 0x102030405060, tm)
+	require.NoError(t, err)
 	if !event.IsValid() {
 		t.Fatalf("NewTableMapEvent().IsValid() is false")
 	}
@@ -334,7 +335,7 @@ func TestTableMapEvent(t *testing.T) {
 		t.Fatalf("NewTableMapEvent().IsTableMap() if false")
 	}
 
-	event, _, err := event.StripChecksum(f)
+	event, _, err = event.StripChecksum(f)
 	if err != nil {
 		t.Fatalf("StripChecksum failed: %v", err)
 	}
@@ -350,6 +351,71 @@ func TestTableMapEvent(t *testing.T) {
 	if !reflect.DeepEqual(gotTm, tm) {
 		t.Fatalf("NewTableMapEvent().TableMapEvent() got TableMap:\n%v\nexpected:\n%v", gotTm, tm)
 	}
+}
+
+// Test serialization of TableMap events that contain optional metadata (e.g. column names, enum values).
+func TestTableMapEventWithOptionalMetadata(t *testing.T) {
+	f := NewMySQL56BinlogFormat()
+	m := NewTestBinlogMetadata()
+
+	tm := &TableMap{
+		Flags:    0x8090,
+		Database: "my_database",
+		Name:     "my_table",
+		Types: []byte{
+			TypeLongLong,
+			TypeLongLong,
+			TypeLongLong,
+		},
+		CanBeNull: NewServerBitmap(10),
+		Metadata: []uint16{
+			0,
+			0,
+			0,
+		},
+		OptionalEnumValues:           [][]string{{"apple", "orange"}, {"red", "green"}},
+		OptionalSetValues:            [][]string{{"one", "two", "three"}},
+		OptionalColumnNames:          []string{"foo", "bar", "baz"},
+		OptionalColumnCollations:     []uint64{0, 0, 0},
+		OptionalEnumAndSetCollations: []uint64{0, 0, 0},
+	}
+	tm.CanBeNull.Set(1, true)
+	tm.CanBeNull.Set(2, true)
+	tm.CanBeNull.Set(5, true)
+	tm.CanBeNull.Set(9, true)
+
+	event, err := NewTableMapEvent(f, m, 0x102030405060, tm)
+	require.NoError(t, err)
+	if !event.IsValid() {
+		t.Fatalf("NewTableMapEvent().IsValid() is false")
+	}
+	if !event.IsTableMap() {
+		t.Fatalf("NewTableMapEvent().IsTableMap() if false")
+	}
+
+	event, _, err = event.StripChecksum(f)
+	if err != nil {
+		t.Fatalf("StripChecksum failed: %v", err)
+	}
+
+	tableID := event.TableID(f)
+	if tableID != 0x102030405060 {
+		t.Fatalf("NewTableMapEvent().TableID returned %x", tableID)
+	}
+
+	// NOTE: Vitess doesn't currently include support for deserializing optional table map data (only serializing it)
+	//       so instead of doing round-trip testing of the values, we use static expected bytes that we know have been
+	//       serialized and work correctly with replication clients.
+	var expectedBytes = []byte{
+		0x98, 0x68, 0xe9, 0x53, 0x13, 0x1, 0x0, 0x0, 0x0, 0x81, 0x0, 0x0, 0x0, 0x4, 0x0, 0x0, 0x0, 0x0, 0x0, 0x60,
+		0x50, 0x40, 0x30, 0x20, 0x10, 0x90, 0x80, 0xb, 0x6d, 0x79, 0x5f, 0x64, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73,
+		0x65, 0x0, 0x8, 0x6d, 0x79, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x0, 0x3, 0x8, 0x8, 0x8, 0x0, 0x26, 0x2,
+		0x3, 0x3, 0x0, 0x0, 0x0, 0x4, 0xc, 0x3, 0x66, 0x6f, 0x6f, 0x3, 0x62, 0x61, 0x72, 0x3, 0x62, 0x61, 0x7a,
+		0x6, 0x19, 0x2, 0x5, 0x61, 0x70, 0x70, 0x6c, 0x65, 0x6, 0x6f, 0x72, 0x61, 0x6e, 0x67, 0x65, 0x2, 0x3,
+		0x72, 0x65, 0x64, 0x5, 0x67, 0x72, 0x65, 0x65, 0x6e, 0x5, 0xf, 0x3, 0x3, 0x6f, 0x6e, 0x65, 0x3, 0x74,
+		0x77, 0x6f, 0x5, 0x74, 0x68, 0x72, 0x65, 0x65, 0xb, 0x3, 0x0, 0x0, 0x0,
+	}
+	require.Equal(t, expectedBytes, event.Bytes())
 }
 
 func TestRowsEvent(t *testing.T) {

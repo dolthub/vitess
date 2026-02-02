@@ -205,12 +205,36 @@ type TableMap struct {
 	// - If the metadata is one byte, only the lower 8 bits are used.
 	// - If the metadata is two bytes, all 16 bits are used.
 	Metadata []uint16
+
+	// OptionalColumnNames contains optional metadata on column names for
+	// the table this TableMap describes. This metadata should only be set
+	// when @@binlog_row_metadata is set to FULL.
+	OptionalColumnNames []string
+
+	// OptionalColumnCollations contains optional metadata on column collations
+	// for the table this TableMap describes. This metadata should only be set
+	// when @@binlog_row_metadata is set to FULL.
+	OptionalColumnCollations []uint64
+
+	// OptionalEnumValues contains one []string for each enum field in a table's
+	// schema, where that []string contains the string values of the enum. This
+	// metadata should only be set when @@binlog_row_metadata is set to FULL.
+	OptionalEnumValues [][]string
+
+	// OptionalSetValues contains one []string for each set field in a table's
+	// schema, where that []string contains the string values of the set. This
+	// metadata should only be set when @@binlog_row_metadata is set to FULL.
+	OptionalSetValues [][]string
+
+	// OptionalEnumAndSetCollations contains one entry for each set and enum
+	// field in the table's schema, indicating the set or enum's collation.
+	OptionalEnumAndSetCollations []uint64
 }
 
 // String implements the Stringer interface
 func (t *TableMap) String() string {
-	return fmt.Sprintf("{Flags: %v, Database: %q, Name: %q, Types: %v, CanBeNull: %v, Metadata: %v}",
-		t.Flags, t.Database, t.Name, t.Types, t.CanBeNull, t.Metadata)
+	return fmt.Sprintf("{Flags: %v, Database: %q, Name: %q, Types: %v, CanBeNull: %v, Metadata: %v, OptionalColumnNames: %v, OptionalColumnCollations: %v, OptionalEnumValues: %v, OptionalSetValues: %v, OptionalEnumAndSetCollations: %v}",
+		t.Flags, t.Database, t.Name, t.Types, t.CanBeNull, t.Metadata, t.OptionalColumnNames, t.OptionalColumnCollations, t.OptionalEnumValues, t.OptionalSetValues, t.OptionalEnumAndSetCollations)
 }
 
 // Rows contains data from a {WRITE,UPDATE,DELETE}_ROWS_EVENT.
