@@ -4970,7 +4970,6 @@ func (*JSONTableExpr) iTableExpr()    {}
 func (*CommonTableExpr) iTableExpr()  {}
 func (*ValuesStatement) iTableExpr()  {}
 func (TableFuncExpr) iTableExpr()     {}
-func (*RowsFromExpr) iTableExpr()     {}
 
 // AliasedTableExpr represents a table expression
 // coupled with an optional alias, AS OF expression, and index hints.
@@ -7759,16 +7758,37 @@ type TableFuncExpr struct {
 	Name  string
 	Alias TableIdent
 	Exprs SelectExprs
+	// Columns are optional column aliases for the result columns.
+	// This is a Doltgres extension, not used by MySQL.
+	Columns Columns
+	// WithOrdinality when true, adds an ordinality column to the result.
+	// This is a Doltgres extension, not used by MySQL.
+	WithOrdinality bool
 }
 
 // Format formats the node.
 func (node TableFuncExpr) Format(buf *TrackedBuffer) {
-	if node.Alias.IsEmpty() {
+	if node.Name != "" {
 		buf.Myprintf("%s(%v)", node.Name, node.Exprs)
 	} else {
-		buf.Myprintf("%s(%v) %s %v", node.Name, node.Exprs, keywordStrings[AS], node.Alias)
+		buf.Myprintf("ROWS FROM(%v)", node.Exprs)
 	}
-
+	if node.WithOrdinality {
+		buf.Myprintf(" WITH ORDINALITY")
+	}
+	if !node.Alias.IsEmpty() {
+		buf.Myprintf(" %s %v", keywordStrings[AS], node.Alias)
+		if len(node.Columns) > 0 {
+			buf.Myprintf("(")
+			for i, col := range node.Columns {
+				if i > 0 {
+					buf.Myprintf(", ")
+				}
+				buf.Myprintf("%v", col)
+			}
+			buf.Myprintf(")")
+		}
+	}
 }
 
 // IsEmpty returns true if TableFuncExpr's name is empty.
@@ -7810,58 +7830,10 @@ func (node *TableFuncExpr) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
 	}
-	return Walk(
-		visit,
-		node.Exprs)
-}
-
-// RowsFromExpr represents a ROWS FROM table expression.
-// This is PostgreSQL syntax: ROWS FROM(func1(...), func2(...), ...)
-// It executes multiple set-returning functions in parallel and zips their results.
-type RowsFromExpr struct {
-	// Exprs contains the function expressions (each should be a FuncExpr or similar)
-	Exprs SelectExprs
-	// WithOrdinality when true, adds an ordinality column to the result
-	WithOrdinality bool
-	// Alias is the table alias
-	Alias TableIdent
-	// Columns are optional column aliases
-	Columns Columns
-}
-
-// Format formats the node.
-func (node *RowsFromExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("ROWS FROM(")
-	for i, expr := range node.Exprs {
-		if i > 0 {
-			buf.Myprintf(", ")
-		}
-		buf.Myprintf("%v", expr)
+	if err := Walk(visit, node.Exprs); err != nil {
+		return err
 	}
-	buf.Myprintf(")")
-	if node.WithOrdinality {
-		buf.Myprintf(" WITH ORDINALITY")
-	}
-	if !node.Alias.IsEmpty() {
-		buf.Myprintf(" AS %v", node.Alias)
-		if len(node.Columns) > 0 {
-			buf.Myprintf("(")
-			for i, col := range node.Columns {
-				if i > 0 {
-					buf.Myprintf(", ")
-				}
-				buf.Myprintf("%v", col)
-			}
-			buf.Myprintf(")")
-		}
-	}
-}
-
-func (node *RowsFromExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(visit, node.Exprs)
+	return node.Columns.walkSubtree(visit)
 }
 
 // TableIdent is a case sensitive SQL identifier. It will be escaped with
