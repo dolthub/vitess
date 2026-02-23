@@ -777,6 +777,7 @@ func (c *Conn) writeErrorPacket(errorCode uint16, sqlState string, format string
 		sqlState = SSUnknownSQLState
 	}
 	if len(sqlState) != 5 {
+		c.recycleWritePacket()
 		panic("sqlState has to be 5 characters long")
 	}
 	pos = writeEOFString(data, pos, sqlState)

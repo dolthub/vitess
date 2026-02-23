@@ -713,6 +713,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, en
 	// auth method is also mysql_native_password or caching_sha2_password.
 	pluginData, err := NewSalt()
 	if err != nil {
+		c.recycleWritePacket()
 		return nil, err
 	}
 	// Plugin data is always defined as having a trailing NULL
@@ -751,6 +752,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, en
 
 	// Sanity check.
 	if pos != len(data) {
+		c.recycleWritePacket()
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "error building Handshake packet: got %v bytes expected %v", pos, len(data))
 	}
 
@@ -961,6 +963,7 @@ func (c *Conn) writeAuthSwitchRequest(pluginName string, pluginData []byte) erro
 
 	// Sanity check.
 	if pos != len(data) {
+		c.recycleWritePacket()
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "error building AuthSwitchRequestPacket packet: got %v bytes expected %v", pos, len(data))
 	}
 	return c.writeEphemeralPacket()

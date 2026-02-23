@@ -1021,6 +1021,7 @@ func (c *Conn) writeColumnDefinition(field *querypb.Field, withDefaults bool) er
 	}
 
 	if pos != len(data) {
+		c.recycleWritePacket()
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "packing of column definition used %v bytes instead of %v", pos, len(data))
 	}
 
@@ -1051,6 +1052,7 @@ func (c *Conn) writeRow(row []sqltypes.Value) error {
 	}
 
 	if pos != length {
+		c.recycleWritePacket()
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "packet row: got %v bytes but expected %v", pos, length)
 	}
 
@@ -1235,6 +1237,7 @@ func (c *Conn) writeBinaryRow(fields []*querypb.Field, row []sqltypes.Value) err
 	}
 
 	if pos != length {
+		c.recycleWritePacket()
 		return fmt.Errorf("internal error packet row: got %v bytes but expected %v", pos, length)
 	}
 
