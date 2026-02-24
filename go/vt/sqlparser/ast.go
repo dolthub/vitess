@@ -4083,6 +4083,7 @@ type Show struct {
 	IfNotExists            bool
 	CountStar              bool
 	Full                   bool
+	Extended               bool
 }
 
 var _ AuthNode = (*Show)(nil)
@@ -4094,6 +4095,9 @@ func (node *Show) Format(buf *TrackedBuffer) {
 	case "tables", "columns", "fields":
 		if node.ShowTablesOpt != nil {
 			buf.Myprintf("show ")
+			if node.Extended {
+				buf.Myprintf("extended ")
+			}
 			if node.Full {
 				buf.Myprintf("full ")
 			}

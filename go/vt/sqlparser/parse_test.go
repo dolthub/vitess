@@ -2586,8 +2586,10 @@ var (
 		}, {
 			input:  "show columns from a for system_time as of 'foo'",
 			output: "show columns from a as of 'foo'",
-		},
-		{
+		}, {
+			input:  "SHOW EXTENDED COLUMNS FROM t1;",
+			output: "show extended columns from t1",
+		}, {
 			input: "explain select * from foobar",
 		},
 		{
