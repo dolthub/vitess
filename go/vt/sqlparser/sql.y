@@ -7336,6 +7336,21 @@ show_statement:
       },
     }
   }
+| SHOW EXTENDED full_opt columns_or_fields FROM table_name from_database_opt as_of_opt like_or_where_opt
+  {
+    showTablesOpt := &ShowTablesOpt{DbName:$7.(string), AsOf:tryCastExpr($8), Filter:$9.(*ShowFilter)}
+    $$ = &Show{
+      Type: string($4.(string)),
+      ShowTablesOpt: showTablesOpt,
+      Table: $6.(TableName),
+      Full: $3.(bool),
+      Auth: AuthInformation{
+        AuthType: AuthType_SHOW,
+        TargetType: AuthTargetType_TODO,
+      },
+      Extended: true,
+    }
+  }
 | SHOW full_opt TABLES from_database_opt as_of_opt like_or_where_opt
   {
     showTablesOpt := &ShowTablesOpt{DbName: $4.(string), Filter: $6.(*ShowFilter), AsOf: tryCastExpr($5)}
