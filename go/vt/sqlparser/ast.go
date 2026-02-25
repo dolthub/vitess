@@ -6533,6 +6533,7 @@ func (node *CollateExpr) replace(from, to Expr) bool {
 
 // FuncExpr represents a function call.
 type FuncExpr struct {
+	Auth      AuthInformation
 	Over      *Over
 	Name      ColIdent
 	Qualifier TableIdent
