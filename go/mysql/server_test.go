@@ -1288,11 +1288,22 @@ func TestCachingSha2PasswordAuthWithoutTLS(t *testing.T) {
 		Uname: "user1",
 		Pass:  "password1",
 	}
-	// Connection should fail, as server requires SSL for caching_sha2_password.
+	// Connection should fail, as this server does not support caching_sha2_password without
+	// TLS or a Unix socket and returns a server-side auth denial packet.
 	ctx := context.Background()
 	_, err = Connect(ctx, params)
-	if err == nil || !strings.Contains(err.Error(), "No authentication methods available for authentication") {
-		t.Fatalf("unexpected connection error: %v", err)
+	if err == nil {
+		t.Fatalf("expected connection error")
+	}
+	sqlErr, ok := err.(*SQLError)
+	if !ok {
+		t.Fatalf("expected *SQLError, got: %T (%v)", err, err)
+	}
+	if sqlErr.Number() != ERAccessDeniedError {
+		t.Fatalf("unexpected mysql error code: %d", sqlErr.Number())
+	}
+	if sqlErr.SQLState() != SSAccessDeniedError {
+		t.Fatalf("unexpected sqlstate: %s", sqlErr.SQLState())
 	}
 }
 

@@ -24,7 +24,6 @@ import (
 	"os"
 	"path"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/dolthub/vitess/go/vt/tlstest"
@@ -64,8 +63,18 @@ func TestClearTextClientAuth(t *testing.T) {
 	// Connection should fail, as server requires SSL for clear text auth.
 	ctx := context.Background()
 	_, err = Connect(ctx, params)
-	if err == nil || !strings.Contains(err.Error(), "Cannot use clear text authentication over non-SSL connections") {
-		t.Fatalf("unexpected connection error: %v", err)
+	if err == nil {
+		t.Fatalf("expected connection error")
+	}
+	sqlErr, ok := err.(*SQLError)
+	if !ok {
+		t.Fatalf("expected *SQLError, got: %T (%v)", err, err)
+	}
+	if sqlErr.Number() != ERAccessDeniedError {
+		t.Fatalf("unexpected mysql error code: %d", sqlErr.Number())
+	}
+	if sqlErr.SQLState() != SSAccessDeniedError {
+		t.Fatalf("unexpected sqlstate: %s", sqlErr.SQLState())
 	}
 
 	// Change server side to allow clear text without auth.
@@ -215,4 +224,73 @@ func testSSLConnectionBasics(t *testing.T, params *ConnParams) {
 
 	// Send a ComQuit to avoid the error message on the server side.
 	conn.writeComQuit()
+}
+
+// rejectingUserValidator is a [UserValidator] that rejects every user.
+// Embedding it in an auth server drives the negotiated-method == nil branch.
+type rejectingUserValidator struct{}
+
+func (rejectingUserValidator) HandleUser(string, net.Addr) bool { return false }
+
+// rejectingHashStorage is a minimal [HashStorage] that always returns access denied.
+type rejectingHashStorage struct{}
+
+func (rejectingHashStorage) UserEntryWithHash(_ *Conn, _ []byte, user string, _ []byte, _ net.Addr) (Getter, error) {
+	return nil, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+}
+
+// rejectAllAuthServer is an [AuthServer] whose sole auth method always returns false
+// from HandleUser, so no method is ever negotiated for any user.
+type rejectAllAuthServer struct{}
+
+func (s *rejectAllAuthServer) AuthMethods() []AuthMethod {
+	return []AuthMethod{NewMysqlNativeAuthMethod(rejectingHashStorage{}, rejectingUserValidator{})}
+}
+
+func (s *rejectAllAuthServer) DefaultAuthMethodDescription() AuthMethodDescription {
+	return MysqlNativePassword
+}
+
+// TestNoAuthMethodsReturnsAccessDenied exercises the server branch where
+// negotiatedAuthMethod is nil after both the initial negotiation and the
+// fallback scan of all methods fail.
+//
+// Before the fix, the server sent CRServerHandshakeErr (2012), a client-side
+// error code that strict clients (e.g. MariaDB 11.8+) interpret as a malformed
+// packet (CR_MALFORMED_PACKET/2027). The server must instead emit a
+// spec-compliant ERR_Packet with ERAccessDeniedError (1045) and
+// SSAccessDeniedError ("28000").
+func TestNoAuthMethodsReturnsAccessDenied(t *testing.T) {
+	th := &testHandler{}
+	authServer := &rejectAllAuthServer{}
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+	host := l.Addr().(*net.TCPAddr).IP.String()
+	port := l.Addr().(*net.TCPAddr).Port
+	go l.Accept()
+
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "nonexistent",
+		Pass:  "anything",
+	}
+	ctx := context.Background()
+	_, err = Connect(ctx, params)
+	if err == nil {
+		t.Fatal("expected connection error, got none")
+	}
+	sqlErr, ok := err.(*SQLError)
+	if !ok {
+		t.Fatalf("expected *SQLError, got: %T (%v)", err, err)
+	}
+	if sqlErr.Number() != ERAccessDeniedError {
+		t.Fatalf("expected error code %d (ERAccessDeniedError), got %d", ERAccessDeniedError, sqlErr.Number())
+	}
+	if sqlErr.SQLState() != SSAccessDeniedError {
+		t.Fatalf("expected SQL state %q (SSAccessDeniedError), got %q", SSAccessDeniedError, sqlErr.SQLState())
+	}
 }

@@ -516,14 +516,47 @@ func (l *Listener) handle(ctx context.Context, conn net.Conn, connectionID uint3
 			}
 		}
 		if negotiatedAuthMethod == nil {
-			l.handleConnectionError(c, "No authentication methods available for authentication.")
-			c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "No authentication methods available for authentication.")
+			// Per [MySQL Connection Phase], the only valid server->client packets during
+			// authentication are OK, ERR, AuthSwitchRequest, and AuthMoreData.
+			//
+			// [MySQL ERR_Packet] defines an `error_code` field in the server's ERR
+			// response, and [MySQL Error Code Ranges] reserve 1000-1999 for server
+			// error messages sent to clients while 2000-2999 are client-library errors.
+			// Therefore, this server must send ER_* and not client CR_* values.
+			//
+			// A well-behaved MySQL-compatible server should not reach this branch: MySQL
+			// ensures an auth method for unknown users via [MySQL decoy_user()]. This is
+			// a defensive last resort; [ERAccessDeniedError]/[SSAccessDeniedError] keeps
+			// the response protocol-compliant if method selection still fails.
+			//
+			// [MySQL Connection Phase]: https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase.html
+			// [MySQL ERR_Packet]: https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_basic_err_packet.html
+			// [MySQL Error Code Ranges]: https://dev.mysql.com/doc/refman/en/error-message-elements.html#error-code-ranges
+			// [MySQL decoy_user()]: https://dev.mysql.com/doc/dev/mysql-server/latest/sql__authentication_8cc.html#a1de21b350d90e000bb0ff939cb698a31
+			l.handleConnectionWarning(c, "No authentication methods available for authentication.")
+			c.writeErrorPacket(
+				ERAccessDeniedError,
+				SSAccessDeniedError,
+				"Access denied for user '%s'",
+				user,
+			)
 			return
 		}
 
 		if !l.AllowClearTextWithoutTLS.Get() && !c.TLSEnabled() && !negotiatedAuthMethod.AllowClearTextWithoutTLS() {
-			l.handleConnectionError(c, "Cannot use clear text authentication over non-SSL connections.")
-			c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "Cannot use clear text authentication over non-SSL connections.")
+			// MySQL can surface ERROR 2061 for this scenario via [MySQL CR_AUTH_PLUGIN_ERR],
+			// which is raised by the client auth plugin during plugin exchange (not sent by
+			// the server as an error code). Stricter clients already implement this behavior
+			// when the auth flow reaches that plugin path.
+			//
+			// [MySQL CR_AUTH_PLUGIN_ERR]: https://dev.mysql.com/doc/mysql-errors/8.0/en/client-error-reference.html#error_cr_auth_plugin_err
+			l.handleConnectionWarning(c, "Cannot use clear text authentication over non-SSL connections.")
+			c.writeErrorPacket(
+				ERAccessDeniedError,
+				SSAccessDeniedError,
+				"Access denied for user '%s'",
+				user,
+			)
 			return
 		}
 
