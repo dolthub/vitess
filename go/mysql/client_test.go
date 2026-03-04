@@ -123,7 +123,11 @@ func TestConnectTimeout(t *testing.T) {
 	listener.Close()
 	wg.Wait()
 	_, err = Connect(ctx, params)
-	assertSQLError(t, err, CRConnHostError, SSUnknownSQLState, "connection refused", "")
+	refusedSubtext := "connection refused"
+	if runtime.GOOS == "windows" {
+		refusedSubtext = "actively refused"
+	}
+	assertSQLError(t, err, CRConnHostError, SSUnknownSQLState, refusedSubtext, "")
 
 	// Tests a connection where Dial to a unix socket fails
 	// properly returns the right error. To simulate exactly the
@@ -141,7 +145,7 @@ func TestConnectTimeout(t *testing.T) {
 	if runtime.GOOS == "darwin" {
 		assertSQLError(t, err, CRConnectionError, SSUnknownSQLState, "socket operation on non-socket", "")
 	} else {
-		assertSQLError(t, err, CRConnectionError, SSUnknownSQLState, "connection refused", "")
+		assertSQLError(t, err, CRConnectionError, SSUnknownSQLState, refusedSubtext, "")
 	}
 }
 

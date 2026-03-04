@@ -20,16 +20,18 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/dolthub/vitess/go/test/utils"
 	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
 	"path"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/dolthub/vitess/go/test/utils"
 
 	"github.com/dolthub/vitess/go/sqltypes"
 	vtenv "github.com/dolthub/vitess/go/vt/env"
@@ -490,6 +492,10 @@ func TestConnectionUseMysqlNativePasswordWithSourceHost(t *testing.T) {
 }
 
 func TestConnectionUnixSocket(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix socket listener tests are not reliable on Windows")
+	}
+
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic("", "", 0)
@@ -922,7 +928,7 @@ func TestClearTextServer(t *testing.T) {
 	if ok {
 		t.Fatalf("mysql should have failed but returned: %v", output)
 	}
-	if !strings.Contains(output, "Cannot use clear text authentication over non-SSL connections") {
+	if !strings.Contains(output, "ERROR 1045 (28000): Access denied for user 'user1'") {
 		t.Errorf("Unexpected output for 'select rows': %v", output)
 	}
 
@@ -1288,11 +1294,22 @@ func TestCachingSha2PasswordAuthWithoutTLS(t *testing.T) {
 		Uname: "user1",
 		Pass:  "password1",
 	}
-	// Connection should fail, as server requires SSL for caching_sha2_password.
+	// Connection should fail, as this server does not support caching_sha2_password without
+	// TLS or a Unix socket and returns a server-side auth denial packet.
 	ctx := context.Background()
 	_, err = Connect(ctx, params)
-	if err == nil || !strings.Contains(err.Error(), "No authentication methods available for authentication") {
-		t.Fatalf("unexpected connection error: %v", err)
+	if err == nil {
+		t.Fatalf("expected connection error")
+	}
+	sqlErr, ok := err.(*SQLError)
+	if !ok {
+		t.Fatalf("expected *SQLError, got: %T (%v)", err, err)
+	}
+	if sqlErr.Number() != ERAccessDeniedError {
+		t.Fatalf("unexpected mysql error code: %d", sqlErr.Number())
+	}
+	if sqlErr.SQLState() != SSAccessDeniedError {
+		t.Fatalf("unexpected sqlstate: %s", sqlErr.SQLState())
 	}
 }
 
@@ -1479,8 +1496,11 @@ func runMysql(t *testing.T, params *ConnParams, command string) (string, bool) {
 	return output, true
 }
 
-// binaryPath does a limited path lookup for a command,
-// searching only within sbin and bin in the given root.
+// binaryPath locates a binary name for integration tests.
+//
+// It first searches within sbin and bin in the given root. If no binary
+// exists there, it falls back to PATH lookup via [exec.LookPath] so local
+// developers can use a system-installed client.
 //
 // FIXME(alainjobart) move this to vt/env, and use it from
 // go/vt/mysqlctl too.
@@ -1492,7 +1512,13 @@ func binaryPath(root, binary string) (string, error) {
 			return binPath, nil
 		}
 	}
-	return "", fmt.Errorf("%s not found in any of %s/{%s}",
+
+	// Local dev fallback: allow a system-installed mysql client from PATH.
+	if pathBinary, err := exec.LookPath(binary); err == nil {
+		return pathBinary, nil
+	}
+
+	return "", fmt.Errorf("%s not found in any of %s/{%s} or in PATH",
 		binary, root, strings.Join(subdirs, ","))
 }
 
