@@ -400,7 +400,7 @@ func tryCastStatement(v interface{}) Statement {
 %type <val> having_opt having
 %type <val> order_by_opt order_list
 %type <val> column_order_opt
-%type <val> trigger_order_opt
+%type <val> trigger_order
 %type <val> order
 %type <val> over over_opt
 %type <val> window window_opt
@@ -1452,7 +1452,30 @@ create_statement:
       },
     }
   }
-| CREATE definer_opt TRIGGER trigger_name trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt lexer_position special_comment_mode trigger_body lexer_position
+| CREATE definer_opt TRIGGER trigger_name trigger_time trigger_event ON table_name FOR EACH ROW lexer_old_position special_comment_mode trigger_body lexer_position
+  {
+    tableName := $8.(TableName)
+    $$ = &DDL{
+      Action: CreateStr,
+      Table: tableName,
+      TriggerSpec: &TriggerSpec{
+        TrigName: $4.(TriggerName),
+        Definer: $2.(string),
+        Time: $5.(string),
+        Event: $6.(string),
+        Body: tryCastStatement($14),
+      },
+      SpecialCommentMode: $13.(bool),
+      SubStatementPositionStart: $12.(int),
+      SubStatementPositionEnd: $15.(int) - 1,
+      Auth: AuthInformation{
+        AuthType: AuthType_TRIGGER,
+        TargetType: AuthTargetType_SingleTableIdentifier,
+        TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+      },
+    }
+  }
+| CREATE definer_opt TRIGGER trigger_name trigger_time trigger_event ON table_name FOR EACH ROW trigger_order lexer_position special_comment_mode trigger_body lexer_position
   {
     tableName := $8.(TableName)
     $$ = &DDL{
@@ -2825,11 +2848,8 @@ trigger_event:
     $$ = DeleteStr
   }
 
-trigger_order_opt:
-  {
-    $$ = (*TriggerOrder)(nil)
-  }
-| FOLLOWS ID
+trigger_order:
+  FOLLOWS ID
   {
     $$ = &TriggerOrder{PrecedesOrFollows: FollowsStr, OtherTriggerName: string($2)}
   }

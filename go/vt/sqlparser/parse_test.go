@@ -5761,46 +5761,60 @@ func TestDDLSelectPosition(t *testing.T) {
 		{
 			query: "create view a as select current_timestamp()",
 			sel:   "select current_timestamp()",
-		}, {
+		},
+		{
 			query: "create view a as select /* comment */ 2 + 2 from dual",
 			sel:   "select /* comment */ 2 + 2 from dual",
-		}, {
+		},
+		{
 			query: "/*!  create view a as select 2 from dual */",
 			sel:   "select 2 from dual",
-		}, {
+		},
+		{
 			query: "/*! create view a as select 2 from dual */  ",
 			sel:   "select 2 from dual",
-		}, {
+		},
+		{
 			query: "/*! create view a as select 2 from  dual    */  ",
 			sel:   "select 2 from  dual",
-		}, {
+		},
+		{
 			query: "/*!12345 create view a as select 2 from dual */",
 			sel:   "select 2 from dual",
-		}, {
+		},
+		{
 			query: "/*!50001  CREATE VIEW `some_view` as SELECT 1 AS `x`*/",
 			sel:   "SELECT 1 AS `x`",
-		}, {
+		},
+		{
 			query: "create or replace view a as select current_timestamp()",
 			sel:   "select current_timestamp()",
-		}, {
+		},
+		{
 			query: "create or replace view a as select /* comment */ 2 + 2 from dual",
 			sel:   "select /* comment */ 2 + 2 from dual",
-		}, {
+		},
+		{
 			query: "/*! create or replace view a as select 2 from dual */",
 			sel:   "select 2 from dual",
-		}, {
+		},
+		{
 			query: "/*! create or replace view a as select 2 from dual */  ",
 			sel:   "select 2 from dual",
-		}, {
+		},
+		{
 			query: "/*! create or replace view a as select 2 from  dual    */  ",
 			sel:   "select 2 from  dual",
-		}, {
+		},
+		{
 			query: "/*!12345 create or replace view a as select 2 from dual */",
 			sel:   "select 2 from dual",
-		}, {
+		},
+		{
 			query: "/*!50001 CREATE OR REPLACE VIEW `some_view` as SELECT 1 AS `x`*/",
 			sel:   "SELECT 1 AS `x`",
-		}, {
+		},
+		{
 			query: `create procedure p1(n double, m double)
 begin
 	set @s = '';
@@ -5826,13 +5840,16 @@ end`,
 	set @s = concat(n, ' ', @s, ' ', m, '.');
 	select @s;
 end`,
-		}, {
+		},
+		{
 			query: "create procedure p1() language sql deterministic sql security invoker select 1+1",
 			sel:   "select 1+1",
-		}, {
+		},
+		{
 			query: "create procedure p1 (in v1 int, inout v2 char(2), out v3 datetime) begin select rand() * 10; end",
 			sel:   "begin select rand() * 10; end",
-		}, {
+		},
+		{
 			query: `/*!50400 create procedure p1(n double, m double)
 begin
 	set @s = '';
@@ -5858,7 +5875,8 @@ end   */  `,
 	set @s = concat(n, ' ', @s, ' ', m, '.');
 	select @s;
 end`,
-		}, {
+		},
+		{
 			query: ` /*! create procedure p1(n double, m double)
 begin
 	set @s = '';
@@ -5884,19 +5902,28 @@ end*/ `,
 	set @s = concat(n, ' ', @s, ' ', m, '.');
 	select @s;
 end`,
-		}, {
+		},
+		{
 			query: "/*!50040   create procedure p1() language sql deterministic sql security invoker select 1+1 */",
 			sel:   "select 1+1",
-		}, {
+		},
+		{
 			query: "/*! create procedure p1 (in v1 int, inout v2 char(2), out v3 datetime) begin select rand() * 10; end */",
 			sel:   "begin select rand() * 10; end",
-		}, {
+		},
+		{
+			query: "create trigger t1 before update on foo for each row update xxy set baz = 1 where a = b",
+			sel:   "update xxy set baz = 1 where a = b",
+		},
+		{
 			query: "create trigger t1 before update on foo for each row precedes bar update xxy set baz = 1 where a = b",
 			sel:   "update xxy set baz = 1 where a = b",
-		}, {
+		},
+		{
 			query: "create definer = me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
 			sel:   "update xxy set x = old.y",
-		}, {
+		},
+		{
 			query: `create trigger t1 before delete on foo for each row follows baz
 			begin
 				set session foo = old.x;
@@ -5908,13 +5935,16 @@ end`,
 				set session bar = new.y;
 				update baz.t set a = @@foo + @@bar where z = old.x;
 			end`,
-		}, {
+		},
+		{
 			query: "/*! create trigger t1 before update on foo for each row precedes bar update xxy set baz = 1 where a = b */",
 			sel:   "update xxy set baz = 1 where a = b",
-		}, {
+		},
+		{
 			query: "/*!50040 create definer = me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y */ ",
 			sel:   "update xxy set x = old.y",
-		}, {
+		},
+		{
 			query: `/*!50604 create trigger t1 before delete on foo for each row follows baz
 			begin
 				set session foo = old.x;
