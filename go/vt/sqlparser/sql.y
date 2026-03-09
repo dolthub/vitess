@@ -1452,7 +1452,7 @@ create_statement:
       },
     }
   }
-| CREATE definer_opt TRIGGER trigger_name trigger_time trigger_event ON table_name FOR EACH ROW lexer_position special_comment_mode trigger_body lexer_position
+| CREATE definer_opt TRIGGER trigger_name trigger_time trigger_event ON table_name FOR EACH ROW lexer_old_position special_comment_mode trigger_body lexer_position
   {
     tableName := $8.(TableName)
     $$ = &DDL{
@@ -1463,7 +1463,7 @@ create_statement:
         Definer: $2.(string),
         Time: $5.(string),
         Event: $6.(string),
-        Body: tryCastStatement($15),
+        Body: tryCastStatement($14),
       },
       SpecialCommentMode: $13.(bool),
       SubStatementPositionStart: $12.(int),
