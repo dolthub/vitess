@@ -1452,7 +1452,7 @@ create_statement:
       },
     }
   }
-| CREATE definer_opt TRIGGER trigger_name trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt lexer_position special_comment_mode trigger_body lexer_position
+| CREATE definer_opt TRIGGER trigger_name trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt lexer_old_position special_comment_mode trigger_body lexer_position
   {
     tableName := $8.(TableName)
     $$ = &DDL{
