@@ -1452,7 +1452,30 @@ create_statement:
       },
     }
   }
-| CREATE definer_opt TRIGGER trigger_name trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt lexer_old_position special_comment_mode trigger_body lexer_position
+| CREATE definer_opt TRIGGER trigger_name trigger_time trigger_event ON table_name FOR EACH ROW lexer_position special_comment_mode trigger_body lexer_position
+  {
+    tableName := $8.(TableName)
+    $$ = &DDL{
+      Action: CreateStr,
+      Table: tableName,
+      TriggerSpec: &TriggerSpec{
+        TrigName: $4.(TriggerName),
+        Definer: $2.(string),
+        Time: $5.(string),
+        Event: $6.(string),
+        Body: tryCastStatement($15),
+      },
+      SpecialCommentMode: $13.(bool),
+      SubStatementPositionStart: $12.(int),
+      SubStatementPositionEnd: $15.(int) - 1,
+      Auth: AuthInformation{
+        AuthType: AuthType_TRIGGER,
+        TargetType: AuthTargetType_SingleTableIdentifier,
+        TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
+      },
+    }
+  }
+| CREATE definer_opt TRIGGER trigger_name trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt lexer_position special_comment_mode trigger_body lexer_position
   {
     tableName := $8.(TableName)
     $$ = &DDL{
@@ -2826,10 +2849,7 @@ trigger_event:
   }
 
 trigger_order_opt:
-  {
-    $$ = (*TriggerOrder)(nil)
-  }
-| FOLLOWS ID
+  FOLLOWS ID
   {
     $$ = &TriggerOrder{PrecedesOrFollows: FollowsStr, OtherTriggerName: string($2)}
   }
