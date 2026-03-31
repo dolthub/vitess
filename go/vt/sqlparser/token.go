@@ -316,7 +316,9 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 			fmt.Fprintf(buf, ":v%d", tkn.posVarIndex)
 			return VALUE_ARG, buf.Bytes()
 		case '.':
-			if isDigit(tkn.lastChar) {
+			// A dot following an identifier begins a qualified name, so the digit
+			// after it is the start of a column name, not a decimal literal.
+			if isDigit(tkn.lastChar) && tkn.lastTyp != ID {
 				return tkn.scanNumber(true)
 			}
 			return int(ch), nil
