@@ -442,7 +442,7 @@ func tryCastStatement(v interface{}) Statement {
 %type <val> view_opts
 %type <val> opt_with_check_option
 %type <bytes> reserved_keyword qualified_column_name_safe_reserved_keyword non_reserved_keyword column_name_safe_keyword function_call_keywords non_reserved_keyword2 non_reserved_keyword3 all_non_reserved id_or_non_reserved
-%type <val> sql_id reserved_sql_id col_alias as_ci_opt using_opt existing_window_name_opt
+%type <val> numeric_col_id sql_id reserved_sql_id col_alias as_ci_opt using_opt existing_window_name_opt
 %type <val> reserved_sql_id_list
 %type <val> charset_value
 %type <val> table_id reserved_table_id table_alias
@@ -10044,6 +10044,10 @@ column_name:
   {
     $$ = &ColName{Qualifier: TableName{Name: $1.(TableIdent)}, Name: NewColIdent(string($3))}
   }
+| table_id '.' numeric_col_id
+  {
+    $$ = &ColName{Qualifier: TableName{Name: $1.(TableIdent)}, Name: $3.(ColIdent)}
+  }
 | column_name_safe_keyword '.' sql_id
   {
     $$ = &ColName{Qualifier: TableName{Name: NewTableIdent(string($1))}, Name: $3.(ColIdent)}
@@ -10077,6 +10081,10 @@ column_name:
     $$ = &ColName{Name: NewColIdent(string($1))}
   }
 | table_id '.' reserved_table_id '.' reserved_sql_id
+  {
+    $$ = &ColName{Qualifier: TableName{DbQualifier: $1.(TableIdent), Name: $3.(TableIdent)}, Name: $5.(ColIdent)}
+  }
+| table_id '.' reserved_table_id '.' numeric_col_id
   {
     $$ = &ColName{Qualifier: TableName{DbQualifier: $1.(TableIdent), Name: $3.(TableIdent)}, Name: $5.(ColIdent)}
   }
@@ -10698,6 +10706,16 @@ using_opt:
   { $$ = ColIdent{} }
 | USING sql_id
   { $$ = $2.(ColIdent) }
+
+numeric_col_id:
+  INTEGRAL
+  {
+    $$ = NewColIdent(string($1))
+  }
+| HEXNUM
+  {
+    $$ = NewColIdent(string($1))
+  }
 
 sql_id:
   ID
