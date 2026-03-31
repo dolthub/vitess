@@ -5397,26 +5397,9 @@ func TestGeneratedColumns(t *testing.T) {
 	}
 }
 
-// Will throw syntax errors, but shouldn't
-func TestNotWorkingIdentifiersStartingWithNumbers(t *testing.T) {
-	tests := []parseTest{
-		{
-			input:  "insert into mydb.2b values (1)",
-			output: "insert into mydb.`2b` values (1)",
-		}, {
-			input:  "insert into 1a.2b values (1)",
-			output: "insert into `1a`.`2b` values (1)",
-		}, {
-			input:  "insert into 1a.2b(3c) values (1)",
-			output: "insert into `1a`.`2b`(`3c`) values (1)",
-		},
-	}
-	for _, tcase := range tests {
-		t.Skip()
-		runParseTestCase(t, tcase)
-	}
-}
-
+// TestParsingIdentifiersStartingWithNumbers tests that identifiers starting with
+// digits parse correctly in all name positions, including column definitions,
+// qualified two-part names (table.col), and qualified three-part names (db.table.col).
 func TestParsingIdentifiersStartingWithNumbers(t *testing.T) {
 	tests := []parseTest{
 		{
@@ -5456,8 +5439,48 @@ func TestParsingIdentifiersStartingWithNumbers(t *testing.T) {
 			output: "insert into t(`1a`) values (1)",
 		},
 		{
+			input:  "insert into mydb.2b values (1)",
+			output: "insert into mydb.`2b` values (1)",
+		},
+		{
+			input:  "insert into 1a.2b values (1)",
+			output: "insert into `1a`.`2b` values (1)",
+		},
+		{
+			input:  "insert into 1a.2b(3c) values (1)",
+			output: "insert into `1a`.`2b`(`3c`) values (1)",
+		},
+		{
 			input:  "select 0xH from t",
 			output: "select `0xH` from t",
+		},
+		{
+			input:  "select v.2b from v",
+			output: "select v.`2b` from v",
+		},
+		{
+			input:  "select v.1 from v",
+			output: "select v.`1` from v",
+		},
+		{
+			input:  "select v.123 from v",
+			output: "select v.`123` from v",
+		},
+		{
+			input:  "select v.0x41 from v",
+			output: "select v.`0x41` from v",
+		},
+		{
+			input:  "select dev.v.1 from v",
+			output: "select dev.v.`1` from v",
+		},
+		{
+			input:  "select dev.v.2b from v",
+			output: "select dev.v.`2b` from v",
+		},
+		{
+			input:  "select dev.v.0x41 from v",
+			output: "select dev.v.`0x41` from v",
 		},
 	}
 	for _, tcase := range tests {
@@ -6209,6 +6232,10 @@ func TestInvalid(t *testing.T) {
 		},
 		{
 			input: "select * from t1 natural invalid join t2",
+			err:   "syntax error",
+		},
+		{
+			input: "select v.-1 from v",
 			err:   "syntax error",
 		},
 	}
