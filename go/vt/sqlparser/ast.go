@@ -4062,6 +4062,7 @@ const (
 	CreateProcedureStr = "create procedure"
 	CreateEventStr     = "create event"
 	CreateTableStr     = "create table"
+	CreateViewStr      = "create view"
 
 	ProcedureStatusStr = "procedure status"
 	FunctionStatusStr  = "function status"
