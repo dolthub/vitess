@@ -62,7 +62,7 @@ const (
 	ephemeralRead
 )
 
-// SingleStringElementFormatString is a template string that formats a single string element. 
+// SingleStringElementFormatString is a template string that formats a single string element.
 const SingleStringElementFormatString = "%s"
 
 // A Getter has a Get()
@@ -1029,13 +1029,7 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 
 		sql := fmt.Sprintf("SELECT * FROM %s LIMIT 0;", formatID(table))
 		err = handler.ComQuery(ctx, c, sql, func(qr *sqltypes.Result, more bool) error {
-			// only send meta data, no rows
-			if len(qr.Fields) == 0 {
-				return NewSQLErrorFromError(errors.New("unexpected: query ended without fields and no error"))
-			}
-
 			// for COM_FIELD_LIST response, don't send the number of fields first.
-
 			for _, field := range qr.Fields {
 				if err := c.writeColumnDefinition(field, true); err != nil {
 					return err
@@ -1045,11 +1039,7 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 		})
 
 		if err != nil {
-			if werr := c.writeErrorPacketFromError(err); werr != nil {
-				// If we can't even write the error, we're done.
-				log.Errorf("Error writing query error to %s: %v", c, werr)
-				return werr
-			}
+			log.Warningf("COM_FIELD_LIST query error for table %s: %v", table, err)
 		}
 		if err := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
 			log.Errorf("Error writing result to %s: %v", c, err)
