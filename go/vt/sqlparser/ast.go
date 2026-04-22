@@ -8219,7 +8219,7 @@ func (node *SrsAttribute) Format(buf *TrackedBuffer) {
 
 // Injectable is an expression that can accept a set of analyzed/resolved children. Used within InjectedExpr.
 type Injectable interface {
-	WithResolvedChildren(children []any) (any, error)
+	WithResolvedChildren(ctx context.Context, children []any) (any, error)
 }
 
 // InjectedExpr allows bypassing AST analysis. This is used by projects that rely on Vitess, but may not implement
