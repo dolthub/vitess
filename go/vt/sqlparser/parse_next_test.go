@@ -87,20 +87,20 @@ func TestParseNextErrors(t *testing.T) {
 		// The first statement should be an error
 		_, err := ParseNext(tokens)
 		if err == nil || err.Error() != tcase.output {
-			t.Fatalf("[0] ParseNext(%q) err: %q, want %q", sql, err, tcase.output)
+			t.Fatalf("[0] ParseNext(%q) err: %q, want %q", sql.String(), err, tcase.output)
 			continue
 		}
 
 		// The second should be valid
 		tree, err := ParseNext(tokens)
 		if err != nil {
-			t.Fatalf("[1] ParseNext(%q) err: %q, want nil", sql, err)
+			t.Fatalf("[1] ParseNext(%q) err: %q, want nil", sql.String(), err)
 			continue
 		}
 
 		want := "select 1 from t"
 		if got := String(tree); got != want {
-			t.Fatalf("[1] ParseNext(%q) = %q, want %q", sql, got, want)
+			t.Fatalf("[1] ParseNext(%q) = %q, want %q", sql.String(), got, want)
 		}
 
 		// Read once more and it should be EOF.
