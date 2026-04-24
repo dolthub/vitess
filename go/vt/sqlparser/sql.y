@@ -1283,7 +1283,7 @@ create_statement:
         ToName: $5.(ColIdent),
         Using: $6.(ColIdent),
         Type: $2.(string),
-        Columns: $10.([]*IndexColumn),
+        Fields: $10.([]*IndexField),
         Options: $12.([]*IndexOption),
         ifNotExists: $4.(int) != 0,
       },
@@ -4601,11 +4601,11 @@ replication_filter_option:
 index_definition:
   index_info '(' index_column_list ')' index_option_list
   {
-    $$ = &IndexDefinition{Info: $1.(*IndexInfo), Columns: $3.([]*IndexColumn), Options: $5.([]*IndexOption)}
+    $$ = &IndexDefinition{Info: $1.(*IndexInfo), Fields: $3.([]*IndexField), Options: $5.([]*IndexOption)}
   }
 | index_info '(' index_column_list ')'
   {
-    $$ = &IndexDefinition{Info: $1.(*IndexInfo), Columns: $3.([]*IndexColumn)}
+    $$ = &IndexDefinition{Info: $1.(*IndexInfo), Fields: $3.([]*IndexField)}
   }
 
 index_option_list_opt:
@@ -4772,25 +4772,25 @@ name_opt:
 index_column_list:
   index_column
   {
-    $$ = []*IndexColumn{$1.(*IndexColumn)}
+    $$ = []*IndexField{$1.(*IndexField)}
   }
 | index_column_list ',' index_column
   {
-    $$ = append($$.([]*IndexColumn), $3.(*IndexColumn))
+    $$ = append($$.([]*IndexField), $3.(*IndexField))
   }
 
 index_column:
   ID length_opt asc_desc_opt
   {
-      $$ = &IndexColumn{Column: NewColIdent(string($1)), Length: $2.(*SQLVal), Order: $3.(string)}
+      $$ = &IndexField{Column: NewColIdent(string($1)), Length: $2.(*SQLVal), Order: $3.(string)}
   }
 | all_non_reserved length_opt asc_desc_opt
   {
-      $$ = &IndexColumn{Column: NewColIdent(string($1)), Length: $2.(*SQLVal), Order: $3.(string)}
+      $$ = &IndexField{Column: NewColIdent(string($1)), Length: $2.(*SQLVal), Order: $3.(string)}
   }
 | openb value_expression closeb asc_desc_opt
  {
-      $$ = &IndexColumn{Expression: tryCastExpr($2), Order: $4.(string)}
+      $$ = &IndexField{Expression: tryCastExpr($2), Order: $4.(string)}
  }
 
 foreign_key_definition:
@@ -5536,7 +5536,7 @@ alter_table_statement_part:
     		Action: CreateStr,
     		ToName: NewColIdent($4.(string)),
     		Using: $5.(ColIdent),
-    		Columns: $7.([]*IndexColumn),
+    		Fields: $7.([]*IndexField),
     		Options: $9.([]*IndexOption),
     		ifNotExists: $3.(int) != 0,
 	    },
@@ -5560,7 +5560,7 @@ alter_table_statement_part:
     		ToName: NewColIdent(idxName),
     		Type: $3.(string),
     		Using: $7.(ColIdent),
-    		Columns: $9.([]*IndexColumn),
+    		Fields: $9.([]*IndexField),
     		Options: $11.([]*IndexOption),
     		ifNotExists: $5.(int) != 0,
         },
@@ -5589,7 +5589,7 @@ alter_table_statement_part:
         Using: NewColIdent(""),
         ToName: NewColIdent($2.(string)),
         Type: PrimaryStr,
-        Columns: $7.([]*IndexColumn),
+        Fields: $7.([]*IndexField),
         Options: $9.([]*IndexOption),
     }
     $$ = ddl

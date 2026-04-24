@@ -13728,7 +13728,7 @@ yydefault:
 					ToName:      yyDollar[5].val.(ColIdent),
 					Using:       yyDollar[6].val.(ColIdent),
 					Type:        yyDollar[2].val.(string),
-					Columns:     yyDollar[10].val.([]*IndexColumn),
+					Fields:      yyDollar[10].val.([]*IndexField),
 					Options:     yyDollar[12].val.([]*IndexOption),
 					ifNotExists: yyDollar[4].val.(int) != 0,
 				},
@@ -17832,13 +17832,13 @@ yydefault:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:4603
 		{
-			yyVAL.val = &IndexDefinition{Info: yyDollar[1].val.(*IndexInfo), Columns: yyDollar[3].val.([]*IndexColumn), Options: yyDollar[5].val.([]*IndexOption)}
+			yyVAL.val = &IndexDefinition{Info: yyDollar[1].val.(*IndexInfo), Fields: yyDollar[3].val.([]*IndexField), Options: yyDollar[5].val.([]*IndexOption)}
 		}
 	case 773:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:4607
 		{
-			yyVAL.val = &IndexDefinition{Info: yyDollar[1].val.(*IndexInfo), Columns: yyDollar[3].val.([]*IndexColumn)}
+			yyVAL.val = &IndexDefinition{Info: yyDollar[1].val.(*IndexInfo), Fields: yyDollar[3].val.([]*IndexField)}
 		}
 	case 774:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -18054,31 +18054,31 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:4774
 		{
-			yyVAL.val = []*IndexColumn{yyDollar[1].val.(*IndexColumn)}
+			yyVAL.val = []*IndexField{yyDollar[1].val.(*IndexField)}
 		}
 	case 809:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:4778
 		{
-			yyVAL.val = append(yyVAL.val.([]*IndexColumn), yyDollar[3].val.(*IndexColumn))
+			yyVAL.val = append(yyVAL.val.([]*IndexField), yyDollar[3].val.(*IndexField))
 		}
 	case 810:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:4784
 		{
-			yyVAL.val = &IndexColumn{Column: NewColIdent(string(yyDollar[1].bytes)), Length: yyDollar[2].val.(*SQLVal), Order: yyDollar[3].val.(string)}
+			yyVAL.val = &IndexField{Column: NewColIdent(string(yyDollar[1].bytes)), Length: yyDollar[2].val.(*SQLVal), Order: yyDollar[3].val.(string)}
 		}
 	case 811:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:4788
 		{
-			yyVAL.val = &IndexColumn{Column: NewColIdent(string(yyDollar[1].bytes)), Length: yyDollar[2].val.(*SQLVal), Order: yyDollar[3].val.(string)}
+			yyVAL.val = &IndexField{Column: NewColIdent(string(yyDollar[1].bytes)), Length: yyDollar[2].val.(*SQLVal), Order: yyDollar[3].val.(string)}
 		}
 	case 812:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:4792
 		{
-			yyVAL.val = &IndexColumn{Expression: tryCastExpr(yyDollar[2].val), Order: yyDollar[4].val.(string)}
+			yyVAL.val = &IndexField{Expression: tryCastExpr(yyDollar[2].val), Order: yyDollar[4].val.(string)}
 		}
 	case 813:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -19029,7 +19029,7 @@ yydefault:
 					Action:      CreateStr,
 					ToName:      NewColIdent(yyDollar[4].val.(string)),
 					Using:       yyDollar[5].val.(ColIdent),
-					Columns:     yyDollar[7].val.([]*IndexColumn),
+					Fields:      yyDollar[7].val.([]*IndexField),
 					Options:     yyDollar[9].val.([]*IndexOption),
 					ifNotExists: yyDollar[3].val.(int) != 0,
 				},
@@ -19055,7 +19055,7 @@ yydefault:
 					ToName:      NewColIdent(idxName),
 					Type:        yyDollar[3].val.(string),
 					Using:       yyDollar[7].val.(ColIdent),
-					Columns:     yyDollar[9].val.([]*IndexColumn),
+					Fields:      yyDollar[9].val.([]*IndexField),
 					Options:     yyDollar[11].val.([]*IndexOption),
 					ifNotExists: yyDollar[5].val.(int) != 0,
 				},
@@ -19084,7 +19084,7 @@ yydefault:
 				Using:   NewColIdent(""),
 				ToName:  NewColIdent(yyDollar[2].val.(string)),
 				Type:    PrimaryStr,
-				Columns: yyDollar[7].val.([]*IndexColumn),
+				Fields:  yyDollar[7].val.([]*IndexField),
 				Options: yyDollar[9].val.([]*IndexOption),
 			}
 			yyVAL.val = ddl

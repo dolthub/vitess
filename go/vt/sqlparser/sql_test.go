@@ -19,7 +19,7 @@ func TestAlterCreateIndex(t *testing.T) {
 			&IndexSpec{
 				Action: CreateStr,
 				ToName: ColIdent{val: "idx_v"},
-				Columns: []*IndexColumn{
+				Fields: []*IndexField{
 					{Column: ColIdent{val: "col1"}, Order: AscScr},
 				},
 			},
@@ -32,7 +32,7 @@ func TestAlterCreateIndex(t *testing.T) {
 			&IndexSpec{
 				Action: CreateStr,
 				ToName: ColIdent{val: ""},
-				Columns: []*IndexColumn{
+				Fields: []*IndexField{
 					{Column: ColIdent{val: "col1"}, Order: AscScr},
 				},
 			},
@@ -46,7 +46,7 @@ func TestAlterCreateIndex(t *testing.T) {
 				Action: CreateStr,
 				ToName: ColIdent{val: "wxyzIndex"},
 				Type:   "unique",
-				Columns: []*IndexColumn{
+				Fields: []*IndexField{
 					{Column: ColIdent{val: "w"}, Order: AscScr},
 					{Column: ColIdent{val: "X"}, Order: AscScr},
 					{Column: ColIdent{val: "y"}, Order: AscScr},
@@ -63,7 +63,7 @@ func TestAlterCreateIndex(t *testing.T) {
 				Action: CreateStr,
 				ToName: ColIdent{},
 				Type:   "unique",
-				Columns: []*IndexColumn{
+				Fields: []*IndexField{
 					{Column: ColIdent{val: "w"}, Order: AscScr},
 					{Column: ColIdent{val: "X"}, Order: AscScr},
 					{Column: ColIdent{val: "y"}, Order: AscScr},
@@ -80,7 +80,7 @@ func TestAlterCreateIndex(t *testing.T) {
 				Action: CreateStr,
 				ToName: ColIdent{},
 				Type:   "unique",
-				Columns: []*IndexColumn{
+				Fields: []*IndexField{
 					{Column: ColIdent{val: "w"}, Order: AscScr},
 					{Column: ColIdent{val: "X"}, Order: AscScr},
 					{Column: ColIdent{val: "y"}, Order: AscScr},
@@ -97,7 +97,7 @@ func TestAlterCreateIndex(t *testing.T) {
 				Action: CreateStr,
 				ToName: ColIdent{val: "abc"},
 				Type:   "unique",
-				Columns: []*IndexColumn{
+				Fields: []*IndexField{
 					{Column: ColIdent{val: "w"}, Order: AscScr},
 					{Column: ColIdent{val: "X"}, Order: AscScr},
 					{Column: ColIdent{val: "y"}, Order: AscScr},
@@ -114,7 +114,7 @@ func TestAlterCreateIndex(t *testing.T) {
 				Action: CreateStr,
 				ToName: ColIdent{val: "abc"},
 				Type:   "unique",
-				Columns: []*IndexColumn{
+				Fields: []*IndexField{
 					{Column: ColIdent{val: "w"}, Order: AscScr},
 					{Column: ColIdent{val: "X"}, Order: AscScr},
 					{Column: ColIdent{val: "y"}, Order: AscScr},
@@ -131,7 +131,7 @@ func TestAlterCreateIndex(t *testing.T) {
 				Action: CreateStr,
 				ToName: ColIdent{val: "def"},
 				Type:   "unique",
-				Columns: []*IndexColumn{
+				Fields: []*IndexField{
 					{Column: ColIdent{val: "w"}, Order: AscScr},
 					{Column: ColIdent{val: "X"}, Order: AscScr},
 					{Column: ColIdent{val: "y"}, Order: AscScr},
@@ -148,7 +148,7 @@ func TestAlterCreateIndex(t *testing.T) {
 				Action: CreateStr,
 				ToName: ColIdent{val: "bestindex"},
 				Type:   "spatial",
-				Columns: []*IndexColumn{
+				Fields: []*IndexField{
 					{Column: ColIdent{val: "bestcol"}, Order: AscScr},
 				},
 				Options: []*IndexOption{{Name: "COMMENT", Value: &SQLVal{Type: StrVal, Val: []byte("hello world")}}},
@@ -163,7 +163,7 @@ func TestAlterCreateIndex(t *testing.T) {
 				Action: CreateStr,
 				ToName: ColIdent{val: "sOmEiNdEx"},
 				Using:  ColIdent{val: "BTREE"},
-				Columns: []*IndexColumn{
+				Fields: []*IndexField{
 					{Column: ColIdent{val: "ye"}, Order: DescScr},
 					{Column: ColIdent{val: "ne"}, Order: AscScr},
 				},
@@ -238,7 +238,7 @@ func TestCreateIndex(t *testing.T) {
 			&IndexSpec{
 				Action: CreateStr,
 				ToName: ColIdent{val: "idx_v"},
-				Columns: []*IndexColumn{
+				Fields: []*IndexField{
 					{Column: ColIdent{val: "col1"}, Order: AscScr},
 				},
 			},
@@ -252,7 +252,7 @@ func TestCreateIndex(t *testing.T) {
 				Action: CreateStr,
 				ToName: ColIdent{val: "wxyzIndex"},
 				Type:   "unique",
-				Columns: []*IndexColumn{
+				Fields: []*IndexField{
 					{Column: ColIdent{val: "w"}, Order: AscScr},
 					{Column: ColIdent{val: "X"}, Order: DescScr},
 					{Column: ColIdent{val: "y"}, Order: AscScr},
@@ -269,7 +269,7 @@ func TestCreateIndex(t *testing.T) {
 				Action: CreateStr,
 				ToName: ColIdent{val: "bestindex"},
 				Type:   "spatial",
-				Columns: []*IndexColumn{
+				Fields: []*IndexField{
 					{Column: ColIdent{val: "bestcol"}, Order: AscScr},
 				},
 				Options: []*IndexOption{{Name: "COMMENT", Value: &SQLVal{Type: StrVal, Val: []byte("hello world")}}},
@@ -284,7 +284,7 @@ func TestCreateIndex(t *testing.T) {
 				Action: CreateStr,
 				ToName: ColIdent{val: "sOmEiNdEx"},
 				Using:  ColIdent{val: "BTREE"},
-				Columns: []*IndexColumn{
+				Fields: []*IndexField{
 					{Column: ColIdent{val: "ye"}, Order: AscScr},
 					{Column: ColIdent{val: "ne"}, Order: DescScr},
 				},
