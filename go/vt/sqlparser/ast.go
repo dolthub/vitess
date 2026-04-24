@@ -3529,14 +3529,10 @@ type IndexSpec struct {
 	Using ColIdent
 	// Type specifies whether this is UNIQUE, FULLTEXT, SPATIAL, or normal (nothing)
 	Type string
-	// Columns contains the column names when creating an index
-	Columns []*IndexColumn
+	// Fields contains the column names or expressions when creating an index
+	Fields []*IndexField
 	// Options contains the index options when creating an index
 	Options []*IndexOption
-	// Expression contains the expression when creating a functional index
-	// TODO: Not fully implemented. Parser should support expressions for ALTER TABLE and CREATE TABLE statements
-	// TODO: Also needs to support mixes of columns and expressions.
-	Expression Expr
 
 	// ifExists and ifNotExists states whether `IF [NOT] EXISTS` was present in query
 	//   This is solely for printing purposes; we rely on the one in ast.DDL for actual logic
@@ -3574,21 +3570,22 @@ func (idx *IndexSpec) Format(buf *TrackedBuffer) {
 
 		buf.Myprintf("(")
 
-		if idx.Expression != nil {
-			buf.Myprintf("(%v)", idx.Expression)
-		} else {
-			for i, col := range idx.Columns {
-				if i != 0 {
-					buf.Myprintf(", %s", col.Column.val)
-				} else {
-					buf.Myprintf("%s", col.Column.val)
-				}
-				if col.Length != nil {
-					buf.Myprintf("(%v)", col.Length)
-				}
-				if col.Order != AscScr {
-					buf.Myprintf(" %s", col.Order)
-				}
+		for i, col := range idx.Fields {
+			if i != 0 {
+				buf.Myprintf(", ")
+			}
+
+			if col.Expression != nil {
+				buf.Myprintf("(%v)", col.Expression)
+			} else {
+				buf.Myprintf("%s", col.Column.val)
+			}
+
+			if col.Length != nil {
+				buf.Myprintf("(%v)", col.Length)
+			}
+			if col.Order != AscScr {
+				buf.Myprintf(" %s", col.Order)
 			}
 		}
 
@@ -3624,7 +3621,7 @@ func (idx *IndexSpec) walkSubtree(visit Visit) error {
 	if idx == nil {
 		return nil
 	}
-	for _, n := range idx.Columns {
+	for _, n := range idx.Fields {
 		if err := Walk(visit, n.Column); err != nil {
 			return err
 		}
@@ -3636,14 +3633,14 @@ func (idx *IndexSpec) walkSubtree(visit Visit) error {
 // IndexDefinition describes an index in a CREATE TABLE statement
 type IndexDefinition struct {
 	Info    *IndexInfo
-	Columns []*IndexColumn
+	Fields  []*IndexField
 	Options []*IndexOption
 }
 
 // Format formats the node.
 func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v (", idx.Info)
-	for i, col := range idx.Columns {
+	for i, col := range idx.Fields {
 		if i != 0 {
 			buf.Myprintf(", %v", col.Column)
 		} else {
@@ -3670,7 +3667,7 @@ func (idx *IndexDefinition) walkSubtree(visit Visit) error {
 		return nil
 	}
 
-	for _, n := range idx.Columns {
+	for _, n := range idx.Fields {
 		if err := Walk(visit, n.Column); err != nil {
 			return err
 		}
@@ -3706,11 +3703,14 @@ func (ii *IndexInfo) walkSubtree(visit Visit) error {
 	return Walk(visit, ii.Name)
 }
 
-// IndexColumn describes a column in an index definition with optional length and direction
-type IndexColumn struct {
-	Column ColIdent
-	Length *SQLVal
-	Order  string
+// IndexField describes a single field in an index: either a column or
+// a functional expression, along with an optional prefix length and
+// sort order.
+type IndexField struct {
+	Column     ColIdent
+	Expression Expr
+	Length     *SQLVal
+	Order      string
 }
 
 // LengthScaleOption is used for types that have an optional length

@@ -2082,6 +2082,14 @@ var (
 			output: "alter table b add index a ((case when id = `value` then upper(id) else lower(id) end))",
 		},
 		{
+			input:  "CREATE INDEX idx1 on b (a, (id + val), c, (upper(id)), d)",
+			output: "alter table b add index idx1 (a, (id + val), c, (upper(id)), d)",
+		},
+		{
+			input:  "CREATE INDEX idx1 on b ((foo(val)), (bar(id)))",
+			output: "alter table b add index idx1 ((foo(val)), (bar(id)))",
+		},
+		{
 			input:  "create unique index a on b (id)",
 			output: "alter table b add unique index a (id)",
 		},

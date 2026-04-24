@@ -1283,7 +1283,7 @@ create_statement:
         ToName: $5.(ColIdent),
         Using: $6.(ColIdent),
         Type: $2.(string),
-        Columns: $10.([]*IndexColumn),
+        Fields: $10.([]*IndexField),
         Options: $12.([]*IndexOption),
         ifNotExists: $4.(int) != 0,
       },
@@ -1299,35 +1299,6 @@ create_statement:
       Auth: AuthInformation{AuthType: AuthType_IGNORE},
     }
   }
-| CREATE key_type_opt INDEX not_exists_opt sql_id using_opt ON table_name openb openb value_expression closeb closeb index_option_list_opt
-    {
-      // For consistency, we always return AlterTable for any ALTER TABLE-equivalent statements
-      tableName := $8.(TableName)
-      ddl := &DDL{
-        Action: AlterStr,
-        Table: tableName,
-        IfNotExists: $4.(int) != 0,
-        IndexSpec: &IndexSpec{
-          Action: CreateStr,
-          ToName: $5.(ColIdent),
-          Using: $6.(ColIdent),
-          Type: $2.(string),
-          Options: $14.([]*IndexOption),
-          Expression: tryCastExpr($11),
-          ifNotExists: $4.(int) != 0,
-        },
-        Auth: AuthInformation{
-          AuthType: AuthType_INDEX,
-          TargetType: AuthTargetType_SingleTableIdentifier,
-          TargetNames: []string{tableName.DbQualifier.String(), tableName.Name.String()},
-        },
-      }
-      $$ = &AlterTable{
-        Table: $8.(TableName),
-        Statements: []*DDL{ddl},
-        Auth: AuthInformation{AuthType: AuthType_IGNORE},
-      }
-    }
 | CREATE view_opts VIEW not_exists_opt table_name ins_column_list_opt AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position opt_with_check_option
   {
     viewName := $5.(TableName)
@@ -4630,11 +4601,11 @@ replication_filter_option:
 index_definition:
   index_info '(' index_column_list ')' index_option_list
   {
-    $$ = &IndexDefinition{Info: $1.(*IndexInfo), Columns: $3.([]*IndexColumn), Options: $5.([]*IndexOption)}
+    $$ = &IndexDefinition{Info: $1.(*IndexInfo), Fields: $3.([]*IndexField), Options: $5.([]*IndexOption)}
   }
 | index_info '(' index_column_list ')'
   {
-    $$ = &IndexDefinition{Info: $1.(*IndexInfo), Columns: $3.([]*IndexColumn)}
+    $$ = &IndexDefinition{Info: $1.(*IndexInfo), Fields: $3.([]*IndexField)}
   }
 
 index_option_list_opt:
@@ -4801,22 +4772,26 @@ name_opt:
 index_column_list:
   index_column
   {
-    $$ = []*IndexColumn{$1.(*IndexColumn)}
+    $$ = []*IndexField{$1.(*IndexField)}
   }
 | index_column_list ',' index_column
   {
-    $$ = append($$.([]*IndexColumn), $3.(*IndexColumn))
+    $$ = append($$.([]*IndexField), $3.(*IndexField))
   }
 
 index_column:
   ID length_opt asc_desc_opt
   {
-      $$ = &IndexColumn{Column: NewColIdent(string($1)), Length: $2.(*SQLVal), Order: $3.(string)}
+      $$ = &IndexField{Column: NewColIdent(string($1)), Length: $2.(*SQLVal), Order: $3.(string)}
   }
 | all_non_reserved length_opt asc_desc_opt
   {
-      $$ = &IndexColumn{Column: NewColIdent(string($1)), Length: $2.(*SQLVal), Order: $3.(string)}
+      $$ = &IndexField{Column: NewColIdent(string($1)), Length: $2.(*SQLVal), Order: $3.(string)}
   }
+| openb value_expression closeb asc_desc_opt
+ {
+      $$ = &IndexField{Expression: tryCastExpr($2), Order: $4.(string)}
+ }
 
 foreign_key_definition:
   CONSTRAINT id_or_non_reserved foreign_key_details
@@ -5561,7 +5536,7 @@ alter_table_statement_part:
     		Action: CreateStr,
     		ToName: NewColIdent($4.(string)),
     		Using: $5.(ColIdent),
-    		Columns: $7.([]*IndexColumn),
+    		Fields: $7.([]*IndexField),
     		Options: $9.([]*IndexOption),
     		ifNotExists: $3.(int) != 0,
 	    },
@@ -5585,7 +5560,7 @@ alter_table_statement_part:
     		ToName: NewColIdent(idxName),
     		Type: $3.(string),
     		Using: $7.(ColIdent),
-    		Columns: $9.([]*IndexColumn),
+    		Fields: $9.([]*IndexField),
     		Options: $11.([]*IndexOption),
     		ifNotExists: $5.(int) != 0,
         },
@@ -5614,7 +5589,7 @@ alter_table_statement_part:
         Using: NewColIdent(""),
         ToName: NewColIdent($2.(string)),
         Type: PrimaryStr,
-        Columns: $7.([]*IndexColumn),
+        Fields: $7.([]*IndexField),
         Options: $9.([]*IndexOption),
     }
     $$ = ddl
