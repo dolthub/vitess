@@ -4407,6 +4407,18 @@ var (
 			output: "alter table t comment 'asdf'",
 		},
 		{
+			input: "create table t (id int primary key) target_row_size=2048",
+			output: "create table t (\n" +
+				"\tid int primary key\n" +
+				") target_row_size 2048",
+		},
+		{
+			input: "create table t (id int primary key) toast_tuple_target=2048",
+			output: "create table t (\n" +
+				"\tid int primary key\n" +
+				") toast_tuple_target 2048",
+		},
+		{
 			input:  "alter table t compression='asdf'",
 			output: "alter table t",
 		},
