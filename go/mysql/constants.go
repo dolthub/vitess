@@ -528,6 +528,7 @@ const (
 	ERWrongNameForIndex                             = 1280
 	ERWrongNameForCatalog                           = 1281
 	ERBadFTColumn                                   = 1283
+	ERWarnDeprecatedSyntax                          = 1287
 	ERTruncatedWrongValue                           = 1292
 	ERTooMuchAutoTimestampCols                      = 1293
 	ERInvalidOnUpdate                               = 1294
