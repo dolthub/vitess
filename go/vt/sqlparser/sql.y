@@ -314,6 +314,10 @@ func tryCastStatement(v interface{}) Statement {
 // Generated Columns
 %token <bytes> GENERATED ALWAYS STORED VIRTUAL
 
+// Dolt-specific table attributes for adaptive encoding
+%token <bytes> TARGET_ROW_SIZE TOAST_TUPLE_TARGET
+
+
 // TODO: categorize/organize these somehow later
 %token <bytes> NVAR PASSWORD_LOCK
 
@@ -5133,6 +5137,14 @@ table_option:
 | WITH SYSTEM VERSIONING
   {
     $$ = &TableOption{Name: string($1) + " " + string($2) + " " + string($3)}
+  }
+| TARGET_ROW_SIZE equal_opt coericble_to_integral
+  {
+    $$ = &TableOption{Name: string($1), Value: string($3)}
+  }
+| TOAST_TUPLE_TARGET equal_opt coericble_to_integral
+  {
+    $$ = &TableOption{Name: string($1), Value: string($3)}
   }
 
 no_first_last:
@@ -11804,6 +11816,7 @@ non_reserved_keyword:
 | TABLES
 | TABLESPACE
 | TABLE_NAME
+| TARGET_ROW_SIZE
 | TEMPORARY
 | TEMPTABLE
 | TEXT
@@ -11812,6 +11825,7 @@ non_reserved_keyword:
 | TIES
 | TIME %prec STRING_TYPE_PREFIX_NON_KEYWORD
 | TIMESTAMP %prec STRING_TYPE_PREFIX_NON_KEYWORD
+| TOAST_TUPLE_TARGET
 | TRANSACTION
 | TRIGGERS
 | TRUNCATE
