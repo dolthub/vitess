@@ -432,7 +432,9 @@ func (l *Listener) handle(ctx context.Context, conn net.Conn, connectionID uint3
 	defer c.discardCursor()
 
 	// First build and send the server handshake packet.
-	serverAuthPluginData, err := c.writeHandshakeV10(l.ServerVersion, l.authServer, l.TLSConfig != nil)
+	// Advertise SSL capability if TLS is configured OR if secure transport is required
+	enableTLS := l.TLSConfig != nil || l.RequireSecureTransport
+	serverAuthPluginData, err := c.writeHandshakeV10(l.ServerVersion, l.authServer, enableTLS)
 	if err != nil {
 		if err != io.EOF {
 			l.handleConnectionError(c, fmt.Sprintf("Cannot send HandshakeV10 packet: %v", err))
