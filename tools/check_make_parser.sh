@@ -14,7 +14,7 @@ if ! cd go/vt/sqlparser/ ; then
         exit 1
 fi
 
-output=$(go run golang.org/x/tools/cmd/goyacc -o $TMP sql.y)
+output=$(go tool goyacc -o $TMP sql.y)
 
 if [ -n "$output" ]; then
     echo "Expected empty output from goyacc, got:"
