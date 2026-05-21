@@ -3533,6 +3533,8 @@ type IndexSpec struct {
 	Fields []*IndexField
 	// Options contains the index options when creating an index
 	Options []*IndexOption
+	// Predicate is the WHERE clause expression for partial indexes.
+	Predicate Expr
 
 	// ifExists and ifNotExists states whether `IF [NOT] EXISTS` was present in query
 	//   This is solely for printing purposes; we rely on the one in ast.DDL for actual logic
@@ -3598,6 +3600,9 @@ func (idx *IndexSpec) Format(buf *TrackedBuffer) {
 				buf.Myprintf(" %v", opt.Value)
 			}
 		}
+		if idx.Predicate != nil {
+			buf.Myprintf(" where %v", idx.Predicate)
+		}
 	case "drop":
 		exists := ""
 		if idx.ifExists {
@@ -3626,7 +3631,11 @@ func (idx *IndexSpec) walkSubtree(visit Visit) error {
 			return err
 		}
 	}
-
+	if idx.Predicate != nil {
+		if err := Walk(visit, idx.Predicate); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
