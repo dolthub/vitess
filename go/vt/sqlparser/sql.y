@@ -4165,6 +4165,18 @@ column_default:
   {
     $$ = tryCastExpr($2)
   }
+| DEFAULT function_call_generic
+  {
+    $$ = tryCastExpr($2)
+  }
+| DEFAULT function_call_keyword
+  {
+    $$ = tryCastExpr($2)
+  }
+| DEFAULT function_call_conflict
+  {
+    $$ = tryCastExpr($2)
+  }
 | DEFAULT openb value_expression closeb
   {
     $$ = &ParenExpr{tryCastExpr($3)}
