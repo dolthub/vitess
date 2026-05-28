@@ -3788,6 +3788,21 @@ var (
 			input:  "CREATE TABLE mytable (h int DEFAULT (date_format(now(),_utf8mb4'%Y')))",
 			output: "create table mytable (\n\th int default (date_format(now(), _utf8mb4 '%Y'))\n)",
 		}, {
+			input:  "CREATE TABLE t (id INT PRIMARY KEY, s LONGTEXT NOT NULL DEFAULT JSON_OBJECT())",
+			output: "create table t (\n\tid INT primary key,\n\ts LONGTEXT not null default JSON_OBJECT()\n)",
+		}, {
+			input:  "CREATE TABLE t (id INT PRIMARY KEY, s TEXT NOT NULL DEFAULT CONCAT('a', 'b'))",
+			output: "create table t (\n\tid INT primary key,\n\ts TEXT not null default CONCAT('a', 'b')\n)",
+		}, {
+			input:  "CREATE TABLE t (id INT PRIMARY KEY, s LONGTEXT NOT NULL DEFAULT CAST(1 as datetime))",
+			output: "create table t (\n\tid INT primary key,\n\ts LONGTEXT not null default CAST(1 as datetime)\n)",
+		}, {
+			input:  "CREATE TABLE t (id INT PRIMARY KEY, s LONGTEXT NOT NULL DEFAULT EXTRACT(DAY from '2020-10-1'))",
+			output: "create table t (\n\tid INT primary key,\n\ts LONGTEXT not null default EXTRACT(DAY from '2020-10-1')\n)",
+		}, {
+			input:  "CREATE TABLE t (id INT PRIMARY KEY, s LONGTEXT NOT NULL DEFAULT replace(uuid(),'-',''))",
+			output: "create table t (\n\tid INT primary key,\n\ts LONGTEXT not null default replace(uuid(), '-', '')\n)",
+		}, {
 			input:  "CREATE TABLE mytable (pk int NOT NULL, col2 varchar(20) NOT NULL DEFAULT 'sometext', PRIMARY KEY (pk), CONSTRAINT status CHECK (col2 like _utf8mb4'%sometext%'))",
 			output: "create table mytable (\n\tpk int not null,\n\tcol2 varchar(20) not null default 'sometext',\n\tPRIMARY KEY (pk),\n\tconstraint status check (col2 like _utf8mb4 '%sometext%')\n)",
 		}, {
