@@ -3982,6 +3982,7 @@ type ForeignKeyDefinition struct {
 	ReferencedColumns Columns
 	OnDelete          ReferenceAction
 	OnUpdate          ReferenceAction
+	NotValid          bool
 }
 
 var _ ConstraintInfo = &ForeignKeyDefinition{}
@@ -3998,6 +3999,9 @@ func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
 	}
 	if f.OnUpdate != DefaultAction {
 		buf.Myprintf(" on update %v", f.OnUpdate)
+	}
+	if f.NotValid {
+		buf.WriteString(" not valid")
 	}
 }
 
@@ -4016,6 +4020,7 @@ func (f *ForeignKeyDefinition) walkSubtree(visit Visit) error {
 type CheckConstraintDefinition struct {
 	Expr     Expr
 	Enforced bool
+	NotValid bool
 }
 
 var _ ConstraintInfo = &CheckConstraintDefinition{}
@@ -4025,6 +4030,9 @@ func (c *CheckConstraintDefinition) Format(buf *TrackedBuffer) {
 	buf.Myprintf("check (%v)", c.Expr)
 	if !c.Enforced {
 		buf.Myprintf(" not enforced")
+	}
+	if c.NotValid {
+		buf.WriteString(" not valid")
 	}
 }
 
