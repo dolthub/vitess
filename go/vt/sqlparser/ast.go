@@ -3974,6 +3974,17 @@ func (a ReferenceAction) Format(buf *TrackedBuffer) {
 	}
 }
 
+// ForeignKeyMatchType controls NULL handling semantics for FK constraint.
+type ForeignKeyMatchType int
+
+const (
+	// MatchSimple is default value allowing NULLs
+	MatchSimple ForeignKeyMatchType = iota
+	// MatchFull enforces all values to be not NULL
+	MatchFull
+	// MatchPartial valid value but it is not supported
+)
+
 // ForeignKeyDefinition describes a foreign key
 type ForeignKeyDefinition struct {
 	ReferencedTable   TableName
@@ -3983,6 +3994,7 @@ type ForeignKeyDefinition struct {
 	OnDelete          ReferenceAction
 	OnUpdate          ReferenceAction
 	NotValid          bool
+	MatchType         ForeignKeyMatchType
 }
 
 var _ ConstraintInfo = &ForeignKeyDefinition{}
@@ -3994,6 +4006,9 @@ func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
 		index = f.Index + " "
 	}
 	buf.Myprintf("foreign key %s%v references %v %v", index, f.Source, f.ReferencedTable, f.ReferencedColumns)
+	if f.MatchType == MatchFull {
+		buf.WriteString(" match full")
+	}
 	if f.OnDelete != DefaultAction {
 		buf.Myprintf(" on delete %v", f.OnDelete)
 	}
