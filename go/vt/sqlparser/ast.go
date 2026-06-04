@@ -3974,6 +3974,18 @@ func (a ReferenceAction) Format(buf *TrackedBuffer) {
 	}
 }
 
+// ForeignKeyMatchType controls NULL handling semantics for FK constraint.
+type ForeignKeyMatchType int
+
+const (
+	// MatchSimple is default value allowing NULLs
+	MatchSimple ForeignKeyMatchType = iota
+	// MatchFull enforces all values to be not NULL
+	MatchFull
+	// MatchPartial it parses but not supported in Postgres
+	MatchPartial
+)
+
 // ForeignKeyDefinition describes a foreign key
 type ForeignKeyDefinition struct {
 	ReferencedTable   TableName
@@ -3982,6 +3994,8 @@ type ForeignKeyDefinition struct {
 	ReferencedColumns Columns
 	OnDelete          ReferenceAction
 	OnUpdate          ReferenceAction
+	NotValid          bool
+	MatchType         ForeignKeyMatchType
 }
 
 var _ ConstraintInfo = &ForeignKeyDefinition{}
@@ -3993,11 +4007,17 @@ func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
 		index = f.Index + " "
 	}
 	buf.Myprintf("foreign key %s%v references %v %v", index, f.Source, f.ReferencedTable, f.ReferencedColumns)
+	if f.MatchType == MatchFull {
+		buf.WriteString(" match full")
+	}
 	if f.OnDelete != DefaultAction {
 		buf.Myprintf(" on delete %v", f.OnDelete)
 	}
 	if f.OnUpdate != DefaultAction {
 		buf.Myprintf(" on update %v", f.OnUpdate)
+	}
+	if f.NotValid {
+		buf.WriteString(" not valid")
 	}
 }
 
@@ -4016,6 +4036,7 @@ func (f *ForeignKeyDefinition) walkSubtree(visit Visit) error {
 type CheckConstraintDefinition struct {
 	Expr     Expr
 	Enforced bool
+	NotValid bool
 }
 
 var _ ConstraintInfo = &CheckConstraintDefinition{}
@@ -4025,6 +4046,9 @@ func (c *CheckConstraintDefinition) Format(buf *TrackedBuffer) {
 	buf.Myprintf("check (%v)", c.Expr)
 	if !c.Enforced {
 		buf.Myprintf(" not enforced")
+	}
+	if c.NotValid {
+		buf.WriteString(" not valid")
 	}
 }
 
