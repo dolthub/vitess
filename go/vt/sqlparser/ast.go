@@ -3982,7 +3982,8 @@ const (
 	MatchSimple ForeignKeyMatchType = iota
 	// MatchFull enforces all values to be not NULL
 	MatchFull
-	// MatchPartial valid value but it is not supported
+	// MatchPartial it parses but not supported in Postgres
+	MatchPartial
 )
 
 // ForeignKeyDefinition describes a foreign key
