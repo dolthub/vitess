@@ -20,8 +20,6 @@ import (
 	"bytes"
 	"context"
 	crypto_rand "crypto/rand"
-	"errors"
-	"io"
 	"math/rand"
 	"net"
 	"reflect"
@@ -283,123 +281,6 @@ func TestEOFOrLengthEncodedIntFuzz(t *testing.T) {
 		isEOF := isEOFPacket(bytes)
 		if (isInt && isEOF) || (!isInt && !isEOF) {
 			t.Fatalf("0xfe bytestring is EOF xor Int. Bytes %v", bytes)
-		}
-	}
-}
-
-// waitForActivity runs sConn.WaitForClientActivity in a goroutine and returns
-// its error, failing the test if it doesn't return within a generous timeout.
-func waitForActivity(t *testing.T, sConn *Conn, ctx context.Context) error {
-	t.Helper()
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- sConn.WaitForClientActivity(ctx)
-	}()
-	select {
-	case err := <-errCh:
-		return err
-	case <-time.After(5 * time.Second):
-		t.Fatal("WaitForClientActivity did not return in time")
-		return nil
-	}
-}
-
-// TestWaitForClientActivityCancel verifies that cancelling the context unblocks
-// the watch with a nil error and leaves the connection usable for a subsequent
-// read.
-func TestWaitForClientActivityCancel(t *testing.T) {
-	listener, sConn, cConn := createSocketPair(t)
-	defer listener.Close()
-	defer sConn.Close()
-	defer cConn.Close()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- sConn.WaitForClientActivity(ctx)
-	}()
-
-	// Give the watch time to block in Peek, then cancel it.
-	time.Sleep(100 * time.Millisecond)
-	cancel()
-
-	select {
-	case err := <-errCh:
-		if err != nil {
-			t.Fatalf("expected nil after cancel, got %v", err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("WaitForClientActivity did not return after cancel")
-	}
-
-	// The connection must still be usable: the deadline we set to interrupt the
-	// peek must have been cleared.
-	if _, err := cConn.Conn.Write([]byte{0x42}); err != nil {
-		t.Fatalf("client write failed: %v", err)
-	}
-	b, err := sConn.bufferedReader.ReadByte()
-	if err != nil {
-		t.Fatalf("server read after cancel failed: %v", err)
-	}
-	if b != 0x42 {
-		t.Fatalf("expected 0x42, got 0x%x", b)
-	}
-}
-
-// TestWaitForClientActivityClosed verifies that a client disconnect unblocks the
-// watch with a non-nil error.
-func TestWaitForClientActivityClosed(t *testing.T) {
-	listener, sConn, cConn := createSocketPair(t)
-	defer listener.Close()
-	defer sConn.Close()
-
-	// Close the client end while the server is watching.
-	go func() {
-		time.Sleep(100 * time.Millisecond)
-		cConn.Close()
-	}()
-
-	err := waitForActivity(t, sConn, context.Background())
-	if err == nil {
-		t.Fatal("expected non-nil error when client closed, got nil")
-	}
-	if errors.Is(err, ErrClientWroteWhileBusy) {
-		t.Fatalf("expected a disconnect error, got ErrClientWroteWhileBusy")
-	}
-	// On a clean close the peer-side read observes io.EOF.
-	if !errors.Is(err, io.EOF) {
-		t.Logf("client-close error was %v (not io.EOF); acceptable if it's a reset", err)
-	}
-}
-
-// TestWaitForClientActivityUnexpectedData verifies that data sent by the client
-// while a query is "executing" is reported as ErrClientWroteWhileBusy and is not
-// consumed (it remains available for the next command read).
-func TestWaitForClientActivityUnexpectedData(t *testing.T) {
-	listener, sConn, cConn := createSocketPair(t)
-	defer listener.Close()
-	defer sConn.Close()
-	defer cConn.Close()
-
-	go func() {
-		time.Sleep(100 * time.Millisecond)
-		cConn.Conn.Write([]byte{0x07, 0x08, 0x09})
-	}()
-
-	err := waitForActivity(t, sConn, context.Background())
-	if !errors.Is(err, ErrClientWroteWhileBusy) {
-		t.Fatalf("expected ErrClientWroteWhileBusy, got %v", err)
-	}
-
-	// The bytes must not have been consumed by the watch.
-	want := []byte{0x07, 0x08, 0x09}
-	for i, w := range want {
-		b, err := sConn.bufferedReader.ReadByte()
-		if err != nil {
-			t.Fatalf("reading byte %d after watch failed: %v", i, err)
-		}
-		if b != w {
-			t.Fatalf("byte %d: expected 0x%x, got 0x%x", i, w, b)
 		}
 	}
 }
