@@ -163,6 +163,12 @@ type Conn struct {
 	bufferedWriter *bufio.Writer
 	sequence       uint8
 
+	// readLease coordinates exclusive ownership of the read side between the
+	// optional client-activity watcher (WaitForClientActivity) and
+	// handler-initiated reads that consume client->server packets mid-query
+	// (LoadInfile / HandleLoadDataLocalQuery for LOAD DATA LOCAL INFILE).
+	readLease readLease
+
 	// fields contains the fields definitions for an on-going
 	// streaming query. It is set by ExecuteStreamFetch, and
 	// cleared by the last FetchNext().  It is nil if no streaming
@@ -239,11 +245,13 @@ var writersPool = sync.Pool{New: func() interface{} { return bufio.NewWriterSize
 // newConn is an internal method to create a Conn. Used by client and server
 // side for common creation code.
 func newConn(conn net.Conn) *Conn {
-	return &Conn{
+	c := &Conn{
 		Conn:           conn,
 		closed:         sync2.NewAtomicBool(false),
 		bufferedReader: bufio.NewReaderSize(conn, DefaultConnBufferSize),
 	}
+	c.readLease.interrupt = func() { _ = c.Conn.SetReadDeadline(aLongTimeAgo) }
+	return c
 }
 
 // newServerConn should be used to create server connections.
@@ -261,6 +269,7 @@ func newServerConn(conn net.Conn, listener *Listener) *Conn {
 	if listener.connReadBufferSize > 0 {
 		c.bufferedReader = bufio.NewReaderSize(conn, listener.connReadBufferSize)
 	}
+	c.readLease.interrupt = func() { _ = c.Conn.SetReadDeadline(aLongTimeAgo) }
 	return c
 }
 
@@ -324,6 +333,234 @@ func (c *Conn) getReader() io.Reader {
 		return c.bufferedReader
 	}
 	return c.Conn
+}
+
+// aLongTimeAgo is a deadline far enough in the past to immediately interrupt a
+// blocked Read when set as the connection's read deadline.
+var aLongTimeAgo = time.Unix(1, 0)
+
+// ErrClientWroteWhileBusy is returned by WaitForClientActivity when the client
+// sends data while the server is executing a query and is not expecting any
+// input. The MySQL protocol is half-duplex with no pipelining: the client must
+// fully consume the current result before issuing another command, so any such
+// data means the client is no longer waiting for the in-flight query's result
+// (for example, a COM_QUIT sent while the query is still running).
+var ErrClientWroteWhileBusy = errors.New("client wrote to connection while a query was executing")
+
+// readLease coordinates exclusive ownership of a Conn's read side between the
+// optional client-activity watcher (WaitForClientActivity) and handler-initiated
+// reads that consume client->server packets in the middle of a query (currently
+// LoadInfile / HandleLoadDataLocalQuery for LOAD DATA LOCAL INFILE).
+//
+// The MySQL protocol is half-duplex with no pipelining, so during query
+// execution the read side is normally idle and the watcher can sit in a blocking
+// Peek to notice a client that has gone away. LOAD DATA LOCAL INFILE is the
+// exception: the server asks the client to stream a file back mid-COM_QUERY, so
+// the handler must read those packets off the same connection. The watcher and
+// that read must never touch the bufio.Reader concurrently.
+//
+// A handler read calls acquire() before reading from the client and release()
+// once the exchange has been fully drained and the protocol is quiescent again.
+// acquire() preempts a parked watcher and blocks until the watcher has confirmed
+// it has left its Peek, so the handoff is race-free; the watcher does not consume
+// the byte it peeks, so nothing the handler needs is lost. While the lease is
+// held the watcher stays suspended and only resumes watching after release().
+type readLease struct {
+	mu sync.Mutex
+	// held is true while a handler-initiated read owns the read side.
+	held bool
+	// freeCh is created by acquire() and closed by release(); anyone waiting for
+	// the lease to become free selects on it.
+	freeCh chan struct{}
+	// preempt is non-nil while a watcher is parked in Peek. acquire() closes it
+	// to ask the watcher to relinquish the read side, then sets it to nil.
+	preempt chan struct{}
+	// yielded is closed by the watcher once it has exited its Peek in response to
+	// a preempt, telling acquire() the handoff is complete.
+	yielded chan struct{}
+	// interrupt wakes a watcher parked in Peek by setting a read deadline in the
+	// past. It is installed once at connection construction (to
+	// c.Conn.SetReadDeadline(aLongTimeAgo)) and called by acquire() under mu when
+	// it preempts a parked watcher. Calling it under mu orders the interrupt
+	// before the watcher's deadline reset, which the watcher performs only after
+	// re-acquiring mu (see WaitForClientActivity).
+	interrupt func()
+}
+
+// acquire takes exclusive ownership of the read side for a handler-initiated
+// read, preempting and suspending any active client-activity watcher. It blocks
+// until a parked watcher has relinquished the read side, so the caller may read
+// without racing it. Every acquire must be paired with exactly one release.
+func (l *readLease) acquire() {
+	l.mu.Lock()
+	for l.held {
+		// Another handler read owns the read side; wait for it to finish.
+		fc := l.freeCh
+		l.mu.Unlock()
+		<-fc
+		l.mu.Lock()
+	}
+	l.held = true
+	l.freeCh = make(chan struct{})
+	var ack chan struct{}
+	if l.preempt != nil {
+		// A watcher is parked in Peek. Wake it by setting a past read deadline,
+		// mark it preempted (close preempt so the watcher sees preempt == nil), and
+		// remember the channel it will close once it has actually left the Peek.
+		// interrupt() runs under mu so it is ordered before the watcher's deadline
+		// reset, which happens only after the watcher re-acquires mu below.
+		ack = l.yielded
+		l.interrupt()
+		close(l.preempt)
+		l.preempt = nil
+	}
+	l.mu.Unlock()
+	if ack != nil {
+		<-ack
+	}
+}
+
+// release relinquishes the read side acquired by acquire, allowing a suspended
+// watcher to resume watching.
+func (l *readLease) release() {
+	l.mu.Lock()
+	l.held = false
+	if l.freeCh != nil {
+		close(l.freeCh)
+		l.freeCh = nil
+	}
+	l.mu.Unlock()
+}
+
+// WaitForClientActivity blocks until the client connection becomes readable
+// (the client sent data or closed its end), or until ctx is cancelled. It is
+// meant to be used by the server while a query is executing, to detect a client
+// that has gone away: the protocol is half-duplex with no pipelining, so no
+// client->server bytes are expected between sending a command and receiving its
+// full result.
+//
+// It returns:
+//   - nil if ctx is cancelled first. This is the normal "the query finished,
+//     stop watching" path.
+//   - a non-nil error if the client closed the connection (e.g. io.EOF or a
+//     connection reset) or sent data unexpectedly (ErrClientWroteWhileBusy).
+//
+// The caller should treat any non-nil return as "the client is no longer
+// waiting for this result" and cancel the in-flight query.
+//
+// LOAD DATA LOCAL INFILE is a documented exception to the "no client->server
+// bytes mid-query" rule: the handler itself reads the streamed file off the
+// connection. Those reads go through LoadInfile / HandleLoadDataLocalQuery, which
+// take the connection's read lease; this function honors that lease, suspending
+// the watch for the duration of the handler read rather than racing it or
+// mistaking the file bytes for a disconnect.
+//
+// WaitForClientActivity does not consume any bytes: if the client did send
+// data, it remains buffered for the next command read. It must only be called
+// when no other goroutine is reading from the connection (apart from a
+// lease-holding handler read, which it coordinates with), and the caller must
+// ensure it has returned before resuming normal command reads (e.g. by
+// cancelling ctx and joining the goroutine it runs in). If the connection has
+// no read buffer (ConnReadBufferSize == 0) it cannot peek without consuming a
+// byte the command loop needs, so it returns nil immediately.
+func (c *Conn) WaitForClientActivity(ctx context.Context) error {
+	if c.bufferedReader == nil {
+		return nil
+	}
+
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil
+		}
+
+		// Wait until no handler-initiated read owns the read side, then register
+		// ourselves as the parked watcher so such a read can preempt us. Both the
+		// check and the registration happen under the lease mutex, so there is no
+		// window in which we begin peeking while a handler read is in progress.
+		preempt := make(chan struct{})
+		yielded := make(chan struct{})
+		c.readLease.mu.Lock()
+		if c.readLease.held {
+			fc := c.readLease.freeCh
+			c.readLease.mu.Unlock()
+			select {
+			case <-fc:
+			case <-ctx.Done():
+				return nil
+			}
+			continue
+		}
+		c.readLease.preempt = preempt
+		c.readLease.yielded = yielded
+		c.readLease.mu.Unlock()
+
+		// Translate ctx cancellation into an interrupted read by setting a read
+		// deadline in the past, which wakes the blocked Peek below. A lease
+		// preemption is handled separately: acquire() sets the same past deadline
+		// directly (via c.readLease.interrupt) under the lease mutex.
+		//
+		// context.AfterFunc runs the callback only if ctx is cancelled, so the
+		// common path where Peek returns on its own (a client disconnect or an
+		// unexpected client write) spawns no goroutine. afFired is closed by the
+		// callback once it has set the deadline; we join on it before resetting the
+		// deadline so a stale past deadline cannot survive the reset.
+		//
+		// A single SetReadDeadline(aLongTimeAgo) is sufficient even when the
+		// connection is wrapped in netutil.ConnWithTimeouts (which re-arms a
+		// managed read deadline on every Read): SetReadDeadline there is a
+		// single-shot override that the next Read honors instead of re-arming, so
+		// the interrupt cannot be lost to a re-arm that races our set. The reset
+		// to the zero time below restores the managed timeout for subsequent
+		// reads.
+		afFired := make(chan struct{})
+		stopAfter := context.AfterFunc(ctx, func() {
+			_ = c.Conn.SetReadDeadline(aLongTimeAgo)
+			close(afFired)
+		})
+
+		_, err := c.bufferedReader.Peek(1)
+
+		// Deregister the ctx callback. If it had already started running, wait for
+		// it to finish setting the deadline so our reset below cannot be undone.
+		if !stopAfter() {
+			<-afFired
+		}
+
+		// Unregister and detect whether a handler read preempted us. Only
+		// acquire() sets preempt to nil, so a nil here means we were preempted.
+		// Re-acquiring the lease mutex here also orders any preempt interrupt
+		// (issued by acquire under the same mutex) before the deadline reset below.
+		c.readLease.mu.Lock()
+		preempted := c.readLease.preempt == nil
+		c.readLease.preempt = nil
+		c.readLease.yielded = nil
+		c.readLease.mu.Unlock()
+
+		// Reset the deadline only after both wake sources have settled: the ctx
+		// callback has been joined (afFired) and any preempt interrupt is ordered
+		// before our re-acquisition of the lease mutex above.
+		_ = c.Conn.SetReadDeadline(time.Time{})
+
+		if preempted {
+			// A handler read (e.g. LoadInfile) preempted us. Acknowledge that we
+			// have left the Peek so it may proceed, then loop to wait for it to
+			// finish before watching again. The byte we peeked, if any, was not
+			// consumed and remains buffered for the handler read.
+			close(yielded)
+			continue
+		}
+
+		// If we were asked to stop, ignore whatever the Peek observed: it may
+		// have been our own past deadline, or a real disconnect that raced with
+		// the cancellation. Either way the caller is no longer interested.
+		if ctx.Err() != nil {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		return ErrClientWroteWhileBusy
+	}
 }
 
 func (c *Conn) readHeaderFrom(ctx context.Context, r io.Reader) (int, error) {
@@ -821,13 +1058,22 @@ func (c *Conn) writeLoadInfilePacket(fileName string) error {
 // method will block while the remainder of the file contents are read from the
 // client and discarded.
 func (c *Conn) LoadInfile(file string) (io.ReadCloser, error) {
+	// Take exclusive ownership of the read side so we do not race a
+	// client-activity watcher (WaitForClientActivity) while we read the file the
+	// client streams back. The lease is released once the whole exchange has been
+	// drained and the protocol is quiescent again (in the reader goroutine
+	// below), at which point a suspended watcher may resume.
+	c.readLease.acquire()
+
 	err := c.writeLoadInfilePacket(file)
 	if err != nil {
+		c.readLease.release()
 		return nil, err
 	}
 
 	err = c.flush(context.Background())
 	if err != nil {
+		c.readLease.release()
 		return nil, err
 	}
 
@@ -836,6 +1082,7 @@ func (c *Conn) LoadInfile(file string) (io.ReadCloser, error) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		defer c.readLease.release()
 		// Read contents from client response, write it to |writer|.
 		data, err := c.readEphemeralPacket(context.Background())
 		if err != nil {
@@ -885,6 +1132,12 @@ func (r *finalizingReader) Close() error {
 }
 
 func (c *Conn) HandleLoadDataLocalQuery(tmpdir string, tmpfileName string, file string) error {
+	// Take exclusive ownership of the read side so we do not race a
+	// client-activity watcher (WaitForClientActivity) while we read the file the
+	// client streams back; released once the whole exchange is drained.
+	c.readLease.acquire()
+	defer c.readLease.release()
+
 	// First send the load infile packet and flush the connector
 	err := c.writeLoadInfilePacket(file)
 	if err != nil {

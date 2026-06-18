@@ -26,26 +26,47 @@ type ConnWithTimeouts struct {
 	net.Conn
 	readTimeout  time.Duration
 	writeTimeout time.Duration
-	mu           *sync.Mutex
+	// readOverride/writeOverride, when true, indicate that an explicit deadline
+	// has been set via Set{,Read,Write}Deadline and must be honored for exactly
+	// the next Read/Write instead of re-arming the managed timeout. They are
+	// cleared when that next operation consumes them, after which the managed
+	// timeout resumes.
+	readOverride  bool
+	writeOverride bool
+	mu            sync.Mutex
 }
 
-// NewConnWithTimeouts wraps a net.Conn with read and write timeouts.
-// It sets a new read or write deadline on every Read or Write call,
-// based on the given Deadline.
+// NewConnWithTimeouts wraps a net.Conn with managed read and write timeouts.
+// It re-arms a fresh read or write deadline (now + the configured duration) at
+// the start of every Read or Write, so each operation is bounded by that
+// duration. A zero duration disables the corresponding managed timeout.
 //
-// If a client calls Set{,Read,Write}Deadline on this connection,
-// the managed timeouts are disabled and the new deadlines are
-// forwarded to the underlying connection. It is assumed the client
-// is fully responsible for deadline handling from that point forward.
-func NewConnWithTimeouts(conn net.Conn, readTimeout time.Duration, writeTimeout time.Duration) ConnWithTimeouts {
-	return ConnWithTimeouts{Conn: conn, readTimeout: readTimeout, writeTimeout: writeTimeout, mu: &sync.Mutex{}}
+// Set{,Read,Write}Deadline with a non-zero time is a single-shot override: the
+// explicit deadline is forwarded to the underlying connection and applies to the
+// next Read/Write only (which skips the managed re-arm); the managed timeout then
+// resumes on the following operation. Set{,Read,Write}Deadline with the zero time
+// drops any pending override and resumes the managed timeout immediately. This
+// lets a caller transiently interrupt or extend a single operation (e.g. cancel a
+// blocked Read by setting a deadline in the past) without permanently disabling
+// the connection's managed timeout.
+//
+// The returned *ConnWithTimeouts is not safe to copy.
+func NewConnWithTimeouts(conn net.Conn, readTimeout time.Duration, writeTimeout time.Duration) *ConnWithTimeouts {
+	return &ConnWithTimeouts{Conn: conn, readTimeout: readTimeout, writeTimeout: writeTimeout}
 }
 
 // Implementation of the Conn interface.
 
-// Read sets a read deadilne and delegates to conn.Read.
-func (c ConnWithTimeouts) Read(b []byte) (int, error) {
+// Read sets a read deadline and delegates to conn.Read.
+func (c *ConnWithTimeouts) Read(b []byte) (int, error) {
 	c.mu.Lock()
+	if c.readOverride {
+		// An explicit deadline was set for this read; honor it once, then let
+		// the managed timeout resume on the next read.
+		c.readOverride = false
+		c.mu.Unlock()
+		return c.Conn.Read(b)
+	}
 	if c.readTimeout == 0 {
 		c.mu.Unlock()
 		return c.Conn.Read(b)
@@ -59,8 +80,15 @@ func (c ConnWithTimeouts) Read(b []byte) (int, error) {
 }
 
 // Write sets a write deadline and delegates to conn.Write
-func (c ConnWithTimeouts) Write(b []byte) (int, error) {
+func (c *ConnWithTimeouts) Write(b []byte) (int, error) {
 	c.mu.Lock()
+	if c.writeOverride {
+		// An explicit deadline was set for this write; honor it once, then let
+		// the managed timeout resume on the next write.
+		c.writeOverride = false
+		c.mu.Unlock()
+		return c.Conn.Write(b)
+	}
 	if c.writeTimeout == 0 {
 		c.mu.Unlock()
 		return c.Conn.Write(b)
@@ -73,27 +101,30 @@ func (c ConnWithTimeouts) Write(b []byte) (int, error) {
 	return c.Conn.Write(b)
 }
 
-// SetDeadline implements the Conn SetDeadline method.
-func (c ConnWithTimeouts) SetDeadline(t time.Time) error {
+// SetDeadline implements the Conn SetDeadline method. See the type doc for the
+// single-shot override / zero-resumes-managed semantics.
+func (c *ConnWithTimeouts) SetDeadline(t time.Time) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.readTimeout = 0
-	c.writeTimeout = 0
+	c.readOverride = !t.IsZero()
+	c.writeOverride = !t.IsZero()
 	return c.Conn.SetDeadline(t)
 }
 
-// SetReadDeadline implements the Conn SetReadDeadline method.
-func (c ConnWithTimeouts) SetReadDeadline(t time.Time) error {
+// SetReadDeadline implements the Conn SetReadDeadline method. See the type doc
+// for the single-shot override / zero-resumes-managed semantics.
+func (c *ConnWithTimeouts) SetReadDeadline(t time.Time) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.readTimeout = 0
+	c.readOverride = !t.IsZero()
 	return c.Conn.SetReadDeadline(t)
 }
 
-// SetWriteDeadline implements the Conn SetWriteDeadline method.
-func (c ConnWithTimeouts) SetWriteDeadline(t time.Time) error {
+// SetWriteDeadline implements the Conn SetWriteDeadline method. See the type doc
+// for the single-shot override / zero-resumes-managed semantics.
+func (c *ConnWithTimeouts) SetWriteDeadline(t time.Time) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.writeTimeout = 0
+	c.writeOverride = !t.IsZero()
 	return c.Conn.SetWriteDeadline(t)
 }
