@@ -27,6 +27,9 @@ import (
 	"strings"
 )
 
+// Make this testable under Go 1.24 (GODEBUG=randseednop)
+var randIntn = rand.Intn
+
 // byPriorityWeight sorts records by ascending priority and weight.
 type byPriorityWeight []*net.SRV
 
@@ -49,7 +52,7 @@ func (addrs byPriorityWeight) shuffleByWeight() {
 	}
 	for sum > 0 && len(addrs) > 1 {
 		s := 0
-		n := rand.Intn(sum)
+		n := randIntn(sum)
 		for i := range addrs {
 			s += int(addrs[i].Weight)
 			if s > n {
