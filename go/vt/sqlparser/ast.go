@@ -7807,16 +7807,37 @@ type TableFuncExpr struct {
 	Name  string
 	Alias TableIdent
 	Exprs SelectExprs
+	// Columns are optional column aliases for the result columns.
+	// This is a Doltgres extension, not used by MySQL.
+	Columns Columns
+	// WithOrdinality when true, adds an ordinality column to the result.
+	// This is a Doltgres extension, not used by MySQL.
+	WithOrdinality bool
 }
 
 // Format formats the node.
 func (node TableFuncExpr) Format(buf *TrackedBuffer) {
-	if node.Alias.IsEmpty() {
+	if node.Name != "" {
 		buf.Myprintf("%s(%v)", node.Name, node.Exprs)
 	} else {
-		buf.Myprintf("%s(%v) %s %v", node.Name, node.Exprs, keywordStrings[AS], node.Alias)
+		buf.Myprintf("ROWS FROM(%v)", node.Exprs)
 	}
-
+	if node.WithOrdinality {
+		buf.Myprintf(" WITH ORDINALITY")
+	}
+	if !node.Alias.IsEmpty() {
+		buf.Myprintf(" %s %v", keywordStrings[AS], node.Alias)
+		if len(node.Columns) > 0 {
+			buf.Myprintf("(")
+			for i, col := range node.Columns {
+				if i > 0 {
+					buf.Myprintf(", ")
+				}
+				buf.Myprintf("%v", col)
+			}
+			buf.Myprintf(")")
+		}
+	}
 }
 
 // IsEmpty returns true if TableFuncExpr's name is empty.
@@ -7858,9 +7879,10 @@ func (node *TableFuncExpr) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
 	}
-	return Walk(
-		visit,
-		node.Exprs)
+	if err := Walk(visit, node.Exprs); err != nil {
+		return err
+	}
+	return node.Columns.walkSubtree(visit)
 }
 
 // TableIdent is a case sensitive SQL identifier. It will be escaped with
