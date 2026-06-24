@@ -167,3 +167,74 @@ func TestNoTimeouts(t *testing.T) {
 		// NOOP
 	}
 }
+
+// TestSingleShotOverrideResumesManagedTimeout verifies the single-shot override
+// contract: SetReadDeadline with an explicit (non-zero) deadline applies to the
+// next Read only, which skips the managed re-arm; the managed timeout then
+// resumes on the following Read. This guards that a transient deadline override
+// (e.g. a watcher cancelling a blocked Read) does not permanently disable the
+// connection's managed timeout, so net_read_timeout still reaps afterward.
+func TestSingleShotOverrideResumesManagedTimeout(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	// Short managed read timeout; the peer never sends, so a managed Read times
+	// out quickly while an overridden Read with a far-future deadline does not.
+	const managed = 50 * time.Millisecond
+	s := NewConnWithTimeouts(sConn, managed, 0)
+
+	// Single-shot override: a far-future explicit deadline for the next Read.
+	if err := s.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
+		t.Fatalf("SetReadDeadline override failed: %v", err)
+	}
+	c := make(chan error, 1)
+	go func() {
+		_, err := s.Read(make([]byte, 10))
+		c <- err
+	}()
+
+	// The override must suppress the managed re-arm: the Read stays blocked well
+	// past the managed timeout.
+	select {
+	case err := <-c:
+		t.Fatalf("overridden Read returned (err=%v); managed timeout was not skipped", err)
+	case <-time.After(10 * managed):
+		// Good: still blocked under the far-future override.
+	}
+
+	// Wake the blocked Read with a past deadline, then resume managed timeouts.
+	if err := s.SetReadDeadline(time.Now().Add(-time.Hour)); err != nil {
+		t.Fatalf("SetReadDeadline (wake) failed: %v", err)
+	}
+	select {
+	case err := <-c:
+		if err == nil {
+			t.Fatalf("expected timeout error waking the overridden Read, got nil")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatalf("overridden Read did not wake after past deadline")
+	}
+	// Zero time resumes the managed timeout (drops the override).
+	if err := s.SetReadDeadline(time.Time{}); err != nil {
+		t.Fatalf("SetReadDeadline(zero) failed: %v", err)
+	}
+
+	// The next Read must re-arm the managed timeout again (reaping resumed).
+	c2 := make(chan error, 1)
+	go func() {
+		_, err := s.Read(make([]byte, 10))
+		c2 <- err
+	}()
+	select {
+	case err := <-c2:
+		if err == nil || !strings.HasSuffix(err.Error(), "i/o timeout") {
+			t.Fatalf("expected managed i/o timeout after resume, got %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatalf("managed timeout did not resume after a single-shot override")
+	}
+}
