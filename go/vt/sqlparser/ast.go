@@ -2629,6 +2629,11 @@ func (node *DDL) walkSubtree(visit Visit) error {
 			return err
 		}
 	}
+	if node.IndexSpec != nil {
+		if err := Walk(visit, node.IndexSpec); err != nil {
+			return err
+		}
+	}
 	// TODO: add missing nodes that are walkable
 	return nil
 }
@@ -3626,10 +3631,8 @@ func (idx *IndexSpec) walkSubtree(visit Visit) error {
 	if idx == nil {
 		return nil
 	}
-	for _, n := range idx.Fields {
-		if err := Walk(visit, n.Column); err != nil {
-			return err
-		}
+	if err := walkIndexFields(visit, idx.Fields); err != nil {
+		return err
 	}
 	if idx.Predicate != nil {
 		if err := Walk(visit, idx.Predicate); err != nil {
@@ -3651,7 +3654,10 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v (", idx.Info)
 	for i, col := range idx.Fields {
 		if i != 0 {
-			buf.Myprintf(", %v", col.Column)
+			buf.Myprintf(", ")
+		}
+		if col.Expression != nil {
+			buf.Myprintf("(%v)", col.Expression)
 		} else {
 			buf.Myprintf("%v", col.Column)
 		}
@@ -3676,13 +3682,7 @@ func (idx *IndexDefinition) walkSubtree(visit Visit) error {
 		return nil
 	}
 
-	for _, n := range idx.Fields {
-		if err := Walk(visit, n.Column); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return walkIndexFields(visit, idx.Fields)
 }
 
 // IndexInfo describes the name and type of an index in a CREATE TABLE statement
@@ -3720,6 +3720,21 @@ type IndexField struct {
 	Expression Expr
 	Length     *SQLVal
 	Order      string
+}
+
+// walkIndexFields walks each field in an index field list, visiting the field's Expression when
+// present, or its Column otherwise. Shared by IndexSpec.walkSubtree and IndexDefinition.walkSubtree.
+func walkIndexFields(visit Visit, fields []*IndexField) error {
+	for _, f := range fields {
+		if f.Expression != nil {
+			if err := Walk(visit, f.Expression); err != nil {
+				return err
+			}
+		} else if err := Walk(visit, f.Column); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // LengthScaleOption is used for types that have an optional length

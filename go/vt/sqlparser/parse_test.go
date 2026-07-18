@@ -1902,6 +1902,12 @@ var (
 			input: "alter table a add vector index idx (id)",
 		},
 		{
+			input: "alter table a add index idx1 (a, (id + val), c, (upper(id)), d)",
+		},
+		{
+			input: "alter table a add index idx1 ((foo(val)), (bar(id)))",
+		},
+		{
 			input:  "alter table a add constraint unique index idx (id)",
 			output: "alter table a add unique index idx (id)",
 		},
@@ -2042,6 +2048,12 @@ var (
 		}, {
 			input:  "CREATE TABLE `dolt_test`.`a` (`id` INT, `b` DOUBLE, PRIMARY KEY (`id`), INDEX `c` (`b` ASC) VISIBLE)",
 			output: "create table dolt_test.a (\n\tid INT,\n\tb DOUBLE,\n\tPRIMARY KEY (id),\n\tINDEX c (b) VISIBLE\n)",
+		}, {
+			input:  "create table t (pk int primary key, a int, b int, key idx1 ((upper(a))))",
+			output: "create table t (\n\tpk int primary key,\n\ta int,\n\tb int,\n\tkey idx1 ((upper(a)))\n)",
+		}, {
+			input:  "create table t (pk int primary key, a int, b int, key idx1 (a, (upper(a)), b, (a + b)))",
+			output: "create table t (\n\tpk int primary key,\n\ta int,\n\tb int,\n\tkey idx1 (a, (upper(a)), b, (a + b))\n)",
 		}, {
 			input:  "create temporary table a (b1 bool not null primary key, b2 boolean not null)",
 			output: "create temporary table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",

@@ -358,6 +358,53 @@ func TestWalkPrepared(t *testing.T) {
 	}
 }
 
+// TestWalkIndexFieldExpressions tests that Walk visits functional expressions nested inside
+// index field definitions for the IndexSpec form (CREATE INDEX / ALTER TABLE ADD INDEX), which
+// may mix plain column references with functional expressions.
+func TestWalkIndexFieldExpressions(t *testing.T) {
+	tests := []struct {
+		q         string
+		funcNames []string
+		colNames  []string
+	}{
+		{
+			q:         "CREATE INDEX idx1 on t (a, (upper(b)), c, (lower(d)))",
+			funcNames: []string{"upper", "lower"},
+			colNames:  []string{"a", "c"},
+		},
+		{
+			q:         "ALTER TABLE t ADD INDEX idx1 (a, (upper(b)), c, (lower(d)))",
+			funcNames: []string{"upper", "lower"},
+			colNames:  []string{"a", "c"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.q, func(t *testing.T) {
+			statement, err := Parse(tt.q)
+			require.NoError(t, err)
+
+			var seenFuncs []string
+			var seenCols []string
+			_ = Walk(func(node SQLNode) (bool, error) {
+				switch node := node.(type) {
+				case *FuncExpr:
+					seenFuncs = append(seenFuncs, node.Name.Lowered())
+				case *ColName:
+					seenCols = append(seenCols, node.Name.String())
+				case ColIdent:
+					if !node.IsEmpty() {
+						seenCols = append(seenCols, node.String())
+					}
+				}
+				return true, nil
+			}, statement)
+
+			assert.ElementsMatch(t, tt.funcNames, seenFuncs, "expected Walk to visit the functional expressions inside the index field list")
+			assert.Subset(t, seenCols, tt.colNames, "expected Walk to visit the plain column references inside the index field list")
+		})
+	}
+}
+
 func TestShowIndex(t *testing.T) {
 	tests := []struct {
 		statement string
