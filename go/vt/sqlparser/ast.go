@@ -7822,6 +7822,8 @@ type TableFuncExpr struct {
 	Name  string
 	Alias TableIdent
 	Exprs SelectExprs
+	// Columns renames the table function's output columns, e.g. AS alias(col1, col2)
+	Columns Columns
 }
 
 // Format formats the node.
@@ -7830,6 +7832,16 @@ func (node TableFuncExpr) Format(buf *TrackedBuffer) {
 		buf.Myprintf("%s(%v)", node.Name, node.Exprs)
 	} else {
 		buf.Myprintf("%s(%v) %s %v", node.Name, node.Exprs, keywordStrings[AS], node.Alias)
+	}
+	if len(node.Columns) > 0 {
+		s := ""
+		for i, c := range node.Columns {
+			if i > 0 {
+				s += ", "
+			}
+			s += c.val
+		}
+		buf.Myprintf("(%s)", s)
 	}
 
 }
