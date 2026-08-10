@@ -246,6 +246,11 @@ func adjustSubstatementPositions(sql string, tokenizer *Tokenizer) {
 }
 
 func trimQuotes(s string) string {
+	// A string shorter than two characters can't be quoted, and indexing into it below would panic.
+	if len(s) < 2 {
+		return s
+	}
+
 	firstChar := s[0]
 	lastChar := s[len(s)-1]
 	if firstChar == lastChar {
@@ -261,6 +266,10 @@ func trimQuotes(s string) string {
 }
 
 func stringIsUnbrokenQuote(s string, quoteChar byte) bool {
+	if len(s) < 2 {
+		return true
+	}
+
 	numConsecutiveQuotes := 0
 	numConsecutiveEscapes := 0
 	for _, c := range ([]byte)(s[1 : len(s)-1]) {
