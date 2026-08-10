@@ -49,7 +49,7 @@ The [security policy](https://github.com/dolthub/vitess/blob/main/SECURITY.md) i
 
 ### Security Audit
 
-A third party security audit was performed of the upstream project by Cure53. You can see the full report [here](https://github.com/vitessio/vitess/blob/main/doc/VIT-01-report.pdf).
+A third party security audit was performed of the upstream project. This fork has diverged substantially from the upstream project. That audit should not necessarily be considered reflective of what is in this project.
 
 ## License
 
