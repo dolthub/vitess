@@ -52,8 +52,17 @@ func checkDistribution(t *testing.T, data []*net.SRV, margin float64) {
 	}
 }
 
+// rand.Seed is a no-op as of Go 1.24 (GODEBUG=randseednop).
+// Use package-level overrides instead.
+func seedRandIntn(t *testing.T) {
+	r := rand.New(rand.NewSource(1))
+	old := randIntn
+	randIntn = r.Intn
+	t.Cleanup(func() { randIntn = old })
+}
+
 func testUniformity(t *testing.T, size int, margin float64) {
-	rand.Seed(1)
+	seedRandIntn(t)
 	data := make([]*net.SRV, size)
 	for i := 0; i < size; i++ {
 		data[i] = &net.SRV{Target: fmt.Sprintf("%c", 'a'+i), Weight: 1}
@@ -69,7 +78,7 @@ func TestUniformity(t *testing.T) {
 }
 
 func testWeighting(t *testing.T, margin float64) {
-	rand.Seed(1)
+	seedRandIntn(t)
 	data := []*net.SRV{
 		{Target: "a", Weight: 60},
 		{Target: "b", Weight: 30},
