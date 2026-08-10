@@ -1001,6 +1001,67 @@ func TestWindowErrors(t *testing.T) {
 	}
 }
 
+func TestTrimQuotes(t *testing.T) {
+	testcases := []struct {
+		input    string
+		expected string
+	}{
+		// Strings too short to be quoted are returned unmodified, rather than panicking.
+		{input: "", expected: ""},
+		{input: "'", expected: "'"},
+		{input: `"`, expected: `"`},
+		{input: "`", expected: "`"},
+		{input: "a", expected: "a"},
+		{input: "''", expected: ""},
+		{input: `""`, expected: ""},
+		{input: "``", expected: ""},
+		{input: "'a'", expected: "a"},
+		{input: `"a"`, expected: "a"},
+		{input: "`a`", expected: "a"},
+		{input: "'a", expected: "'a"},
+		{input: "a'", expected: "a'"},
+		{input: "aa", expected: "aa"},
+		// Quotes that don't span the whole string are left alone.
+		{input: `"1" + "2"`, expected: `"1" + "2"`},
+		{input: `'1' + '2'`, expected: `'1' + '2'`},
+		{input: `'it''s'`, expected: `it''s`},
+		{input: `'it\'s'`, expected: `it\'s`},
+	}
+
+	for _, tt := range testcases {
+		t.Run(tt.input, func(t *testing.T) {
+			assert.Equal(t, tt.expected, trimQuotes(tt.input))
+		})
+	}
+}
+
+// TestParseDegenerateQuotedExpressions asserts that queries with degenerate quoting in their select expressions
+// parse without panicking.
+func TestParseDegenerateQuotedExpressions(t *testing.T) {
+	testcases := []string{
+		"SELECT''A",
+		"SELECT''",
+		`SELECT""A`,
+		"SELECT``A",
+		"SELECT '' A",
+		"SELECT '' as A",
+		"SELECT ''A, ''B",
+		"SELECT (SELECT''A) B",
+		"SELECT''A FROM t WHERE x IN (SELECT''B FROM u)",
+		"INSERT INTO t SELECT''A",
+		"CREATE VIEW v AS SELECT''A",
+	}
+
+	for _, tt := range testcases {
+		t.Run(tt, func(t *testing.T) {
+			require.NotPanics(t, func() {
+				// Some of these are valid and some aren't; all that matters is that we don't panic.
+				_, _ = Parse(tt)
+			})
+		})
+	}
+}
+
 func newStrVal(in string) *SQLVal {
 	return NewStrVal([]byte(in))
 }
