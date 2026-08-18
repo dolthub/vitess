@@ -8682,6 +8682,15 @@ var (
 		input:  "select name, ntile() over (partition by b) from t",
 		output: "syntax error at position 21 near 'ntile'",
 	}, {
+		input:  "select name, ntile(-123) over (partition by b) from t",
+		output: "syntax error at position 21 near 'ntile'",
+	}, {
+		input:  "select name, ntile(0x12AB) over (partition by b) from t",
+		output: "syntax error at position 26 near '0x12AB'",
+	}, {
+		input:  "select name, ntile('abc') over (partition by b) from t",
+		output: "syntax error at position 25 near 'abc'",
+	}, {
 		input:  "select name, percent_rank(a) over (partition by b) from t",
 		output: "syntax error at position 28 near 'a'",
 	}, {

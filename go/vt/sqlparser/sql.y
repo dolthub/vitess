@@ -9394,9 +9394,15 @@ function_call_window:
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3.(SelectExprs), Over: $5.(*Over)}
   }
-| NTILE openb argument_expression closeb over
+| NTILE openb INTEGRAL closeb over
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3.(SelectExpr)}, Over: $5.(*Over)}
+    $$ = &FuncExpr{
+        Name: NewColIdent(string($1)),
+        Exprs: SelectExprs{
+            &AliasedExpr{Expr: NewIntVal($3)},
+        },
+        Over: $5.(*Over),
+    }
   }
 | PERCENT_RANK openb closeb over
   {
