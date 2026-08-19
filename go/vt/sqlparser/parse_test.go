@@ -8682,6 +8682,9 @@ var (
 		input:  "select name, ntile() over (partition by b) from t",
 		output: "syntax error at position 21 near 'ntile'",
 	}, {
+		input:  "select name, ntile(null) over (partition by b) from t",
+		output: "syntax error at position 24 near 'null'",
+	}, {
 		input:  "select name, ntile(-123) over (partition by b) from t",
 		output: "syntax error at position 21 near 'ntile'",
 	}, {
