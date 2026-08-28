@@ -414,6 +414,27 @@ var (
 			input: "create table u as select 1 from t intersect all select 1 from t",
 		},
 		{
+			// https://github.com/dolthub/dolt/issues/11620
+			input:  "CREATE TABLE people_copy AS (SELECT * FROM people)",
+			output: "create table people_copy as (select * from people)",
+		},
+		{
+			input:  "CREATE TABLE people_copy (id INT, name VARCHAR(100)) AS (SELECT * FROM people)",
+			output: "create table people_copy (\n\tid INT,\n\t`name` VARCHAR(100)\n) as (select * from people)",
+		},
+		{
+			input:  "CREATE TABLE people_copy AS (SELECT * FROM people ORDER BY id LIMIT 10)",
+			output: "create table people_copy as (select * from people order by id asc limit 10)",
+		},
+		{
+			input:  "CREATE TABLE people_copy AS (SELECT * FROM people) ORDER BY id LIMIT 10",
+			output: "create table people_copy as (select * from people) order by id asc limit 10",
+		},
+		{
+			input:  "CREATE TABLE people_copy AS (WITH cte AS (SELECT * FROM people) SELECT * FROM cte)",
+			output: "create table people_copy as (with cte as (select * from people) select * from cte)",
+		},
+		{
 			input:  "(select id, a from t order by id limit 1) union (select id, b as a from s order by id limit 1) order by a limit 1",
 			output: "(select id, a from t order by id asc limit 1) union (select id, b as a from s order by id asc limit 1) order by a asc limit 1",
 		}, {
@@ -8898,6 +8919,12 @@ var (
 	}, {
 		input:  "ALTER DEFINER = `newuser`@`localhost` EVENT myevent",
 		output: "You have an error in your SQL syntax; At least one event field to alter needs to be defined at position 52 near 'myevent'",
+	}, {
+		input:  "CREATE TABLE dest AS (SELECT * FROM src INTO OUTFILE '/tmp/out.txt')",
+		output: "INTO clause is not allowed at position 69 near '/tmp/out.txt'",
+	}, {
+		input:  "CREATE TABLE dest AS ()",
+		output: "syntax error at position 24 near 'AS'",
 	},
 	}
 
