@@ -322,7 +322,7 @@ func tryCastStatement(v interface{}) Statement {
 %token <bytes> NVAR PASSWORD_LOCK
 
 %type <val> command
-%type <val> create_query_expression create_query_select_expression select_statement with_select select_or_set_op base_select base_select_no_cte select_statement_with_no_trailing_into values_select_statement
+%type <val> create_query_expression create_query_select_expression select_statement with_select select_or_set_op base_select base_select_no_cte select_statement_with_no_trailing_into paren_select values_select_statement
 %type <val> set_op intersect_stmt union_except_lhs union_except_rhs
 %type <val> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <val> create_statement rename_statement drop_statement truncate_statement call_statement
@@ -753,6 +753,12 @@ intersect_stmt:
     $$ = &SetOp{Type: $2.(string), Left: $1.(SelectStatement), Right: $3.(SelectStatement)}
   }
 
+paren_select:
+  openb select_statement_with_no_trailing_into closeb
+  {
+    $$ = &ParenSelect{Select: $2.(SelectStatement)}
+  }
+
 // base_select is either a simple SELECT or a SELECT wrapped in parentheses
 base_select:
   base_select_no_cte
@@ -763,9 +769,9 @@ base_select:
     }
     $$ = $1.(SelectStatement)
   }
-| openb select_statement_with_no_trailing_into closeb
+| paren_select
   {
-    $$ = &ParenSelect{Select: $2.(SelectStatement)}
+    $$ = $1.(SelectStatement)
   }
 
 // union_except_lhs is either a simple select or a set_op
@@ -2342,6 +2348,13 @@ create_query_expression:
       yylex.Error(fmt.Errorf("INTO clause is not allowed").Error())
       return 1
     }
+    $1.(SelectStatement).SetOrderBy($2.(OrderBy))
+    $1.(SelectStatement).SetLimit($3.(*Limit))
+    $1.(SelectStatement).SetLock($4.(string))
+    $$ = $1.(SelectStatement)
+  }
+| paren_select order_by_opt limit_opt lock_opt
+  {
     $1.(SelectStatement).SetOrderBy($2.(OrderBy))
     $1.(SelectStatement).SetLimit($3.(*Limit))
     $1.(SelectStatement).SetLock($4.(string))
