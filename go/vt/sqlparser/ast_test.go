@@ -113,6 +113,35 @@ func TestSelect(t *testing.T) {
 	}
 }
 
+func TestInsertOnDupWhereFormatAndWalk(t *testing.T) {
+	predicate := &ComparisonExpr{
+		Operator: LessThanStr,
+		Left:     NewColName("old_value"),
+		Right:    NewColName("new_value"),
+	}
+	insert := &Insert{
+		Action: InsertStr,
+		Table:  TableName{Name: NewTableIdent("t")},
+		Rows: &AliasedValues{Values: Values{
+			ValTuple{NewIntVal([]byte("1"))},
+		}},
+		OnDup: OnDup{
+			&AssignmentExpr{Name: NewColName("old_value"), Expr: NewIntVal([]byte("2"))},
+		},
+		OnDupWhere: predicate,
+	}
+
+	require.Equal(t, "insert into t values (1) on duplicate key update old_value = 2 where old_value < new_value", String(insert))
+	visitedPredicate := false
+	require.NoError(t, Walk(func(node SQLNode) (bool, error) {
+		if node == predicate {
+			visitedPredicate = true
+		}
+		return true, nil
+	}, insert))
+	require.True(t, visitedPredicate)
+}
+
 func TestRemoveHints(t *testing.T) {
 	for _, query := range []string{
 		"select * from t use index (i)",

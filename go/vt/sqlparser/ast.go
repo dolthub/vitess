@@ -1740,17 +1740,20 @@ func (node *Stream) walkSubtree(visit Visit) error {
 // normal INSERT except if the row exists. In that case it first deletes
 // the row and re-inserts with new values. For that reason we keep it as an Insert struct.
 type Insert struct {
-	Auth       AuthInformation
-	Rows       InsertRows
-	With       *With
-	Table      TableName
-	Action     string
-	Ignore     string
-	Comments   Comments
-	Partitions Partitions
-	Columns    Columns
-	Returning  SelectExprs
-	OnDup      OnDup
+	Auth                           AuthInformation
+	Rows                           InsertRows
+	With                           *With
+	Table                          TableName
+	Action                         string
+	Ignore                         string
+	Comments                       Comments
+	Partitions                     Partitions
+	Columns                        Columns
+	Returning                      SelectExprs
+	OnDup                          OnDup
+	OnDupValuesAlias               string
+	OnDupWhere                     Expr
+	CountOnDuplicateUpdateAsOneRow bool
 }
 
 var _ AuthNode = (*Insert)(nil)
@@ -1770,6 +1773,9 @@ func (node *Insert) Format(buf *TrackedBuffer) {
 		buf.Myprintf(" partition (%v)", node.Partitions)
 	}
 	buf.Myprintf("%v %v%v", node.Columns, node.Rows, node.OnDup)
+	if node.OnDupWhere != nil {
+		buf.Myprintf(" where %v", node.OnDupWhere)
+	}
 	if len(node.Returning) > 0 {
 		buf.Myprintf(" returning %v", node.Returning)
 	}
@@ -1811,6 +1817,7 @@ func (node *Insert) walkSubtree(visit Visit) error {
 		node.Columns,
 		node.Rows,
 		node.OnDup,
+		node.OnDupWhere,
 		node.With,
 	)
 }
