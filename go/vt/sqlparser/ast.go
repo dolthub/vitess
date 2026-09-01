@@ -2332,6 +2332,11 @@ type DDL struct {
 	Temporary          bool
 	ConstraintIfExists bool
 
+	// Cascade is set for DROP statements with CASCADE behavior: dependent objects should be dropped along with the
+	// named objects. MySQL parses but ignores CASCADE, so the MySQL grammar never sets this field; integrators with
+	// CASCADE semantics (e.g. Postgres dialects) set it when constructing the statement.
+	Cascade bool
+
 	// This exposes the start and end index of the string that makes up the sub statement of the query given.
 	// Meaning is specific to the different kinds of statements with sub statements, e.g. views, trigger definitions.
 	// For statements defined within a MySQL special comment (/*! */), we have to fudge the offset a bit because we won't
@@ -2529,7 +2534,11 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			if node.Temporary {
 				temporary = " " + TemporaryStr
 			}
-			buf.Myprintf("%s%s table%s %v", node.Action, temporary, exists, node.FromTables)
+			cascade := ""
+			if node.Cascade {
+				cascade = " cascade"
+			}
+			buf.Myprintf("%s%s table%s %v%s", node.Action, temporary, exists, node.FromTables, cascade)
 		}
 	case RenameStr:
 		buf.Myprintf("%s table %v to %v", node.Action, node.FromTables[0], node.ToTables[0])
