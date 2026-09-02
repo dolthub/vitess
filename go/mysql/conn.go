@@ -582,6 +582,10 @@ func (c *Conn) readHeaderFrom(ctx context.Context, r io.Reader) (int, error) {
 		if strings.HasSuffix(err.Error(), "read: connection reset by peer") {
 			return 0, io.EOF
 		}
+		var netErr net.Error
+		if errors.As(err, &netErr) && netErr.Timeout() {
+			return 0, err
+		}
 		return 0, vterrors.Wrapf(err, "io.ReadFull(header size) failed")
 	}
 
@@ -1194,6 +1198,16 @@ func (c *Conn) writeEOFPacket(flags uint16, warnings uint16) error {
 
 const batchSize = 128
 
+// shouldLogReadError reports whether a command-loop packet read error is an
+// unexpected server failure rather than a routine client disconnect or reap.
+func shouldLogReadError(err error) bool {
+	if err == io.EOF {
+		return false
+	}
+	var netErr net.Error
+	return !errors.As(err, &netErr) || !netErr.Timeout()
+}
+
 // handleNextCommand is called in the server loop to process
 // incoming packets.
 func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
@@ -1207,7 +1221,7 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 		// 'readEphemeralPacket'.  This is a corner
 		// case though, and very unlikely to happen,
 		// and the only downside is we log a bit more then.
-		if err != io.EOF {
+		if shouldLogReadError(err) {
 			log.Errorf("Error reading packet from %s: %v", c, err)
 		}
 		return err
