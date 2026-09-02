@@ -199,6 +199,31 @@ func TestPackets(t *testing.T) {
 	verifyPacketComms(t, cConn, sConn, data)
 }
 
+// TestReadHeaderTimeoutLogging verifies that command-loop logging suppresses an
+// idle read timeout without erasing its identity for other packet-read callers.
+func TestReadHeaderTimeoutLogging(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+	defer serverConn.Close()
+	defer clientConn.Close()
+
+	if err := serverConn.SetReadDeadline(time.Now().Add(10 * time.Millisecond)); err != nil {
+		t.Fatalf("SetReadDeadline failed: %v", err)
+	}
+
+	c := &Conn{}
+	_, err := c.readHeaderFrom(context.Background(), serverConn)
+	var netErr net.Error
+	if !errors.As(err, &netErr) || !netErr.Timeout() {
+		t.Fatalf("readHeaderFrom returned %v, want a timeout", err)
+	}
+	if !shouldLogReadError(errors.New("malformed packet")) {
+		t.Fatal("shouldLogReadError suppressed a non-timeout read failure")
+	}
+	if shouldLogReadError(err) {
+		t.Fatalf("shouldLogReadError did not suppress timeout %v", err)
+	}
+}
+
 func TestBasicPackets(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
 	defer func() {
