@@ -6155,6 +6155,14 @@ func TestInvalid(t *testing.T) {
 			err:   "syntax error",
 		},
 		{
+			input: "select first_value(*) over (partition by b) from t",
+			err:   "syntax error",
+		},
+		{
+			input: "select last_value(*) over (partition by b) from t",
+			err:   "syntax error",
+		},
+		{
 			input: "with test as (select 1), test_two as (select 2) select * from test, test_two union all with b as (select 1, 2) select * from b",
 			err:   "syntax error",
 		},

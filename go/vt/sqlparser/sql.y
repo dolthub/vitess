@@ -9387,17 +9387,17 @@ function_call_window:
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Over: $4.(*Over)}
   }
-| FIRST_VALUE openb argument_expression closeb over
+| FIRST_VALUE openb expression closeb over
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3.(SelectExpr)}, Over: $5.(*Over)}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: tryCastExpr($3)}}, Over: $5.(*Over)}
   }
 | LAG openb argument_expression_list closeb over
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3.(SelectExprs), Over: $5.(*Over)}
   }
-| LAST_VALUE openb argument_expression closeb over
+| LAST_VALUE openb expression closeb over
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3.(SelectExpr)}, Over: $5.(*Over)}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: tryCastExpr($3)}}, Over: $5.(*Over)}
   }
 | LEAD openb argument_expression_list closeb over
   {
