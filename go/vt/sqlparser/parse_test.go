@@ -93,14 +93,12 @@ var (
 			output: "insert into hourly_logins(applications_id, `count`, `hour`) values (:v1, :v2, :v3) on duplicate key update account = `account` + values(`account`)",
 		},
 		{
-			// INVISIBLE should parse, but be a no-op (for now)
 			input:  "create table t (pk int primary key, c1 int INVISIBLE)",
-			output: "create table t (\n\tpk int primary key,\n\tc1 int\n)",
+			output: "create table t (\n\tpk int primary key,\n\tc1 int invisible\n)",
 		},
 		{
-			// INVISIBLE should parse, but be a no-op (for now)
 			input:  "alter table t add column c1 int INVISIBLE",
-			output: "alter table t add column (\n\tc1 int\n)",
+			output: "alter table t add column (\n\tc1 int invisible\n)",
 		},
 		{
 			input:  "ALTER TABLE webhook_events ADD COLUMN event varchar(255) DEFAULT NULL;",

@@ -3086,9 +3086,14 @@ type ColumnType struct {
 	Zerofill BoolVal
 
 	Stored BoolVal // Default is Virtual (not stored)
+
+	Invisible BoolVal
 }
 
 func (ct *ColumnType) merge(other ColumnType) error {
+	if other.Invisible {
+		ct.Invisible = true
+	}
 	if other.sawnull {
 		ct.sawnull = true
 		ct.Null = other.Null
@@ -3291,6 +3296,10 @@ func (ct ColumnType) Format(buf *TrackedBuffer) {
 		} else {
 			opts = append(opts, keywordStrings[VIRTUAL])
 		}
+	}
+
+	if ct.Invisible {
+		opts = append(opts, keywordStrings[INVISIBLE])
 	}
 
 	if len(opts) != 0 {
