@@ -1749,6 +1749,7 @@ type Insert struct {
 	Comments                       Comments
 	Partitions                     Partitions
 	Columns                        Columns
+	ConflictTarget                 Columns // Supports PostgreSQL ON CONFLICT behavior
 	Returning                      SelectExprs
 	OnDup                          OnDup
 	OnDupValuesAlias               string
@@ -1772,7 +1773,12 @@ func (node *Insert) Format(buf *TrackedBuffer) {
 	if len(node.Partitions) > 0 {
 		buf.Myprintf(" partition (%v)", node.Partitions)
 	}
-	buf.Myprintf("%v %v%v", node.Columns, node.Rows, node.OnDup)
+	buf.Myprintf("%v %v", node.Columns, node.Rows)
+	if len(node.ConflictTarget) > 0 {
+		// ConflictTarget is PostgreSQL planning metadata, so this intentionally extends the MySQL syntax emitted here.
+		buf.Myprintf(" on conflict %v", node.ConflictTarget)
+	}
+	buf.Myprintf("%v", node.OnDup)
 	if node.OnDupWhere != nil {
 		buf.Myprintf(" where %v", node.OnDupWhere)
 	}
@@ -1815,6 +1821,7 @@ func (node *Insert) walkSubtree(visit Visit) error {
 		node.Comments,
 		node.Table,
 		node.Columns,
+		node.ConflictTarget,
 		node.Rows,
 		node.OnDup,
 		node.OnDupWhere,
