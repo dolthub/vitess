@@ -3561,7 +3561,13 @@ column_type_options:
   }
 | column_type_options INVISIBLE
   {
-    $$ = $1.(ColumnType)
+    opt := ColumnType{Invisible: true}
+    ct := $1.(ColumnType)
+    if err := ct.merge(opt); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = ct
   }
 | column_type_options NULL
   {
