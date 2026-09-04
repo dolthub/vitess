@@ -457,8 +457,23 @@ var (
 		},
 		{
 			// https://github.com/dolthub/dolt/issues/8058
+			input:  "SELECT EXISTS (((SELECT 1)))",
+			output: "select exists (select 1)",
+		},
+		{
+			// https://github.com/dolthub/dolt/issues/8058
 			input:  "WITH t AS ((SELECT 1)) SELECT * FROM t",
 			output: "with t as (select 1) select * from t",
+		},
+		{
+			// https://github.com/dolthub/dolt/issues/8058
+			input:  "WITH t AS (((SELECT 1))) SELECT * FROM t",
+			output: "with t as (select 1) select * from t",
+		},
+		{
+			// https://github.com/dolthub/dolt/issues/8058
+			input:  "select a from ((values (1, 2), ('a', 'b'))) as t (a, b)",
+			output: "select a from (values row(1, 2), row('a', 'b')) as t (a, b)",
 		},
 		{
 			input:  "select a from (values (1, 2), ('a', 'b')) as t (a, b)",
@@ -6170,6 +6185,14 @@ func TestInvalid(t *testing.T) {
 		},
 		{
 			input: "select a from ((select * from tbl))",
+			err:   "Every derived table must have its own alias",
+		},
+		{
+			input: "select a from (((select * from tbl)))",
+			err:   "Every derived table must have its own alias",
+		},
+		{
+			input: "select * from ((values (1, 2)))",
 			err:   "Every derived table must have its own alias",
 		},
 		{

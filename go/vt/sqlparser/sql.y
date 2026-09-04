@@ -111,7 +111,11 @@ func tryCastStatement(v interface{}) Statement {
 %token <bytes> SQL_NO_CACHE SQL_CACHE
 %left <bytes> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <bytes> ON USING
-%token <empty> '(' ',' ')' '@' ':'
+// Lower precedence than ')' makes the parser shift outer parentheses
+// rather than prematurely reducing an unaliased derived table error.
+%left <bytes> PREFER_PARENTHESES
+%left <empty> '(' ')'
+%token <empty> ',' '@' ':'
 %nonassoc <bytes> STRING
 %token <bytes> ID HEX INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
 %token <bytes> NULL TRUE FALSE OFF
@@ -367,7 +371,7 @@ func tryCastStatement(v interface{}) Statement {
 %type <val> table_references cte_list from_opt
 %type <val> with_clause with_clause_opt
 %type <val> table_reference table_function table_factor join_table common_table_expression
-%type <val> values_statement subquery_or_values cte_subquery_or_values
+%type <val> values_statement subquery_or_values parenthesized_query_expression
 %type <val> subquery exists_subquery
 %type <val> join_condition join_condition_opt on_expression_opt
 %type <val> table_name_list delete_table_list view_name_list
@@ -854,10 +858,6 @@ from_opt:
   }
 | FROM table_references
   {
-    if err := checkDerivedTableAliases($2.(TableExprs)); err != nil {
-      yylex.Error(err.Error())
-      return 1
-    }
     $$ = $2.(TableExprs)
   }
 
@@ -912,23 +912,23 @@ cte_list:
   }
 
 common_table_expression:
-  table_alias ins_column_list_opt AS cte_subquery_or_values
+  table_alias ins_column_list_opt AS parenthesized_query_expression
   {
     $$ = &CommonTableExpr{
       &AliasedTableExpr{
-        Expr: $4.(SimpleTableExpr),
+        Expr:$4.(SimpleTableExpr),
         As: $1.(TableIdent),
         Auth: AuthInformation{AuthType: AuthType_IGNORE},
       },
     $2.(Columns)}
   }
 
-cte_subquery_or_values:
+parenthesized_query_expression:
   subquery_or_values
   {
     $$ = $1.(SimpleTableExpr)
   }
-| openb cte_subquery_or_values closeb
+| openb parenthesized_query_expression closeb
   {
     $$ = $2.(SimpleTableExpr)
   }
@@ -1034,10 +1034,6 @@ insert_or_replace:
 update_statement:
   with_clause_opt UPDATE comment_opt ignore_opt table_references SET assignment_list where_expression_opt order_by_opt limit_opt
   {
-    if err := checkDerivedTableAliases($5.(TableExprs)); err != nil {
-      yylex.Error(err.Error())
-      return 1
-    }
     update := &Update{
 	Comments: Comments($3.(Comments)),
 	Ignore: $4.(string),
@@ -1079,10 +1075,6 @@ delete_statement:
   }
 | with_clause_opt DELETE comment_opt FROM table_name_list USING table_references where_expression_opt
   {
-    if err := checkDerivedTableAliases($7.(TableExprs)); err != nil {
-      yylex.Error(err.Error())
-      return 1
-    }
     delete := &Delete{
 	Comments: Comments($3.(Comments)),
 	Targets: $5.(TableNames),
@@ -1096,10 +1088,6 @@ delete_statement:
   }
 | with_clause_opt DELETE comment_opt table_name_list from_or_using table_references where_expression_opt
   {
-    if err := checkDerivedTableAliases($6.(TableExprs)); err != nil {
-      yylex.Error(err.Error())
-      return 1
-    }
     delete := &Delete{
 	Comments: Comments($3.(Comments)),
 	Targets: $4.(TableNames),
@@ -1113,10 +1101,6 @@ delete_statement:
   }
 | with_clause_opt DELETE comment_opt delete_table_list from_or_using table_references where_expression_opt
   {
-    if err := checkDerivedTableAliases($6.(TableExprs)); err != nil {
-      yylex.Error(err.Error())
-      return 1
-    }
     tableNames := $4.(TableNames)
     authTargetNames := make([]string, len(tableNames)*2)
     for i, tableName := range tableNames {
@@ -8382,43 +8366,51 @@ table_factor:
   {
     $$ = $1.(*AliasedTableExpr)
   }
-| subquery_or_values as_opt table_alias column_list_opt
+| parenthesized_query_expression as_opt table_alias column_list_opt
   {
-    $$ = newTableExpr($1.(SimpleTableExpr), $3.(TableIdent), $4.(Columns), false)
+    switch n := $1.(SimpleTableExpr).(type) {
+    case *Subquery:
+        n.Columns = $4.(Columns)
+    case *ValuesStatement:
+        n.Columns = $4.(Columns)
+    }
+    $$ = &AliasedTableExpr{
+      Lateral: false,
+      Expr:$1.(SimpleTableExpr),
+      As: $3.(TableIdent),
+      Auth: AuthInformation{AuthType: AuthType_IGNORE},
+    }
   }
-| LATERAL subquery_or_values as_opt table_alias column_list_opt
+| LATERAL parenthesized_query_expression as_opt table_alias column_list_opt
   {
-    $$ = newTableExpr($2.(SimpleTableExpr), $4.(TableIdent), $5.(Columns), true)
+    switch n := $2.(SimpleTableExpr).(type) {
+    case *Subquery:
+        n.Columns = $5.(Columns)
+    case *ValuesStatement:
+        n.Columns = $5.(Columns)
+    }
+    $$ = &AliasedTableExpr{
+      Lateral: true,
+      Expr:$2.(SimpleTableExpr),
+      As: $4.(TableIdent),
+      Auth: AuthInformation{AuthType: AuthType_IGNORE},
+    }
   }
-| subquery_or_values
+| parenthesized_query_expression %prec PREFER_PARENTHESES
   {
-    $$ = newTableExpr($1.(SimpleTableExpr), NewTableIdent(""), nil, false)
+    // missed alias for subquery
+    yylex.Error("Every derived table must have its own alias")
+    return 1
   }
-| LATERAL subquery_or_values
+| LATERAL parenthesized_query_expression %prec PREFER_PARENTHESES
   {
-    $$ = newTableExpr($2.(SimpleTableExpr), NewTableIdent(""), nil, true)
+    // missed alias for subquery
+    yylex.Error("Every derived table must have its own alias")
+    return 1
   }
 | openb table_references closeb
   {
     $$ = &ParenTableExpr{Exprs: $2.(TableExprs)}
-  }
-| openb table_references closeb as_opt table_alias column_list_opt
-  {
-    tableExpr, err := applyAliasToParenthesizedTable($2.(TableExprs), $5.(TableIdent), $6.(Columns), false)
-    if err != nil {
-      yylex.Error(err.Error())
-      return 1
-    }
-    $$ = tableExpr
-  }
-| LATERAL openb table_references closeb as_opt table_alias column_list_opt
-  {
-    tableExpr, err := applyAliasToParenthesizedTable($3.(TableExprs), $6.(TableIdent), $7.(Columns), true)
-    if err != nil {
-      yylex.Error(err.Error())
-      return 1
-    }
-    $$ = tableExpr
   }
 | table_function
 | json_table
