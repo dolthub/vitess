@@ -5218,6 +5218,100 @@ func (node *AliasedTableExpr) RemoveHints() *AliasedTableExpr {
 	return &noHints
 }
 
+// newTableExpr constructs an [AliasedTableExpr] for a derived table or
+// subquery, populating column aliases if specified.
+func newTableExpr(expr SimpleTableExpr, alias TableIdent, cols Columns, lateral bool) *AliasedTableExpr {
+	switch n := expr.(type) {
+	case *Subquery:
+		n.Columns = cols
+	case *ValuesStatement:
+		n.Columns = cols
+	}
+	return &AliasedTableExpr{
+		Lateral: lateral,
+		Expr:    expr,
+		As:      alias,
+		Auth:    AuthInformation{AuthType: AuthType_IGNORE},
+	}
+}
+
+// applyAliasToParenthesizedTable unwraps nested parentheses around a
+// derived table expression and applies the outer alias and column list.
+func applyAliasToParenthesizedTable(tableExprs TableExprs, alias TableIdent, cols Columns, lateral bool) (TableExpr, error) {
+	if len(tableExprs) != 1 {
+		return nil, fmt.Errorf("syntax error")
+	}
+	curr := tableExprs[0]
+	for {
+		paren, ok := curr.(*ParenTableExpr)
+		if !ok {
+			break
+		}
+		if len(paren.Exprs) != 1 {
+			return nil, fmt.Errorf("syntax error")
+		}
+		curr = paren.Exprs[0]
+	}
+	ate, ok := curr.(*AliasedTableExpr)
+	if !ok || !ate.As.IsEmpty() {
+		return nil, fmt.Errorf("syntax error")
+	}
+	switch n := ate.Expr.(type) {
+	case *Subquery:
+		n.Columns = cols
+	case *ValuesStatement:
+		n.Columns = cols
+	default:
+		return nil, fmt.Errorf("syntax error")
+	}
+	ate.As = alias
+	if lateral {
+		ate.Lateral = true
+	}
+	return ate, nil
+}
+
+var errDerivedTableAlias = errors.New("Every derived table must have its own alias")
+
+// checkDerivedTableAliases validates that every derived table within
+// the provided table expressions has an explicit alias.
+func checkDerivedTableAliases(tableExprs TableExprs) error {
+	for _, te := range tableExprs {
+		if err := checkTableExprAlias(te); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// checkTableExprAlias recursively inspects a [TableExpr] for unaliased
+// subqueries or values statements.
+func checkTableExprAlias(te TableExpr) error {
+	switch t := te.(type) {
+	case *AliasedTableExpr:
+		switch t.Expr.(type) {
+		case *Subquery, *ValuesStatement:
+			if t.As.IsEmpty() {
+				return errDerivedTableAlias
+			}
+		}
+	case *ParenTableExpr:
+		for _, inner := range t.Exprs {
+			if err := checkTableExprAlias(inner); err != nil {
+				return err
+			}
+		}
+	case *JoinTableExpr:
+		if err := checkTableExprAlias(t.LeftExpr); err != nil {
+			return err
+		}
+		if err := checkTableExprAlias(t.RightExpr); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 type With struct {
 	Ctes      []*CommonTableExpr
 	Recursive bool

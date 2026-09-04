@@ -441,6 +441,26 @@ var (
 			input: "select a from (select 1 as a from tbl1 union select 2 from tbl2) as t (a, b)",
 		},
 		{
+			// https://github.com/dolthub/dolt/issues/8058
+			input:  "SELECT SUM(found) FROM ((SELECT 2 as found FROM dual)) as all_found",
+			output: "select SUM(`found`) from (select 2 as `found`) as all_found",
+		},
+		{
+			// https://github.com/dolthub/dolt/issues/8058
+			input:  "SELECT SUM(found) FROM (((SELECT 2 as found FROM dual))) as all_found",
+			output: "select SUM(`found`) from (select 2 as `found`) as all_found",
+		},
+		{
+			// https://github.com/dolthub/dolt/issues/8058
+			input:  "SELECT EXISTS ((SELECT 1))",
+			output: "select exists (select 1)",
+		},
+		{
+			// https://github.com/dolthub/dolt/issues/8058
+			input:  "WITH t AS ((SELECT 1)) SELECT * FROM t",
+			output: "with t as (select 1) select * from t",
+		},
+		{
 			input:  "select a from (values (1, 2), ('a', 'b')) as t (a, b)",
 			output: "select a from (values row(1, 2), row('a', 'b')) as t (a, b)",
 		},
