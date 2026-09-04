@@ -164,6 +164,7 @@ func ParseOneWithOptions(ctx context.Context, sql string, options ParserOptions)
 }
 
 func parseTokenizer(sql string, tokenizer *Tokenizer) (Statement, error) {
+	tokenizer.intervalExprs = nil
 	if yyParsePooled(tokenizer) != 0 {
 		if se, ok := tokenizer.LastError.(vterrors.SyntaxError); ok {
 			return nil, vterrors.NewWithCause(vtrpcpb.Code_INVALID_ARGUMENT, tokenizer.LastError.Error(), se)
@@ -174,9 +175,66 @@ func parseTokenizer(sql string, tokenizer *Tokenizer) (Statement, error) {
 	if tokenizer.ParseTree == nil {
 		return nil, ErrEmpty
 	}
+	if tokenizer.hasInvalidIntervalExpr() {
+		return nil, invalidIntervalSyntaxError(sql, tokenizer.Position)
+	}
 	captureSelectExpressions(sql, tokenizer)
 	adjustSubstatementPositions(sql, tokenizer)
 	return tokenizer.ParseTree, nil
+}
+
+// invalidIntervalSyntaxError returns the parser error used for unsupported interval positions.
+func invalidIntervalSyntaxError(sql string, position int) error {
+	err := vterrors.SyntaxError{Message: "syntax error", Position: position, Statement: sql}
+	return vterrors.NewWithCause(vtrpcpb.Code_INVALID_ARGUMENT, err.Error(), err)
+}
+
+// newIntervalExpr creates an interval and registers it for syntax validation.
+func newIntervalExpr(yylex interface{}, expr Expr, unit string) *IntervalExpr {
+	interval := &IntervalExpr{Expr: expr, Unit: unit}
+	if tokenizer, ok := yylex.(*Tokenizer); ok {
+		tokenizer.registerIntervalExpr(interval)
+	}
+	return interval
+}
+
+// newArithmeticExpr creates an arithmetic expression and permits intervals in MySQL's supported positions.
+func newArithmeticExpr(yylex interface{}, left Expr, operator string, right Expr) *BinaryExpr {
+	tokenizer, ok := yylex.(*Tokenizer)
+	if !ok {
+		return &BinaryExpr{Left: left, Operator: operator, Right: right}
+	}
+	_, leftIsInterval := left.(*IntervalExpr)
+	_, rightIsInterval := right.(*IntervalExpr)
+	if leftIsInterval && rightIsInterval {
+		return &BinaryExpr{Left: left, Operator: operator, Right: right}
+	}
+	if operator == PlusStr {
+		tokenizer.allowIntervalExpr(left)
+	}
+	tokenizer.allowIntervalExpr(right)
+	return &BinaryExpr{Left: left, Operator: operator, Right: right}
+}
+
+// newGenericFunctionExpr creates a function and permits MySQL date-function interval arguments.
+func newGenericFunctionExpr(yylex interface{}, qualifier TableIdent, name ColIdent, distinct bool, exprs SelectExprs) *FuncExpr {
+	function := &FuncExpr{Qualifier: qualifier, Name: name, Distinct: distinct, Exprs: exprs}
+	if !function.Qualifier.IsEmpty() || function.Distinct || len(function.Exprs) != 2 {
+		return function
+	}
+	switch function.Name.Lowered() {
+	case "adddate", "date_add", "date_sub", "subdate":
+	default:
+		return function
+	}
+	argument, ok := function.Exprs[1].(*AliasedExpr)
+	if !ok {
+		return function
+	}
+	if tokenizer, ok := yylex.(*Tokenizer); ok {
+		tokenizer.allowIntervalExpr(argument.Expr)
+	}
+	return function
 }
 
 // For select statements, capture the verbatim select expressions from the original query text.
@@ -312,6 +370,10 @@ func ParseNext(tokenizer *Tokenizer) (Statement, error) {
 	}
 	if tokenizer.ParseTree == nil {
 		return ParseNext(tokenizer)
+	}
+	if tokenizer.hasInvalidIntervalExpr() {
+		tokenizer.Error("syntax error")
+		return nil, tokenizer.LastError
 	}
 
 	captureSelectExpressions((string)(tokenizer.queryBuf), tokenizer)

@@ -9214,11 +9214,11 @@ value_expression:
   }
 | value_expression '+' value_expression
   {
-    $$ = &BinaryExpr{Left: tryCastExpr($1), Operator: PlusStr, Right: tryCastExpr($3)}
+    $$ = newArithmeticExpr(yylex, tryCastExpr($1), PlusStr, tryCastExpr($3))
   }
 | value_expression '-' value_expression
   {
-    $$ = &BinaryExpr{Left: tryCastExpr($1), Operator: MinusStr, Right: tryCastExpr($3)}
+    $$ = newArithmeticExpr(yylex, tryCastExpr($1), MinusStr, tryCastExpr($3))
   }
 | value_expression '*' value_expression
   {
@@ -9304,7 +9304,7 @@ value_expression:
     // as a function. If support is needed for that,
     // we'll need to revisit this. The solution
     // will be non-trivial because of grammar conflicts.
-    $$ = &IntervalExpr{Expr: tryCastExpr($2), Unit: $3.(ColIdent).String()}
+    $$ = newIntervalExpr(yylex, tryCastExpr($2), $3.(ColIdent).String())
   }
 | value_expression CONCAT value_expression
   {
@@ -9324,11 +9324,11 @@ value_expression:
 function_call_generic:
   sql_id openb distinct_opt argument_expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: $1.(ColIdent), Distinct: $3.(string) == DistinctStr, Exprs: $4.(SelectExprs)}
+    $$ = newGenericFunctionExpr(yylex, TableIdent{}, $1.(ColIdent), $3.(string) == DistinctStr, $4.(SelectExprs))
   }
 | table_id '.' reserved_sql_id openb argument_expression_list_opt closeb
   {
-    $$ = &FuncExpr{Qualifier: $1.(TableIdent), Name: $3.(ColIdent), Exprs: $5.(SelectExprs)}
+    $$ = newGenericFunctionExpr(yylex, $1.(TableIdent), $3.(ColIdent), false, $5.(SelectExprs))
   }
 
 /*

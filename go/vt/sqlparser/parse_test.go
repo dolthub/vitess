@@ -6459,6 +6459,61 @@ func TestInvalid(t *testing.T) {
 	}
 }
 
+func TestIntervalExpressionSyntax(t *testing.T) {
+	valid := []string{
+		"select date '2024-01-01' + interval 1 day",
+		"select interval 1 day + date '2024-01-01'",
+		"select date '2024-01-01' - interval 1 day",
+		"select date_add('2024-01-01', interval 1 day)",
+		"select date_sub('2024-01-01', interval 1 day)",
+		"select adddate('2024-01-01', interval 1 day)",
+		"select subdate('2024-01-01', interval 1 day)",
+		"select date '2024-01-01' + interval ? day",
+		"select sum(1) over (order by d range interval 1 day preceding) from t",
+		"create event e on schedule at current_timestamp + interval 1 day do select 1",
+	}
+	for _, query := range valid {
+		t.Run(query, func(t *testing.T) {
+			_, err := Parse(query)
+			require.NoError(t, err)
+		})
+	}
+
+	invalid := []string{
+		"select interval 1 day",
+		"select (interval 1 day)",
+		"select interval 1 day as x",
+		"select * from (select interval 1 day) t",
+		"select interval 1 day = interval 1 day",
+		"select date '2024-01-01' + (interval 1 day)",
+		"select (interval 1 day) + date '2024-01-01'",
+		"select interval 1 day + interval 1 day",
+		"select -interval 1 day",
+		"select interval 1 day * 2",
+		"select 2 * interval 1 day",
+		"select interval 1 day - date '2024-01-01'",
+		"select if(true, interval 1 day, 0)",
+		"select cast(interval 1 day as char)",
+		"select mysql.date_add('2024-01-01', interval 1 day)",
+		"select date_add(interval 1 day, interval 1 day)",
+		"select date_add(distinct '2024-01-01', interval 1 day)",
+		"select sum(1) over (order by d range (interval 1 day) preceding) from t",
+		"create event e on schedule at current_timestamp + interval 1 day do select interval 1 day",
+	}
+	for _, query := range invalid {
+		t.Run(query, func(t *testing.T) {
+			_, err := Parse(query)
+			require.ErrorContains(t, err, "syntax error")
+		})
+	}
+
+	tokenizer := NewTokenizer(strings.NewReader("select interval 1 day; select date '2024-01-01' + interval 1 day"))
+	_, err := ParseNext(tokenizer)
+	require.ErrorContains(t, err, "syntax error")
+	_, err = ParseNext(tokenizer)
+	require.NoError(t, err)
+}
+
 func TestCaseSensitivity(t *testing.T) {
 	validSQL := []parseTest{
 		{

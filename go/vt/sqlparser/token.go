@@ -60,6 +60,7 @@ type Tokenizer struct {
 	buf                  []byte
 	lastToken            []byte
 	lastNonNilToken      []byte
+	intervalExprs        map[*IntervalExpr]bool
 	nesting              int
 	bufPos               int
 	bufSize              int
@@ -81,6 +82,32 @@ type Tokenizer struct {
 	SkipSpecialComments  bool
 	AllowComments        bool
 	PipesAsConcat        bool
+}
+
+// registerIntervalExpr records an interval expression for validation after parsing.
+func (tkn *Tokenizer) registerIntervalExpr(expr *IntervalExpr) {
+	if tkn.intervalExprs == nil {
+		tkn.intervalExprs = make(map[*IntervalExpr]bool)
+	}
+	tkn.intervalExprs[expr] = false
+}
+
+// allowIntervalExpr marks an interval expression as occupying a MySQL-compatible syntax position.
+func (tkn *Tokenizer) allowIntervalExpr(expr Expr) {
+	interval, ok := expr.(*IntervalExpr)
+	if ok {
+		tkn.intervalExprs[interval] = true
+	}
+}
+
+// hasInvalidIntervalExpr reports whether parsing produced an interval in an unsupported position.
+func (tkn *Tokenizer) hasInvalidIntervalExpr() bool {
+	for _, valid := range tkn.intervalExprs {
+		if !valid {
+			return true
+		}
+	}
+	return false
 }
 
 var defaultIdQuotes = map[uint16]struct{}{backtickQuote: {}}
@@ -893,6 +920,7 @@ func (tkn *Tokenizer) next() {
 func (tkn *Tokenizer) reset() {
 	tkn.ParseTree = nil
 	tkn.specialComment = nil
+	tkn.intervalExprs = nil
 	tkn.posVarIndex = 0
 	tkn.nesting = 0
 	bufLeft := len(tkn.buf) - tkn.bufPos

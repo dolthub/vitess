@@ -570,8 +570,8 @@ func TestReplaceExpr(t *testing.T) {
 		in:  "select * from t where -(select a from b)",
 		out: "-:a",
 	}, {
-		in:  "select * from t where interval (select a from b) aa",
-		out: "interval :a aa",
+		in:  "select * from t where d + interval (select a from b) aa",
+		out: "d + interval :a aa",
 	}, {
 		in:  "select * from t where (select a from b) collate utf8",
 		out: ":a collate utf8",

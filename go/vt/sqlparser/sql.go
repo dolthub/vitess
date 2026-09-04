@@ -23749,13 +23749,13 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:9216
 		{
-			yyVAL.val = &BinaryExpr{Left: tryCastExpr(yyDollar[1].val), Operator: PlusStr, Right: tryCastExpr(yyDollar[3].val)}
+			yyVAL.val = newArithmeticExpr(yylex, tryCastExpr(yyDollar[1].val), PlusStr, tryCastExpr(yyDollar[3].val))
 		}
 	case 1525:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:9220
 		{
-			yyVAL.val = &BinaryExpr{Left: tryCastExpr(yyDollar[1].val), Operator: MinusStr, Right: tryCastExpr(yyDollar[3].val)}
+			yyVAL.val = newArithmeticExpr(yylex, tryCastExpr(yyDollar[1].val), MinusStr, tryCastExpr(yyDollar[3].val))
 		}
 	case 1526:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -23875,7 +23875,7 @@ yydefault:
 			// as a function. If support is needed for that,
 			// we'll need to revisit this. The solution
 			// will be non-trivial because of grammar conflicts.
-			yyVAL.val = &IntervalExpr{Expr: tryCastExpr(yyDollar[2].val), Unit: yyDollar[3].val.(ColIdent).String()}
+			yyVAL.val = newIntervalExpr(yylex, tryCastExpr(yyDollar[2].val), yyDollar[3].val.(ColIdent).String())
 		}
 	case 1543:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -23887,13 +23887,13 @@ yydefault:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:9326
 		{
-			yyVAL.val = &FuncExpr{Name: yyDollar[1].val.(ColIdent), Distinct: yyDollar[3].val.(string) == DistinctStr, Exprs: yyDollar[4].val.(SelectExprs)}
+			yyVAL.val = newGenericFunctionExpr(yylex, TableIdent{}, yyDollar[1].val.(ColIdent), yyDollar[3].val.(string) == DistinctStr, yyDollar[4].val.(SelectExprs))
 		}
 	case 1551:
 		yyDollar = yyS[yypt-6 : yypt+1]
 //line sql.y:9330
 		{
-			yyVAL.val = &FuncExpr{Qualifier: yyDollar[1].val.(TableIdent), Name: yyDollar[3].val.(ColIdent), Exprs: yyDollar[5].val.(SelectExprs)}
+			yyVAL.val = newGenericFunctionExpr(yylex, yyDollar[1].val.(TableIdent), yyDollar[3].val.(ColIdent), false, yyDollar[5].val.(SelectExprs))
 		}
 	case 1552:
 		yyDollar = yyS[yypt-6 : yypt+1]
