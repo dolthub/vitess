@@ -6169,6 +6169,10 @@ func TestInvalid(t *testing.T) {
 			err:   "Every derived table must have its own alias",
 		},
 		{
+			input: "select a from ((select * from tbl))",
+			err:   "Every derived table must have its own alias",
+		},
+		{
 			input: "select a, b from (select * from tbl) sort by a",
 			err:   "syntax error",
 		},
