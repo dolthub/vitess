@@ -358,7 +358,7 @@ func tryCastStatement(v interface{}) Statement {
 %type <bytes> work_opt no_opt chain_opt release_opt index_name_opt no_first_last yes_no
 %type <val> comment_opt comment_list
 %type <val> distinct_opt union_op intersect_op except_op insert_or_replace
-%type <val> match_option format_opt plan_opt
+%type <val> match_option format_opt plan_opt trim_direction
 %type <val> separator_opt
 %type <val> like_escape_opt
 %type <val> select_expression_list argument_expression_list argument_expression_list_opt
@@ -9514,17 +9514,13 @@ function_call_keyword:
   {
     $$ = &TrimExpr{Pattern: tryCastExpr($3), Str: tryCastExpr($5), Dir: Both}
   }
-| TRIM openb LEADING value_expression FROM value_expression closeb
+| TRIM openb trim_direction value_expression FROM value_expression closeb
   {
-    $$ = &TrimExpr{Pattern: tryCastExpr($4), Str: tryCastExpr($6), Dir: Leading}
+    $$ = &TrimExpr{Pattern: tryCastExpr($4), Str: tryCastExpr($6), Dir: $3.(string)}
   }
-| TRIM openb TRAILING value_expression FROM value_expression closeb
+| TRIM openb trim_direction FROM value_expression closeb
   {
-    $$ = &TrimExpr{Pattern: tryCastExpr($4), Str: tryCastExpr($6), Dir: Trailing}
-  }
-| TRIM openb BOTH value_expression FROM value_expression closeb
-  {
-    $$ = &TrimExpr{Pattern: tryCastExpr($4), Str: tryCastExpr($6), Dir: Both}
+    $$ = &TrimExpr{Pattern: NewStrVal([]byte(" ")), Str: tryCastExpr($5), Dir: $3.(string)}
   }
 | MATCH openb argument_expression_list closeb AGAINST openb value_expression match_option closeb
   {
@@ -9704,6 +9700,20 @@ match_option:
  {
     $$ = QueryExpansionStr
  }
+
+trim_direction:
+  LEADING
+  {
+    $$ = Leading
+  }
+| TRAILING
+  {
+    $$ = Trailing
+  }
+| BOTH
+  {
+    $$ = Both
+  }
 
 charset:
   ID

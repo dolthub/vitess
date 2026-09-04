@@ -8407,6 +8407,22 @@ func TestTrim(t *testing.T) {
 			input:  `SELECT TRIM(TRIM("foobar"))`,
 			output: "select trim(both ' ' from trim(both ' ' from 'foobar'))",
 		},
+		{
+			input:  `SELECT TRIM(LEADING FROM "foo")`,
+			output: "select trim(leading ' ' from 'foo')",
+		},
+		{
+			input:  `SELECT TRIM(TRAILING FROM "foo")`,
+			output: "select trim(trailing ' ' from 'foo')",
+		},
+		{
+			input:  `SELECT TRIM(BOTH FROM "foo")`,
+			output: "select trim(both ' ' from 'foo')",
+		},
+		{
+			input:  `SELECT TRIM(LEADING FROM FIRST_VALUE(s) OVER ())`,
+			output: "select trim(leading ' ' from FIRST_VALUE(s) over ())",
+		},
 	}
 	for _, tcase := range testCases {
 		runParseTestCase(t, tcase)
