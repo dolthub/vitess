@@ -111,7 +111,11 @@ func tryCastStatement(v interface{}) Statement {
 %token <bytes> SQL_NO_CACHE SQL_CACHE
 %left <bytes> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <bytes> ON USING
-%token <empty> '(' ',' ')' '@' ':'
+// Lower precedence than ')' makes the parser shift outer parentheses
+// rather than prematurely reducing an unaliased derived table error.
+%left <bytes> PREFER_PARENTHESES
+%left <empty> '(' ')'
+%token <empty> ',' '@' ':'
 %nonassoc <bytes> STRING
 %token <bytes> ID HEX INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
 %token <bytes> NULL TRUE FALSE OFF
@@ -367,8 +371,8 @@ func tryCastStatement(v interface{}) Statement {
 %type <val> table_references cte_list from_opt
 %type <val> with_clause with_clause_opt
 %type <val> table_reference table_function table_factor join_table common_table_expression
-%type <val> values_statement subquery_or_values
-%type <val> subquery
+%type <val> values_statement subquery_or_values paren_query_expression
+%type <val> subquery paren_subquery
 %type <val> join_condition join_condition_opt on_expression_opt
 %type <val> table_name_list delete_table_list view_name_list
 %type <val> inner_join outer_join straight_join natural_join
@@ -908,15 +912,25 @@ cte_list:
   }
 
 common_table_expression:
-  table_alias ins_column_list_opt AS subquery_or_values
+  table_alias ins_column_list_opt AS paren_query_expression
   {
     $$ = &CommonTableExpr{
       &AliasedTableExpr{
-        Expr: $4.(SimpleTableExpr),
+        Expr:$4.(SimpleTableExpr),
         As: $1.(TableIdent),
         Auth: AuthInformation{AuthType: AuthType_IGNORE},
       },
     $2.(Columns)}
+  }
+
+paren_query_expression:
+  subquery_or_values
+  {
+    $$ = $1.(SimpleTableExpr)
+  }
+| openb paren_query_expression closeb
+  {
+    $$ = $2.(SimpleTableExpr)
   }
 
 insert_statement:
@@ -8352,7 +8366,7 @@ table_factor:
   {
     $$ = $1.(*AliasedTableExpr)
   }
-| subquery_or_values as_opt table_alias column_list_opt
+| paren_query_expression as_opt table_alias column_list_opt
   {
     switch n := $1.(SimpleTableExpr).(type) {
     case *Subquery:
@@ -8367,7 +8381,7 @@ table_factor:
       Auth: AuthInformation{AuthType: AuthType_IGNORE},
     }
   }
-| LATERAL subquery_or_values as_opt table_alias column_list_opt
+| LATERAL paren_query_expression as_opt table_alias column_list_opt
   {
     switch n := $2.(SimpleTableExpr).(type) {
     case *Subquery:
@@ -8382,13 +8396,13 @@ table_factor:
       Auth: AuthInformation{AuthType: AuthType_IGNORE},
     }
   }
-| subquery_or_values
+| paren_query_expression %prec PREFER_PARENTHESES
   {
     // missed alias for subquery
     yylex.Error("Every derived table must have its own alias")
     return 1
   }
-| LATERAL subquery_or_values
+| LATERAL paren_query_expression %prec PREFER_PARENTHESES
   {
     // missed alias for subquery
     yylex.Error("Every derived table must have its own alias")
@@ -9017,9 +9031,19 @@ condition:
   {
     $$ = &RangeCond{Left: tryCastExpr($1), Operator: NotBetweenStr, From: tryCastExpr($4), To: tryCastExpr($6)}
   }
-| EXISTS subquery
+| EXISTS paren_subquery
   {
     $$ = &ExistsExpr{Subquery: $2.(*Subquery)}
+  }
+
+paren_subquery:
+  subquery
+  {
+    $$ = $1.(*Subquery)
+  }
+| openb paren_subquery closeb
+  {
+    $$ = $2.(*Subquery)
   }
 
 is_suffix:
