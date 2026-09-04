@@ -371,8 +371,8 @@ func tryCastStatement(v interface{}) Statement {
 %type <val> table_references cte_list from_opt
 %type <val> with_clause with_clause_opt
 %type <val> table_reference table_function table_factor join_table common_table_expression
-%type <val> values_statement subquery_or_values parenthesized_query_expression
-%type <val> subquery exists_subquery
+%type <val> values_statement subquery_or_values paren_query_expression
+%type <val> subquery paren_subquery
 %type <val> join_condition join_condition_opt on_expression_opt
 %type <val> table_name_list delete_table_list view_name_list
 %type <val> inner_join outer_join straight_join natural_join
@@ -912,7 +912,7 @@ cte_list:
   }
 
 common_table_expression:
-  table_alias ins_column_list_opt AS parenthesized_query_expression
+  table_alias ins_column_list_opt AS paren_query_expression
   {
     $$ = &CommonTableExpr{
       &AliasedTableExpr{
@@ -923,12 +923,12 @@ common_table_expression:
     $2.(Columns)}
   }
 
-parenthesized_query_expression:
+paren_query_expression:
   subquery_or_values
   {
     $$ = $1.(SimpleTableExpr)
   }
-| openb parenthesized_query_expression closeb
+| openb paren_query_expression closeb
   {
     $$ = $2.(SimpleTableExpr)
   }
@@ -8366,7 +8366,7 @@ table_factor:
   {
     $$ = $1.(*AliasedTableExpr)
   }
-| parenthesized_query_expression as_opt table_alias column_list_opt
+| paren_query_expression as_opt table_alias column_list_opt
   {
     switch n := $1.(SimpleTableExpr).(type) {
     case *Subquery:
@@ -8381,7 +8381,7 @@ table_factor:
       Auth: AuthInformation{AuthType: AuthType_IGNORE},
     }
   }
-| LATERAL parenthesized_query_expression as_opt table_alias column_list_opt
+| LATERAL paren_query_expression as_opt table_alias column_list_opt
   {
     switch n := $2.(SimpleTableExpr).(type) {
     case *Subquery:
@@ -8396,13 +8396,13 @@ table_factor:
       Auth: AuthInformation{AuthType: AuthType_IGNORE},
     }
   }
-| parenthesized_query_expression %prec PREFER_PARENTHESES
+| paren_query_expression %prec PREFER_PARENTHESES
   {
     // missed alias for subquery
     yylex.Error("Every derived table must have its own alias")
     return 1
   }
-| LATERAL parenthesized_query_expression %prec PREFER_PARENTHESES
+| LATERAL paren_query_expression %prec PREFER_PARENTHESES
   {
     // missed alias for subquery
     yylex.Error("Every derived table must have its own alias")
@@ -9031,17 +9031,17 @@ condition:
   {
     $$ = &RangeCond{Left: tryCastExpr($1), Operator: NotBetweenStr, From: tryCastExpr($4), To: tryCastExpr($6)}
   }
-| EXISTS exists_subquery
+| EXISTS paren_subquery
   {
     $$ = &ExistsExpr{Subquery: $2.(*Subquery)}
   }
 
-exists_subquery:
+paren_subquery:
   subquery
   {
     $$ = $1.(*Subquery)
   }
-| openb exists_subquery closeb
+| openb paren_subquery closeb
   {
     $$ = $2.(*Subquery)
   }
