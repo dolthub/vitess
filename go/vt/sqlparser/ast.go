@@ -3772,6 +3772,10 @@ type IndexField struct {
 	Expression Expr
 	Length     *SQLVal
 	Order      string
+	// NullsOrder is NullsFirstStr, NullsLastStr, or empty for the engine's default NULL placement.
+	NullsOrder string
+	// OpClass is the operator class of the field, for dialects that support one.
+	OpClass string
 }
 
 // walkIndexFields walks each field in an index field list, visiting the field's Expression when
@@ -7166,12 +7170,20 @@ func (node OrderBy) walkSubtree(visit Visit) error {
 type Order struct {
 	Expr      Expr
 	Direction string
+	// NullsOrder is NullsFirstStr, NullsLastStr, or empty for the engine's default NULL placement.
+	NullsOrder string
 }
 
 // Order.Direction
 const (
 	AscScr  = "asc"
 	DescScr = "desc"
+)
+
+// Order.NullsOrder and IndexField.NullsOrder
+const (
+	NullsFirstStr = "nulls first"
+	NullsLastStr  = "nulls last"
 )
 
 // Format formats the node.
