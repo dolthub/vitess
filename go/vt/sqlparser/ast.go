@@ -179,6 +179,25 @@ func parseTokenizer(sql string, tokenizer *Tokenizer) (Statement, error) {
 	return tokenizer.ParseTree, nil
 }
 
+// ParseOnUpdateClause parses |s| as a bare column ON UPDATE
+// clause and returns its canonical update value.
+//
+// The value is always CURRENT_TIMESTAMP, with optional fractional
+// seconds precision appended for non-zero precision (e.g. "(3)").
+// Grammar synonyms (now, localtime, localtimestamp) all produce
+// the same canonical value.
+func ParseOnUpdateClause(s string) (string, error) {
+	tokenizer := NewStringTokenizer(s)
+	tokenizer.allowOnUpdateClause = true
+	if yyParsePooled(tokenizer) != 0 {
+		return "", tokenizer.LastError
+	}
+	if tokenizer.onUpdateExpr == nil {
+		return "", fmt.Errorf("could not parse ON UPDATE %q", s)
+	}
+	return String(tokenizer.onUpdateExpr), nil
+}
+
 // For select statements, capture the verbatim select expressions from the original query text.
 // It searches select expressions in walkable nodes.
 func captureSelectExpressions(sql string, tokenizer *Tokenizer) {
@@ -5759,6 +5778,7 @@ func (*UnaryExpr) iExpr()         {}
 func (*IntervalExpr) iExpr()      {}
 func (*CollateExpr) iExpr()       {}
 func (*FuncExpr) iExpr()          {}
+func (*CurTimeOnUpdate) iExpr()   {}
 func (*TimestampFuncExpr) iExpr() {}
 func (*ExtractFuncExpr) iExpr()   {}
 func (*CaseExpr) iExpr()          {}
@@ -6689,6 +6709,47 @@ func (node *FuncExpr) replace(from, to Expr) bool {
 		}
 	}
 	return false
+}
+
+// CurTimeOnUpdate represents a canonical ON UPDATE CURRENT_TIMESTAMP[(fsp)]
+// expression, where fsp is optional fractional seconds precision.
+type CurTimeOnUpdate struct {
+	Expr *FuncExpr
+}
+
+// Format formats the node into |buf|.
+func (node *CurTimeOnUpdate) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	buf.Myprintf("CURRENT_TIMESTAMP")
+	if node.Expr != nil && len(node.Expr.Exprs) > 0 {
+		if aliased, ok := node.Expr.Exprs[0].(*AliasedExpr); ok {
+			if val, ok := aliased.Expr.(*SQLVal); ok {
+				if fsp := strings.TrimLeft(string(val.Val), "0"); fsp != "" {
+					buf.Myprintf("(%s)", fsp)
+				}
+			}
+		}
+	}
+}
+
+func (node *CurTimeOnUpdate) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(visit, node.Expr)
+}
+
+func (node *CurTimeOnUpdate) replace(from, to Expr) bool {
+	if node == nil || node.Expr == nil {
+		return false
+	}
+	if expr, ok := to.(*FuncExpr); ok && node.Expr == from {
+		node.Expr = expr
+		return true
+	}
+	return node.Expr.replace(from, to)
 }
 
 // Aggregates is a map of all aggregate functions.

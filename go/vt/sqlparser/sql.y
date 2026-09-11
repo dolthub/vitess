@@ -392,7 +392,7 @@ func tryCastStatement(v interface{}) Statement {
 %type <val> value value_expression num_val as_of_opt limit_val integral_or_interval_expr timestamp_value
 %type <bytes> time_unit non_microsecond_time_unit date_datetime_time_timestamp
 %type <val> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
-%type <val> func_datetime_prec_opt function_call_window function_call_aggregate_with_window function_call_on_update
+%type <val> func_datetime_prec_opt function_call_window function_call_aggregate_with_window function_call_on_update function_call_on_update_opt_paren
 %type <val> is_suffix
 %type <val> col_tuple
 %type <val> expression_list group_by_list partition_by_opt
@@ -616,6 +616,15 @@ command:
 | flush_statement
 | purge_binary_logs_statement
 | binlog_statement
+| function_call_on_update_opt_paren
+{
+  if !yylex.(*Tokenizer).allowOnUpdateClause {
+    yylex.Error("syntax error")
+    return 1
+  }
+  yylex.(*Tokenizer).onUpdateExpr = &CurTimeOnUpdate{Expr: tryCastExpr($1).(*FuncExpr)}
+  $$ = nil
+}
 | comment_list
 {
   setParseTree(yylex, nil)
@@ -4216,7 +4225,7 @@ column_default:
   }
 
 on_update:
-  ON UPDATE function_call_on_update
+  ON UPDATE function_call_on_update_opt_paren
   {
     $$ = tryCastExpr($3)
   }
@@ -9654,6 +9663,16 @@ function_call_on_update:
 | LOCALTIMESTAMP func_datetime_prec_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: tryCastExpr($2)}}}
+  }
+
+function_call_on_update_opt_paren:
+  function_call_on_update
+  {
+    $$ = tryCastExpr($1)
+  }
+| openb function_call_on_update closeb
+  {
+    $$ = tryCastExpr($2)
   }
 
 // Optional parens for certain keyword functions that don't require them.

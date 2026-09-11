@@ -7584,6 +7584,55 @@ var sampleGeoColumns = []string{
 	"	col_multipolygon2 multipolygon not null",
 }
 
+func TestParseOnUpdateClause(t *testing.T) {
+	testCases := []struct {
+		input   string
+		want    string
+		wantErr bool
+	}{
+		{"CURRENT_TIMESTAMP", "CURRENT_TIMESTAMP", false},
+		{"current_timestamp", "CURRENT_TIMESTAMP", false},
+		{"CURRENT_TIMESTAMP()", "CURRENT_TIMESTAMP", false},
+		{"CURRENT_TIMESTAMP(0)", "CURRENT_TIMESTAMP", false},
+		{"CURRENT_TIMESTAMP(00)", "CURRENT_TIMESTAMP", false},
+		{"CURRENT_TIMESTAMP(6)", "CURRENT_TIMESTAMP(6)", false},
+		{"CURRENT_TIMESTAMP(06)", "CURRENT_TIMESTAMP(6)", false},
+		{"NOW()", "CURRENT_TIMESTAMP", false},
+		{"now(0)", "CURRENT_TIMESTAMP", false},
+		{"now(003)", "CURRENT_TIMESTAMP(3)", false},
+		{"now(3)", "CURRENT_TIMESTAMP(3)", false},
+		{"LOCALTIME", "CURRENT_TIMESTAMP", false},
+		{"localtimestamp(2)", "CURRENT_TIMESTAMP(2)", false},
+		{"(CURRENT_TIMESTAMP)", "CURRENT_TIMESTAMP", false},
+		{"CURRENT_TIMESTAMPS", "", true},
+		{"1", "", true},
+		{"", "", true},
+	}
+	for _, tc := range testCases {
+		got, err := ParseOnUpdateClause(tc.input)
+		if tc.wantErr {
+			if err == nil {
+				t.Errorf("ParseOnUpdateClause(%q) succeeded, want error", tc.input)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("ParseOnUpdateClause(%q) returned error: %v", tc.input, err)
+			continue
+		}
+		if got != tc.want {
+			t.Errorf("ParseOnUpdateClause(%q) = %q, want %q", tc.input, got, tc.want)
+		}
+	}
+	// A bare fragment is only accepted in fragment mode;
+	// normal statement parsing must still reject it.
+	for _, input := range []string{"CURRENT_TIMESTAMP", "ON UPDATE CURRENT_TIMESTAMP"} {
+		if _, err := Parse(input); err == nil {
+			t.Errorf("Parse(%q) succeeded, want error", input)
+		}
+	}
+}
+
 func TestCreateTable(t *testing.T) {
 	var createStatement strings.Builder
 	createStatement.WriteString("create table t (\n")
