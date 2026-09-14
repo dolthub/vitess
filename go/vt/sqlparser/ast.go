@@ -4619,6 +4619,9 @@ type ChangeReplicationFilter struct {
 	Options []*ReplicationOption
 }
 
+// StringList represents an ordered list of string-values.
+type StringList []string
+
 var _ Statement = (*ChangeReplicationFilter)(nil)
 var _ AuthNode = (*ChangeReplicationFilter)(nil)
 
@@ -4639,6 +4642,13 @@ func (c *ChangeReplicationFilter) Format(buf *TrackedBuffer) {
 					buf.WriteString(", ")
 				}
 				buf.WriteString(tableName.String())
+			}
+		case StringList:
+			for i, pattern := range value {
+				if i > 0 {
+					buf.WriteString(", ")
+				}
+				NewStrVal([]byte(pattern)).Format(buf)
 			}
 		default:
 			panic(fmt.Sprintf("unexpected option value type: %T", option.Value))
