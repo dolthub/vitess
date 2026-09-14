@@ -5769,6 +5769,7 @@ func (*UnaryExpr) iExpr()         {}
 func (*IntervalExpr) iExpr()      {}
 func (*CollateExpr) iExpr()       {}
 func (*FuncExpr) iExpr()          {}
+func (*OnUpdateExpr) iExpr()      {}
 func (*TimestampFuncExpr) iExpr() {}
 func (*ExtractFuncExpr) iExpr()   {}
 func (*CaseExpr) iExpr()          {}
@@ -6698,6 +6699,38 @@ func (node *FuncExpr) replace(from, to Expr) bool {
 			return true
 		}
 	}
+	return false
+}
+
+// OnUpdateExpr represents a CURRENT_TIMESTAMP[(fsp)] expression in an
+// ON UPDATE clause of a column definition.
+//
+// NOW, CURRENT_TIMESTAMP, LOCALTIME, and LOCALTIMESTAMP are accepted
+// as synonyms in this expression, but normalized to CURRENT_TIMESTAMP.
+// See the [MySQL Reference Manual].
+//
+// [MySQL Reference Manual]: https://dev.mysql.com/doc/refman/8.4/en/timestamp-initialization.html
+type OnUpdateExpr struct {
+	Precision int
+}
+
+// Format formats the node.
+func (node *OnUpdateExpr) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	if node.Precision > 0 {
+		buf.Myprintf("CURRENT_TIMESTAMP(%s)", strconv.Itoa(node.Precision))
+	} else {
+		buf.WriteString("CURRENT_TIMESTAMP")
+	}
+}
+
+func (node *OnUpdateExpr) walkSubtree(visit Visit) error {
+	return nil
+}
+
+func (node *OnUpdateExpr) replace(from, to Expr) bool {
 	return false
 }
 
