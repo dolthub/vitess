@@ -393,7 +393,7 @@ func tryCastStatement(v interface{}) Statement {
 %type <val> value value_expression num_val as_of_opt limit_val integral_or_interval_expr timestamp_value
 %type <bytes> time_unit non_microsecond_time_unit date_datetime_time_timestamp
 %type <val> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
-%type <val> func_datetime_prec_opt function_call_window function_call_aggregate_with_window on_update_fn on_update_prec_opt
+%type <val> func_datetime_prec_opt function_call_window function_call_aggregate_with_window on_update_fn
 %type <val> is_suffix
 %type <val> col_tuple
 %type <val> expression_list group_by_list partition_by_opt
@@ -4219,45 +4219,33 @@ column_default:
 on_update:
   ON UPDATE on_update_fn
   {
-    $$ = &OnUpdateExpr{Precision: $3.(int)}
+    $$ = $3
   }
 
 on_update_fn:
   NOW openb closeb
   {
-    $$ = 0
+    $$ = &OnUpdateExpr{Precision: 0}
   }
 | NOW openb INTEGRAL closeb
   {
     p, _ := strconv.Atoi(string($3))
-    $$ = p
+    $$ = &OnUpdateExpr{Precision: p}
   }
-| CURRENT_TIMESTAMP on_update_prec_opt
+| CURRENT_TIMESTAMP func_datetime_prec_opt
   {
-    $$ = $2
+    p, _ := strconv.Atoi(string($2.(*SQLVal).Val))
+    $$ = &OnUpdateExpr{Precision: p}
   }
-| LOCALTIME on_update_prec_opt
+| LOCALTIME func_datetime_prec_opt
   {
-    $$ = $2
+    p, _ := strconv.Atoi(string($2.(*SQLVal).Val))
+    $$ = &OnUpdateExpr{Precision: p}
   }
-| LOCALTIMESTAMP on_update_prec_opt
+| LOCALTIMESTAMP func_datetime_prec_opt
   {
-    $$ = $2
-  }
-
-on_update_prec_opt:
-  /* empty */
-  {
-    $$ = 0
-  }
-| openb closeb
-  {
-    $$ = 0
-  }
-| openb INTEGRAL closeb
-  {
-    p, _ := strconv.Atoi(string($2))
-    $$ = p
+    p, _ := strconv.Atoi(string($2.(*SQLVal).Val))
+    $$ = &OnUpdateExpr{Precision: p}
   }
 
 auto_increment:
