@@ -3094,57 +3094,57 @@ var (
 			input: "drop trigger if exists dbName.trigger3",
 		}, {
 			input:  "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
-			output: "create table t (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
+			output: "create table t (\n\tc int not null default 0 on update CURRENT_TIMESTAMP auto_increment comment 'a comment here' unique\n)",
 		}, {
 			input:  "create table t (c int null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
-			output: "create table t (\n\tc int default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
+			output: "create table t (\n\tc int default 0 on update CURRENT_TIMESTAMP auto_increment comment 'a comment here' unique\n)",
 		}, {
 			input:  "create table t (c INT NOT NULL DEFAULT 0 ON UPDATE current_timestamp() AUTO_INCREMENT COMMENT 'a comment here' UNIQUE)",
-			output: "create table t (\n\tc INT not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
+			output: "create table t (\n\tc INT not null default 0 on update CURRENT_TIMESTAMP auto_increment comment 'a comment here' unique\n)",
 		}, {
 			// Same input with options backwards.
 			input:  "create table t (c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null)",
-			output: "create table t (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
+			output: "create table t (\n\tc int not null default 0 on update CURRENT_TIMESTAMP auto_increment comment 'a comment here' unique\n)",
 		}, {
 			// Transpose pairs in original
 			input:  "create table t (c int default 0 not null auto_increment on update current_timestamp() unique comment 'a comment here')",
-			output: "create table t (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
+			output: "create table t (\n\tc int not null default 0 on update CURRENT_TIMESTAMP auto_increment comment 'a comment here' unique\n)",
 		}, {
 			// Transpose pairs in reversed
 			input:  "create table t (c int comment 'a comment here' unique on update current_timestamp() auto_increment not null default 0)",
-			output: "create table t (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
+			output: "create table t (\n\tc int not null default 0 on update CURRENT_TIMESTAMP auto_increment comment 'a comment here' unique\n)",
 		}, {
 			// Those tests for ALTER TABLE ADD (...
 			input:  "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
-			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
+			output: "alter table t add column (\n\tc int not null default 0 on update CURRENT_TIMESTAMP auto_increment comment 'a comment here' unique\n)",
 		}, {
 			input:  "alter table t add (c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null)",
-			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
+			output: "alter table t add column (\n\tc int not null default 0 on update CURRENT_TIMESTAMP auto_increment comment 'a comment here' unique\n)",
 		}, {
 			input:  "alter table t add (c int default 0 not null auto_increment on update current_timestamp() unique comment 'a comment here')",
-			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
+			output: "alter table t add column (\n\tc int not null default 0 on update CURRENT_TIMESTAMP auto_increment comment 'a comment here' unique\n)",
 		}, {
 			input:  "alter table t add (c int comment 'a comment here' unique on update current_timestamp() auto_increment not null default 0)",
-			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
+			output: "alter table t add column (\n\tc int not null default 0 on update CURRENT_TIMESTAMP auto_increment comment 'a comment here' unique\n)",
 		}, {
 			// Those tests for ALTER TABLE ADD COLUMN name ...
 			input:  "alter table t add column c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique",
-			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
+			output: "alter table t add column (\n\tc int not null default 0 on update CURRENT_TIMESTAMP auto_increment comment 'a comment here' unique\n)",
 		}, {
 			input:  "alter table t add column c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null",
-			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
+			output: "alter table t add column (\n\tc int not null default 0 on update CURRENT_TIMESTAMP auto_increment comment 'a comment here' unique\n)",
 		}, {
 			input:  "alter table t add column c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null after foo",
-			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n) after foo",
+			output: "alter table t add column (\n\tc int not null default 0 on update CURRENT_TIMESTAMP auto_increment comment 'a comment here' unique\n) after foo",
 		}, {
 			input:  "alter table t add column c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null first",
-			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n) first",
+			output: "alter table t add column (\n\tc int not null default 0 on update CURRENT_TIMESTAMP auto_increment comment 'a comment here' unique\n) first",
 		}, {
 			input:  "alter table t add column c int default 0 not null auto_increment on update current_timestamp() unique comment 'a comment here'",
-			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
+			output: "alter table t add column (\n\tc int not null default 0 on update CURRENT_TIMESTAMP auto_increment comment 'a comment here' unique\n)",
 		}, {
 			input:  "alter table t add column c int comment 'a comment here' unique on update current_timestamp() auto_increment not null default 0",
-			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n)",
+			output: "alter table t add column (\n\tc int not null default 0 on update CURRENT_TIMESTAMP auto_increment comment 'a comment here' unique\n)",
 		}, {
 			input:  "alter table t change foo bar int not null auto_increment first",
 			output: "alter table t change column foo (\n\tbar int not null auto_increment\n) first",
@@ -3153,7 +3153,7 @@ var (
 			output: "alter table test change column v1 (\n\tv2 varchar(255) character set utf8mb4 binary not null\n)",
 		}, {
 			input:  "alter table a modify foo int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null after bar",
-			output: "alter table a modify column foo (\n\tfoo int not null default 0 on update current_timestamp(0) auto_increment comment 'a comment here' unique\n) after bar",
+			output: "alter table a modify column foo (\n\tfoo int not null default 0 on update CURRENT_TIMESTAMP auto_increment comment 'a comment here' unique\n) after bar",
 		}, {
 			input:  "alter table t alter foo set default 5",
 			output: "alter table t alter column foo set default 5",
@@ -7584,52 +7584,79 @@ var sampleGeoColumns = []string{
 	"	col_multipolygon2 multipolygon not null",
 }
 
-func TestParseOnUpdateClause(t *testing.T) {
-	testCases := []struct {
-		input   string
-		want    string
-		wantErr bool
-	}{
-		{"CURRENT_TIMESTAMP", "CURRENT_TIMESTAMP", false},
-		{"current_timestamp", "CURRENT_TIMESTAMP", false},
-		{"CURRENT_TIMESTAMP()", "CURRENT_TIMESTAMP", false},
-		{"CURRENT_TIMESTAMP(0)", "CURRENT_TIMESTAMP", false},
-		{"CURRENT_TIMESTAMP(00)", "CURRENT_TIMESTAMP", false},
-		{"CURRENT_TIMESTAMP(6)", "CURRENT_TIMESTAMP(6)", false},
-		{"CURRENT_TIMESTAMP(06)", "CURRENT_TIMESTAMP(6)", false},
-		{"NOW()", "CURRENT_TIMESTAMP", false},
-		{"now(0)", "CURRENT_TIMESTAMP", false},
-		{"now(003)", "CURRENT_TIMESTAMP(3)", false},
-		{"now(3)", "CURRENT_TIMESTAMP(3)", false},
-		{"LOCALTIME", "CURRENT_TIMESTAMP", false},
-		{"localtimestamp(2)", "CURRENT_TIMESTAMP(2)", false},
-		{"(CURRENT_TIMESTAMP)", "CURRENT_TIMESTAMP", false},
-		{"CURRENT_TIMESTAMPS", "", true},
-		{"1", "", true},
-		{"", "", true},
+func TestOnUpdate(t *testing.T) {
+	validSQL := []parseTest{
+		{
+			input:  "create table t (c timestamp on update CURRENT_TIMESTAMP)",
+			output: "create table t (\n\tc timestamp on update CURRENT_TIMESTAMP\n)",
+		},
+		{
+			input:  "create table t (c timestamp on update current_timestamp)",
+			output: "create table t (\n\tc timestamp on update CURRENT_TIMESTAMP\n)",
+		},
+		{
+			input:  "create table t (c timestamp on update CURRENT_TIMESTAMP())",
+			output: "create table t (\n\tc timestamp on update CURRENT_TIMESTAMP\n)",
+		},
+		{
+			input:  "create table t (c timestamp on update CURRENT_TIMESTAMP(0))",
+			output: "create table t (\n\tc timestamp on update CURRENT_TIMESTAMP\n)",
+		},
+		{
+			input:  "create table t (c timestamp on update CURRENT_TIMESTAMP(00))",
+			output: "create table t (\n\tc timestamp on update CURRENT_TIMESTAMP\n)",
+		},
+		{
+			input:  "create table t (c timestamp on update CURRENT_TIMESTAMP(6))",
+			output: "create table t (\n\tc timestamp on update CURRENT_TIMESTAMP(6)\n)",
+		},
+		{
+			input:  "create table t (c timestamp on update CURRENT_TIMESTAMP(06))",
+			output: "create table t (\n\tc timestamp on update CURRENT_TIMESTAMP(6)\n)",
+		},
+		{
+			input:  "create table t (c timestamp on update NOW())",
+			output: "create table t (\n\tc timestamp on update CURRENT_TIMESTAMP\n)",
+		},
+		{
+			input:  "create table t (c timestamp on update now(0))",
+			output: "create table t (\n\tc timestamp on update CURRENT_TIMESTAMP\n)",
+		},
+		{
+			input:  "create table t (c timestamp on update now(003))",
+			output: "create table t (\n\tc timestamp on update CURRENT_TIMESTAMP(3)\n)",
+		},
+		{
+			input:  "create table t (c timestamp on update now(3))",
+			output: "create table t (\n\tc timestamp on update CURRENT_TIMESTAMP(3)\n)",
+		},
+		{
+			input:  "create table t (c timestamp on update LOCALTIME)",
+			output: "create table t (\n\tc timestamp on update CURRENT_TIMESTAMP\n)",
+		},
+		{
+			input:  "create table t (c timestamp on update localtimestamp(2))",
+			output: "create table t (\n\tc timestamp on update CURRENT_TIMESTAMP(2)\n)",
+		},
 	}
-	for _, tc := range testCases {
-		got, err := ParseOnUpdateClause(tc.input)
-		if tc.wantErr {
-			if err == nil {
-				t.Errorf("ParseOnUpdateClause(%q) succeeded, want error", tc.input)
-			}
-			continue
-		}
-		if err != nil {
-			t.Errorf("ParseOnUpdateClause(%q) returned error: %v", tc.input, err)
-			continue
-		}
-		if got != tc.want {
-			t.Errorf("ParseOnUpdateClause(%q) = %q, want %q", tc.input, got, tc.want)
-		}
+	for _, tcase := range validSQL {
+		runParseTestCase(t, tcase)
 	}
-	// A bare fragment is only accepted in fragment mode;
-	// normal statement parsing must still reject it.
-	for _, input := range []string{"CURRENT_TIMESTAMP", "ON UPDATE CURRENT_TIMESTAMP"} {
-		if _, err := Parse(input); err == nil {
-			t.Errorf("Parse(%q) succeeded, want error", input)
-		}
+
+	invalidSQL := []string{
+		"create table t (c timestamp on update current_timestamps)",
+		"create table t (c timestamp on update 1)",
+		"create table t (c timestamp on update)",
+		"create table t (c timestamp on update now)",
+		"create table t (c timestamp on update now(1, 2))",
+		"create table t (c timestamp on update (current_timestamp))",
+		"create table t (c timestamp on update (now(4)))",
+	}
+	for _, sql := range invalidSQL {
+		t.Run(sql, func(t *testing.T) {
+			_, err := Parse(sql)
+			require.Error(t, err)
+		})
 	}
 }
 
@@ -7967,8 +7994,8 @@ func TestCreateTable(t *testing.T) {
 				"	username varchar unique key,\n" +
 				"	email varchar unique,\n" +
 				"	full_name varchar key,\n" +
-				"	time1 timestamp on update current_timestamp(0),\n" +
-				"	time2 timestamp default current_timestamp(0) on update current_timestamp(0)\n" +
+				"	time1 timestamp on update CURRENT_TIMESTAMP,\n" +
+				"	time2 timestamp default current_timestamp(0) on update CURRENT_TIMESTAMP\n" +
 				")",
 		},
 		{
@@ -8019,8 +8046,8 @@ func TestCreateTable(t *testing.T) {
 				")",
 			output: "create table t (\n" +
 				"	time1 timestamp default now(),\n" +
-				"	time2 timestamp default now() on update now(),\n" +
-				"	time3 timestamp(3) default now(3) on update now(3)\n" +
+				"	time2 timestamp default now() on update CURRENT_TIMESTAMP,\n" +
+				"	time3 timestamp(3) default now(3) on update CURRENT_TIMESTAMP(3)\n" +
 				")",
 		},
 		{
@@ -8035,9 +8062,9 @@ func TestCreateTable(t *testing.T) {
 			output: "create table t (\n" +
 				"	time1 timestamp default current_timestamp(0),\n" +
 				"	time2 timestamp default current_timestamp(0),\n" +
-				"	time3 timestamp default current_timestamp(0) on update current_timestamp(0),\n" +
-				"	time4 timestamp default current_timestamp(0) on update current_timestamp(0),\n" +
-				"	time5 timestamp(3) default current_timestamp(3) on update current_timestamp(3)\n" +
+				"	time3 timestamp default current_timestamp(0) on update CURRENT_TIMESTAMP,\n" +
+				"	time4 timestamp default current_timestamp(0) on update CURRENT_TIMESTAMP,\n" +
+				"	time5 timestamp(3) default current_timestamp(3) on update CURRENT_TIMESTAMP(3)\n" +
 				")",
 		},
 		{
@@ -8118,9 +8145,9 @@ func TestCreateTable(t *testing.T) {
 			output: "create table t (\n" +
 				"	time1 timestamp default localtime(0),\n" +
 				"	time2 timestamp default localtime(0),\n" +
-				"	time3 timestamp default localtime(0) on update localtime(0),\n" +
-				"	time4 timestamp default localtime(0) on update localtime(0),\n" +
-				"	time5 timestamp(6) default localtime(6) on update localtime(6)\n" +
+				"	time3 timestamp default localtime(0) on update CURRENT_TIMESTAMP,\n" +
+				"	time4 timestamp default localtime(0) on update CURRENT_TIMESTAMP,\n" +
+				"	time5 timestamp(6) default localtime(6) on update CURRENT_TIMESTAMP(6)\n" +
 				")",
 		},
 		{
@@ -8135,9 +8162,9 @@ func TestCreateTable(t *testing.T) {
 			output: "create table t (\n" +
 				"	time1 timestamp default localtimestamp(0),\n" +
 				"	time2 timestamp default localtimestamp(0),\n" +
-				"	time3 timestamp default localtimestamp(0) on update localtimestamp(0),\n" +
-				"	time4 timestamp default localtimestamp(0) on update localtimestamp(0),\n" +
-				"	time5 timestamp(1) default localtimestamp(1) on update localtimestamp(1)\n" +
+				"	time3 timestamp default localtimestamp(0) on update CURRENT_TIMESTAMP,\n" +
+				"	time4 timestamp default localtimestamp(0) on update CURRENT_TIMESTAMP,\n" +
+				"	time5 timestamp(1) default localtimestamp(1) on update CURRENT_TIMESTAMP(1)\n" +
 				")",
 		},
 		{

@@ -18,6 +18,7 @@ limitations under the License.
 package sqlparser
 
 import "fmt"
+import "strconv"
 import "strings"
 //import "runtime/debug"
 
@@ -392,7 +393,7 @@ func tryCastStatement(v interface{}) Statement {
 %type <val> value value_expression num_val as_of_opt limit_val integral_or_interval_expr timestamp_value
 %type <bytes> time_unit non_microsecond_time_unit date_datetime_time_timestamp
 %type <val> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
-%type <val> func_datetime_prec_opt function_call_window function_call_aggregate_with_window function_call_on_update function_call_on_update_opt_paren
+%type <val> func_datetime_prec_opt function_call_window function_call_aggregate_with_window on_update_fn on_update_prec_opt
 %type <val> is_suffix
 %type <val> col_tuple
 %type <val> expression_list group_by_list partition_by_opt
@@ -616,15 +617,6 @@ command:
 | flush_statement
 | purge_binary_logs_statement
 | binlog_statement
-| function_call_on_update_opt_paren
-{
-  if !yylex.(*Tokenizer).allowOnUpdateClause {
-    yylex.Error("syntax error")
-    return 1
-  }
-  yylex.(*Tokenizer).onUpdateExpr = &CurTimeOnUpdate{Expr: tryCastExpr($1).(*FuncExpr)}
-  $$ = nil
-}
 | comment_list
 {
   setParseTree(yylex, nil)
@@ -4225,9 +4217,47 @@ column_default:
   }
 
 on_update:
-  ON UPDATE function_call_on_update_opt_paren
+  ON UPDATE on_update_fn
   {
-    $$ = tryCastExpr($3)
+    $$ = &OnUpdateExpr{Precision: $3.(int)}
+  }
+
+on_update_fn:
+  NOW openb closeb
+  {
+    $$ = 0
+  }
+| NOW openb INTEGRAL closeb
+  {
+    p, _ := strconv.Atoi(string($3))
+    $$ = p
+  }
+| CURRENT_TIMESTAMP on_update_prec_opt
+  {
+    $$ = $2
+  }
+| LOCALTIME on_update_prec_opt
+  {
+    $$ = $2
+  }
+| LOCALTIMESTAMP on_update_prec_opt
+  {
+    $$ = $2
+  }
+
+on_update_prec_opt:
+  /* empty */
+  {
+    $$ = 0
+  }
+| openb closeb
+  {
+    $$ = 0
+  }
+| openb INTEGRAL closeb
+  {
+    p, _ := strconv.Atoi(string($2))
+    $$ = p
   }
 
 auto_increment:
@@ -9608,9 +9638,25 @@ function_call_nonkeyword:
     $$ = &FuncExpr{Name: NewColIdent(string($1))}
   }
 // functions that can be called with optional second argument
-| function_call_on_update
+| NOW openb closeb
   {
-    $$ = tryCastExpr($1)
+    $$ = &FuncExpr{Name: NewColIdent(string($1))}
+  }
+| NOW openb INTEGRAL closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: NewIntVal($3)}}}
+  }
+| CURRENT_TIMESTAMP func_datetime_prec_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: tryCastExpr($2)}}}
+  }
+| LOCALTIME func_datetime_prec_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: tryCastExpr($2)}}}
+  }
+| LOCALTIMESTAMP func_datetime_prec_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: tryCastExpr($2)}}}
   }
 | CURRENT_TIME func_datetime_prec_opt
   {
@@ -9639,40 +9685,6 @@ function_call_nonkeyword:
 | GET_FORMAT openb date_datetime_time_timestamp ',' value_expression closeb
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: NewStrVal($3)}, &AliasedExpr{Expr: tryCastExpr($5)}}}
-  }
-
-// functions that can be used with the ON UPDATE clause
-function_call_on_update:
-  // NOW is special; it can't be called without parentheses
-  NOW openb closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1))}
-  }
-| NOW openb INTEGRAL closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: NewIntVal($3)}}}
-  }
-| CURRENT_TIMESTAMP func_datetime_prec_opt
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: tryCastExpr($2)}}}
-  }
-| LOCALTIME func_datetime_prec_opt
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: tryCastExpr($2)}}}
-  }
-| LOCALTIMESTAMP func_datetime_prec_opt
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{&AliasedExpr{Expr: tryCastExpr($2)}}}
-  }
-
-function_call_on_update_opt_paren:
-  function_call_on_update
-  {
-    $$ = tryCastExpr($1)
-  }
-| openb function_call_on_update closeb
-  {
-    $$ = tryCastExpr($2)
   }
 
 // Optional parens for certain keyword functions that don't require them.

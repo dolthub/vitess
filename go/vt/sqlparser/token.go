@@ -81,10 +81,6 @@ type Tokenizer struct {
 	SkipSpecialComments  bool
 	AllowComments        bool
 	PipesAsConcat        bool
-	// allowOnUpdateClause gates parsing of a bare ON UPDATE clause.
-	allowOnUpdateClause bool
-	// onUpdateExpr holds the parsed expression of a bare ON UPDATE clause.
-	onUpdateExpr Expr
 }
 
 var defaultIdQuotes = map[uint16]struct{}{backtickQuote: {}}
