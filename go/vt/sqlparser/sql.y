@@ -205,7 +205,7 @@ func tryCastStatement(v interface{}) Statement {
 // Replication Tokens
 %token <bytes> REPLICA REPLICAS SOURCE STOP RESET FILTER LOG MASTER
 %token <bytes> SOURCE_HOST SOURCE_SSL SOURCE_USER SOURCE_PASSWORD SOURCE_PORT SOURCE_CONNECT_RETRY SOURCE_RETRY_COUNT SOURCE_AUTO_POSITION
-%token <bytes> REPLICATE_DO_TABLE REPLICATE_IGNORE_TABLE
+%token <bytes> REPLICATE_DO_TABLE REPLICATE_IGNORE_TABLE REPLICATE_WILD_DO_TABLE REPLICATE_WILD_IGNORE_TABLE
 %token <bytes> IO_THREAD SQL_THREAD
 
 // Transaction Tokens
@@ -496,7 +496,7 @@ func tryCastStatement(v interface{}) Statement {
 %type <val> flush_option
 %type <val> flush_tables_read_lock_opt
 %type <val> replication_option_list replication_filter_option_list
-%type <val> replication_option replication_filter_option
+%type <val> replication_option replication_filter_option wild_table_filter_list_opt wild_table_filter_list
 %type <val> relay_logs_attribute
 %type <val> foreign_key_details check_constraint_info
 %type <val> partition_definitions partition_definitions_opt
@@ -4684,6 +4684,33 @@ replication_filter_option:
 | REPLICATE_IGNORE_TABLE '=' '(' table_name_list ')'
   {
     $$ = &ReplicationOption{Name: string($1), Value: $4.(TableNames)}
+  }
+| REPLICATE_WILD_DO_TABLE '=' '(' wild_table_filter_list_opt ')'
+  {
+    $$ = &ReplicationOption{Name: string($1), Value: $4.(StringList)}
+  }
+| REPLICATE_WILD_IGNORE_TABLE '=' '(' wild_table_filter_list_opt ')'
+  {
+    $$ = &ReplicationOption{Name: string($1), Value: $4.(StringList)}
+  }
+
+wild_table_filter_list_opt:
+  {
+    $$ = StringList{}
+  }
+| wild_table_filter_list
+  {
+    $$ = $1
+  }
+
+wild_table_filter_list:
+  STRING
+  {
+    $$ = StringList{string($1)}
+  }
+| wild_table_filter_list ',' STRING
+  {
+    $$ = append($1.(StringList), string($3))
   }
 
 index_definition:
@@ -11859,6 +11886,8 @@ non_reserved_keyword:
 | REPLICAS
 | REPLICATE_DO_TABLE
 | REPLICATE_IGNORE_TABLE
+| REPLICATE_WILD_DO_TABLE
+| REPLICATE_WILD_IGNORE_TABLE
 | REPLICATION
 | REQUIRE_ROW_FORMAT
 | RESET

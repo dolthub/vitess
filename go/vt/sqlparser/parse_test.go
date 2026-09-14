@@ -214,6 +214,14 @@ var (
 			output: "change replication filter replicate_do_table = (db1.t1, db2.t2), replicate_ignore_table = (db1.t1, db2.t2)",
 		},
 		{
+			input:  "change replication filter REPLICATE_WILD_DO_TABLE=('db%.table_', 'db2.literal\\\\%', 'db.O''Brien'), REPLICATE_WILD_IGNORE_TABLE=('archive\\\\_.%', 'db3.literal\\\\_', 'δοκιμή.%')",
+			output: "change replication filter replicate_wild_do_table = ('db%.table_', 'db2.literal\\\\%', 'db.O\\'Brien'), replicate_wild_ignore_table = ('archive\\\\_.%', 'db3.literal\\\\_', 'δοκιμή.%')",
+		},
+		{
+			input:  "change replication filter REPLICATE_WILD_DO_TABLE=(), REPLICATE_WILD_IGNORE_TABLE=()",
+			output: "change replication filter replicate_wild_do_table = (), replicate_wild_ignore_table = ()",
+		},
+		{
 			input: "reset replica",
 		},
 		{
@@ -6167,6 +6175,14 @@ func TestInvalid(t *testing.T) {
 		},
 		{
 			input: "change replication filter REPLICATE_DO_TABLE=()",
+			err:   "syntax error",
+		},
+		{
+			input: "CHANGE REPLICATION FILTER REPLICATE_WILD_DO_TABLE=(db.%)",
+			err:   "syntax error",
+		},
+		{
+			input: "CHANGE REPLICATION FILTER REPLICATE_WILD_IGNORE_TABLE=(db.%)",
 			err:   "syntax error",
 		},
 		{

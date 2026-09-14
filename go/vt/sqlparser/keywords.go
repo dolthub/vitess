@@ -513,6 +513,8 @@ var keywords = map[string]int{
 	"replicas":                      REPLICAS,
 	"replicate_do_table":            REPLICATE_DO_TABLE,
 	"replicate_ignore_table":        REPLICATE_IGNORE_TABLE,
+	"replicate_wild_do_table":       REPLICATE_WILD_DO_TABLE,
+	"replicate_wild_ignore_table":   REPLICATE_WILD_IGNORE_TABLE,
 	"replication":                   REPLICATION,
 	"replication_applier":           REPLICATION_APPLIER,
 	"replication_slave_admin":       REPLICATION_SLAVE_ADMIN,
