@@ -318,6 +318,21 @@ func TestExecutableComments(t *testing.T) {
 	}, {
 		input:  "/*M!100101 SET @@session.skip_parallel_replication=0*/",
 		outSQL: "set session skip_parallel_replication = 0",
+	}, {
+		input:  "/*DOLT! SELECT 1 */",
+		outSQL: "select 1",
+	}, {
+		input:  "/*dolt! SET @a=2 */",
+		outSQL: "set @a = 2",
+	}, {
+		input:  "SELECT /*DOLT! 1 + */ 2",
+		outSQL: "select 1 + 2",
+	}, {
+		input:  "SELECT 1 /*DOLT ordinary comment */",
+		outSQL: "select 1",
+	}, {
+		input:  "SELECT 1 /*dog! ordinary comment */",
+		outSQL: "select 1",
 	}}
 	for _, testCase := range testCases {
 		stmt, err := Parse(testCase.input)
