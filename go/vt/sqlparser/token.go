@@ -335,6 +335,19 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 				switch tkn.lastChar {
 				case '!':
 					return tkn.scanMySQLSpecificComment()
+				case 'D', 'd':
+					prefix := "/*"
+					for _, ch := range "dolt" {
+						if tkn.lastChar != uint16(ch) && tkn.lastChar != uint16(ch-'a'+'A') {
+							return tkn.scanCommentType2WithPrefix(prefix)
+						}
+						prefix += string(rune(tkn.lastChar))
+						tkn.next()
+					}
+					if tkn.lastChar == '!' {
+						return tkn.scanExecutableComment(prefix + "!")
+					}
+					return tkn.scanCommentType2WithPrefix(prefix)
 				case 'M':
 					tkn.next()
 					if tkn.lastChar == '!' {
@@ -746,8 +759,12 @@ func (tkn *Tokenizer) scanCommentType1(prefix string) (int, []byte) {
 }
 
 func (tkn *Tokenizer) scanCommentType2() (int, []byte) {
+	return tkn.scanCommentType2WithPrefix("/*")
+}
+
+func (tkn *Tokenizer) scanCommentType2WithPrefix(prefix string) (int, []byte) {
 	buffer := &bytes2.Buffer{}
-	buffer.WriteString("/*")
+	buffer.WriteString(prefix)
 	for {
 		if tkn.lastChar == '*' {
 			tkn.consumeNext(buffer)
