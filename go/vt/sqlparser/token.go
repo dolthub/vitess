@@ -710,7 +710,10 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 				// String terminates mid escape character.
 				return LEX_ERROR, buffer.Bytes()
 			}
-			if decodedChar := sqltypes.SQLDecodeMap[byte(tkn.lastChar)]; decodedChar == sqltypes.DontEscape {
+			if tkn.lastChar == '%' || tkn.lastChar == '_' {
+				buffer.WriteByte('\\')
+				ch = tkn.lastChar
+			} else if decodedChar := sqltypes.SQLDecodeMap[byte(tkn.lastChar)]; decodedChar == sqltypes.DontEscape {
 				ch = tkn.lastChar
 			} else {
 				ch = uint16(decodedChar)
