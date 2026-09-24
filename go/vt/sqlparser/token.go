@@ -710,7 +710,10 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 				// String terminates mid escape character.
 				return LEX_ERROR, buffer.Bytes()
 			}
-			if decodedChar := sqltypes.SQLDecodeMap[byte(tkn.lastChar)]; decodedChar == sqltypes.DontEscape {
+			if isPatternWildcard(tkn.lastChar) {
+				buffer.WriteByte('\\')
+				ch = tkn.lastChar
+			} else if decodedChar := sqltypes.SQLDecodeMap[byte(tkn.lastChar)]; decodedChar == sqltypes.DontEscape {
 				ch = tkn.lastChar
 			} else {
 				ch = uint16(decodedChar)
@@ -743,6 +746,12 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 	}
 
 	return typ, buffer.Bytes()
+}
+
+// isPatternWildcard reports whether |ch| is a pattern wildcard
+// (% or _) whose escape backslash must be kept in string literals.
+func isPatternWildcard(ch uint16) bool {
+	return ch == '%' || ch == '_'
 }
 
 func (tkn *Tokenizer) scanCommentType1(prefix string) (int, []byte) {
