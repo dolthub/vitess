@@ -811,7 +811,6 @@ with_select:
   {
     with := $2.(*With)
     selectStatement := $3.(SelectStatement)
-    handleCTEAuth(selectStatement, with)
     selectStatement.SetWith(with)
     $$ = selectStatement
   }
@@ -956,7 +955,6 @@ insert_statement:
     ins.OnDup = OnDup($8.(AssignmentExprs))
     ins.Returning = $9.(SelectExprs)
     with := $1.(*With)
-    handleCTEAuth(ins, with)
     ins.With = with
     $$ = ins
   }
@@ -982,7 +980,6 @@ insert_statement:
     ins.OnDup = OnDup($8.(AssignmentExprs))
     ins.Returning = $9.(SelectExprs)
     with := $1.(*With)
-    handleCTEAuth(ins, with)
     ins.With = with
     $$ = ins
   }
@@ -1016,7 +1013,6 @@ insert_statement:
 	},
     }
     with := $1.(*With)
-    handleCTEAuth(ins, with)
     ins.With = with
     $$ = ins
   }
@@ -1044,7 +1040,6 @@ update_statement:
 	Limit: $10.(*Limit),
     }
     with := $1.(*With)
-    handleCTEAuth(update, with)
     update.With = with
     $$ = update
   }
@@ -1069,7 +1064,6 @@ delete_statement:
 	Limit: $9.(*Limit),
     }
     with := $1.(*With)
-    handleCTEAuth(delete, with)
     delete.With = with
     $$ = delete
   }
@@ -1082,7 +1076,6 @@ delete_statement:
 	Where: NewWhere(WhereStr, tryCastExpr($8)),
     }
     with := $1.(*With)
-    handleCTEAuth(delete, with)
     delete.With = with
     $$ = delete
   }
@@ -1095,7 +1088,6 @@ delete_statement:
 	Where: NewWhere(WhereStr, tryCastExpr($7)),
     }
     with := $1.(*With)
-    handleCTEAuth(delete, with)
     delete.With = with
     $$ = delete
   }
@@ -1114,7 +1106,6 @@ delete_statement:
 	Where: NewWhere(WhereStr, tryCastExpr($7)),
     }
     with := $1.(*With)
-    handleCTEAuth(delete, with)
     delete.With = with
     $$ = delete
   }
