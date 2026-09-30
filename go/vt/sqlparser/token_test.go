@@ -108,6 +108,22 @@ func TestString(t *testing.T) {
 		id:   STRING,
 		want: "a'b",
 	}, {
+		in:   "'a\\_b'",
+		id:   STRING,
+		want: "a\\_b",
+	}, {
+		in:   "'a\\%b'",
+		id:   STRING,
+		want: "a\\%b",
+	}, {
+		in:   "'a\\\\_b'",
+		id:   STRING,
+		want: "a\\_b",
+	}, {
+		in:   "'\\_\\%'",
+		id:   STRING,
+		want: "\\_\\%",
+	}, {
 		in:   "'\\'",
 		id:   LEX_ERROR,
 		want: "'",
