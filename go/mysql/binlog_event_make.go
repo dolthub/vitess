@@ -276,10 +276,16 @@ func NewInvalidQueryEvent(f BinlogFormat, m BinlogEventMetadata) BinlogEvent {
 	return NewMysql56BinlogEvent(ev)
 }
 
-// NewXIDEvent returns a XID event. We do not use the data, so keep it 0.
+// NewXIDEvent returns a XID event with a zero transaction ID (XID).
 func NewXIDEvent(f BinlogFormat, m BinlogEventMetadata) BinlogEvent {
+	return NewXIDEventWithXID(f, m, 0)
+}
+
+// NewXIDEventWithXID returns an XID event for the specified transaction ID |xid|.
+func NewXIDEventWithXID(f BinlogFormat, m BinlogEventMetadata, xid uint64) BinlogEvent {
 	length := 8
 	data := make([]byte, length)
+	binary.LittleEndian.PutUint64(data, xid)
 
 	ev := packetize(f, eXIDEvent, 0, data, m)
 	return NewMysql56BinlogEvent(ev)
