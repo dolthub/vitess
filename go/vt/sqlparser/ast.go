@@ -4144,6 +4144,8 @@ type Explain struct {
 	Analyze       bool
 }
 
+var _ WalkableSQLNode = &Explain{}
+
 // Format formats the node.
 func (node *Explain) Format(buf *TrackedBuffer) {
 	analyzeOpt := ""
@@ -4159,6 +4161,10 @@ func (node *Explain) Format(buf *TrackedBuffer) {
 		planOpt = "plan "
 	}
 	buf.Myprintf("explain %s%s%s%v", analyzeOpt, formatOpt, planOpt, node.Statement)
+}
+
+func (node *Explain) walkSubtree(visit Visit) error {
+	return Walk(visit, node.Statement)
 }
 
 const (
