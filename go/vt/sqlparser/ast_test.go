@@ -142,6 +142,22 @@ func TestInsertOnDupWhereFormatAndWalk(t *testing.T) {
 	require.True(t, visitedPredicate)
 }
 
+func TestInputExpressionInExplain(t *testing.T) {
+	stmt, err := Parse("explain select (select 1)")
+	require.NoError(t, err)
+	var inputExpression string
+	require.NoError(t, Walk(func(node SQLNode) (bool, error) {
+		if ae, ok := node.(*AliasedExpr); ok {
+			if _, ok := ae.Expr.(*Subquery); ok {
+				inputExpression = ae.InputExpression
+				return false, nil
+			}
+		}
+		return true, nil
+	}, stmt))
+	require.Equal(t, inputExpression, "(select 1)")
+}
+
 func TestRemoveHints(t *testing.T) {
 	for _, query := range []string{
 		"select * from t use index (i)",
