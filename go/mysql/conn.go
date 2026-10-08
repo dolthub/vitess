@@ -385,6 +385,58 @@ type readLease struct {
 	// before the watcher's deadline reset, which the watcher performs only after
 	// re-acquiring mu (see WaitForClientActivity).
 	interrupt func()
+	// suspended is true while a server-side cursor is open on the connection
+	// (Conn.cs != nil). The cursor's COM_STMT_EXECUTE is still executing in its
+	// goroutine, yet the command loop legitimately reads client packets
+	// (COM_STMT_FETCH, COM_STMT_CLOSE, ...) for as long as the cursor lives, so
+	// client->server bytes are expected and must not be read as a departed
+	// client. Unlike held, a suspension does not block acquire(): the watcher is
+	// simply not watching, and no handler read is in progress.
+	suspended bool
+	// resumeCh is created by suspend() and closed by resume(); a watcher that
+	// finds the lease suspended parks on it.
+	resumeCh chan struct{}
+}
+
+// suspend parks the client-activity watcher until resume is called. It is taken
+// by execPrepareStatement before a server-side cursor's query starts executing,
+// so the watcher never observes the COM_STMT_FETCH packets the cursor protocol
+// requires the client to send while that query is still running.
+func (l *readLease) suspend() {
+	l.mu.Lock()
+	if l.suspended {
+		l.mu.Unlock()
+		return
+	}
+	l.suspended = true
+	l.resumeCh = make(chan struct{})
+	// A watcher already parked in Peek is preempted exactly as acquire() does
+	// it, and re-checks the lease once it has left the Peek, where it now finds
+	// the suspension and parks on resumeCh instead.
+	var ack chan struct{}
+	if l.preempt != nil {
+		ack = l.yielded
+		l.interrupt()
+		close(l.preempt)
+		l.preempt = nil
+	}
+	l.mu.Unlock()
+	if ack != nil {
+		<-ack
+	}
+}
+
+// resume lifts a suspension taken by suspend, letting a parked watcher watch
+// again. It is safe to call when no suspension is in effect.
+func (l *readLease) resume() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !l.suspended {
+		return
+	}
+	l.suspended = false
+	close(l.resumeCh)
+	l.resumeCh = nil
 }
 
 // acquire takes exclusive ownership of the read side for a handler-initiated
@@ -455,6 +507,12 @@ func (l *readLease) release() {
 // the watch for the duration of the handler read rather than racing it or
 // mistaking the file bytes for a disconnect.
 //
+// A server-side cursor is the other exception: between the COM_STMT_EXECUTE
+// that opens it and the fetch that exhausts it, the query keeps executing while
+// the command loop reads the client's COM_STMT_FETCH packets. execPrepareStatement
+// suspends the watch for the life of the cursor (readLease.suspend); while
+// suspended this function parks and returns only when ctx is cancelled.
+//
 // WaitForClientActivity does not consume any bytes: if the client did send
 // data, it remains buffered for the next command read. It must only be called
 // when no other goroutine is reading from the connection (apart from a
@@ -485,6 +543,19 @@ func (c *Conn) WaitForClientActivity(ctx context.Context) error {
 			c.readLease.mu.Unlock()
 			select {
 			case <-fc:
+			case <-ctx.Done():
+				return nil
+			}
+			continue
+		}
+		if c.readLease.suspended {
+			// A server-side cursor is open: the command loop is reading the client's
+			// fetches, and the bytes we would peek are its next command, not a
+			// departure. Park until the cursor closes or the query is done.
+			rc := c.readLease.resumeCh
+			c.readLease.mu.Unlock()
+			select {
+			case <-rc:
 			case <-ctx.Done():
 				return nil
 			}
@@ -1612,7 +1683,7 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 				if !ok {
 					// Query has terminated. Check for an error.
 					err := <-c.cs.done
-					c.cs = nil
+					c.closeCursor()
 					if err != nil {
 						// We can't send an error in the middle of a stream.
 						// All we can do is abort the send, which will cause a 2013.
@@ -1623,16 +1694,20 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 			}
 		}
 
+		// MySQL keeps SERVER_STATUS_CURSOR_EXISTS in the EOF of every fetch while
+		// the cursor has more rows, and replaces it with SERVER_STATUS_LAST_ROW_SENT
+		// on the fetch that exhausts it (sql/sql_cursor.cc, Materialized_cursor::fetch).
+		// Clients decide whether to keep fetching from these two bits.
 		if c.cs == nil {
 			c.StatusFlags |= uint16(ServerCursorLastRowSent)
+		} else {
+			c.StatusFlags |= uint16(ServerCursorExists)
 		}
 		if err := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
 			log.Errorf("Error writing result to %s: %v", c, err)
 			return err
 		}
-		if c.cs == nil {
-			c.StatusFlags &= ^uint16(ServerCursorLastRowSent)
-		}
+		c.StatusFlags &= ^uint16(ServerCursorLastRowSent | ServerCursorExists)
 		if err := c.flush(ctx); err != nil {
 			log.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
 			return err
@@ -1760,7 +1835,14 @@ func (c *Conn) discardCursor() {
 		case <-c.cs.done:
 		}
 	}
+	c.closeCursor()
+}
+
+// closeCursor clears the cursor state and lets the client-activity watcher
+// suspended by execPrepareStatement resume. Safe to call with no cursor open.
+func (c *Conn) closeCursor() {
 	c.cs = nil
+	c.readLease.resume()
 }
 
 // formatID returns a quoted identifier from the one given. Adapted from ast.go
@@ -1928,6 +2010,18 @@ func (c *Conn) execPrepareStatement(ctx context.Context, stmtID uint32, cursorTy
 	}
 	next := make(chan *sqltypes.Result)
 	done, quit := make(chan error), make(chan error)
+
+	// The cursor's query keeps executing until the last fetch, and the client
+	// must send COM_STMT_FETCH packets while it does. Suspend the client-activity
+	// watcher before the handler can register the query with it, so those packets
+	// are not mistaken for a departed client; closeCursor resumes it. If no cursor
+	// ends up open (no result set, or a write error below), resume right away.
+	c.readLease.suspend()
+	defer func() {
+		if c.cs == nil {
+			c.readLease.resume()
+		}
+	}()
 
 	go func() {
 		var err error
