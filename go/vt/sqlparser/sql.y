@@ -5997,12 +5997,13 @@ alter_table_statement_part:
       },
     }
   }
-| DROP column_opt id_or_non_reserved
+| DROP column_opt exists_opt id_or_non_reserved
   {
     $$ = &DDL{
     	Action: AlterStr,
     	ColumnAction: DropStr,
-    	Column: NewColIdent(string($3)),
+        Column: NewColIdent(string($4)),
+        ColumnIfExists: $3.(int) != 0,
     	Auth: AuthInformation{
             AuthType: AuthType_ALTER,
             TargetType: AuthTargetType_SingleTableIdentifier,
