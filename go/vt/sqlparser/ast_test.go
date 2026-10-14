@@ -1133,3 +1133,30 @@ func TestFormatDropColumnIfExists(t *testing.T) {
 	ddl.ColumnIfExists = false
 	require.Equal(t, "alter table t drop column c", String(ddl))
 }
+
+func TestParseDropColumnIfExists(t *testing.T) {
+	for _, query := range []string{
+		"alter table t drop column if exists c",
+		"alter table t drop if exists c",
+		"alter table t drop column c",
+		"alter table t drop c",
+		"alter table t drop column if exists c, drop column d",
+	} {
+		t.Run(query, func(t *testing.T) {
+			stmt, err := Parse(query)
+			require.NoError(t, err)
+			alter := stmt.(*AlterTable)
+			require.Equal(t, strings.Contains(query, "if exists"), alter.Statements[0].ColumnIfExists)
+			require.False(t, alter.Statements[0].IfExists)
+			require.Equal(t, "c", alter.Statements[0].Column.String())
+			if len(alter.Statements) > 1 {
+				require.False(t, alter.Statements[1].ColumnIfExists)
+			}
+			formatted := String(stmt)
+			reparsed, err := Parse(formatted)
+			require.NoError(t, err)
+			require.Equal(t, formatted, String(reparsed))
+			require.Equal(t, alter.Statements[0].ColumnIfExists, reparsed.(*AlterTable).Statements[0].ColumnIfExists)
+		})
+	}
+}
