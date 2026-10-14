@@ -2345,6 +2345,8 @@ type DDL struct {
 	// Temporary is set for CREATE TEMPORARY TABLE operations.
 	Temporary          bool
 	ConstraintIfExists bool
+	// ColumnIfExists applies to DROP COLUMN, independently of table-level IfExists.
+	ColumnIfExists bool
 
 	// Cascade is set for DROP statements with CASCADE behavior: dependent objects should be dropped along with the
 	// named objects. MySQL parses but ignores CASCADE, so the MySQL grammar never sets this field; integrators with
@@ -2710,7 +2712,11 @@ func (node *DDL) alterFormat(buf *TrackedBuffer) {
 		}
 		buf.Myprintf(" %s column %v %v%s", node.ColumnAction, node.Column, node.TableSpec, after)
 	} else if node.ColumnAction == DropStr {
-		buf.Myprintf(" %s column %v", node.ColumnAction, node.Column)
+		exists := ""
+		if node.ColumnIfExists {
+			exists = " if exists"
+		}
+		buf.Myprintf(" %s column%s %v", node.ColumnAction, exists, node.Column)
 	} else if node.ColumnAction == RenameStr {
 		buf.Myprintf(" %s column %v to %v", node.ColumnAction, node.Column, node.ToColumn)
 	} else if node.IndexSpec != nil {

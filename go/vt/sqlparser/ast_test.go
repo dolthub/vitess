@@ -1126,3 +1126,10 @@ func newHexVal(in string) *SQLVal {
 func newValArg(in string) *SQLVal {
 	return NewValArg([]byte(in))
 }
+
+func TestFormatDropColumnIfExists(t *testing.T) {
+	ddl := &DDL{Action: AlterStr, Table: TableName{Name: NewTableIdent("t")}, ColumnAction: DropStr, Column: NewColIdent("c"), ColumnIfExists: true}
+	require.Equal(t, "alter table t drop column if exists c", String(ddl))
+	ddl.ColumnIfExists = false
+	require.Equal(t, "alter table t drop column c", String(ddl))
+}
