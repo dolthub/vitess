@@ -209,6 +209,10 @@ func (ev filePosFakeEvent) PreviousGTIDs(BinlogFormat) (Position, error) {
 	return Position{}, nil
 }
 
+func (ev filePosFakeEvent) XID(BinlogFormat) (uint64, error) {
+	return 0, nil
+}
+
 func (ev filePosFakeEvent) TableID(BinlogFormat) uint64 {
 	return 0
 }

@@ -113,6 +113,23 @@ func TestXIDEvent(t *testing.T) {
 	if !event.IsXID() {
 		t.Fatalf("NewXIDEvent().IsXID() is false")
 	}
+	xid, err := event.XID(f)
+	if err != nil || xid != 0 {
+		t.Fatalf("event.XID() returned %v, %v; expected 0, nil", xid, err)
+	}
+
+	expectedXid := uint64(0x123456789abcdef0)
+	eventWithXid := NewXIDEventWithXID(f, m, expectedXid)
+	if !eventWithXid.IsValid() {
+		t.Fatalf("NewXIDEventWithXID().IsValid() is false")
+	}
+	if !eventWithXid.IsXID() {
+		t.Fatalf("NewXIDEventWithXID().IsXID() is false")
+	}
+	gotXid, err := eventWithXid.XID(f)
+	if err != nil || gotXid != expectedXid {
+		t.Fatalf("eventWithXid.XID() returned %v, %v; expected %v, nil", gotXid, err, expectedXid)
+	}
 }
 
 func TestIntVarEvent(t *testing.T) {
