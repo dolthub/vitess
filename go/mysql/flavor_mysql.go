@@ -62,7 +62,11 @@ func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, slaveID uint32, startPos Posit
 
 	// Build the command.
 	sidBlock := gtidSet.SIDBlock()
-	return c.WriteComBinlogDumpGTID(slaveID, "", 4, 0, sidBlock)
+	var flags uint16
+	if len(sidBlock) > 0 {
+		flags |= BinlogThroughGTID
+	}
+	return c.WriteComBinlogDumpGTID(slaveID, "", 4, flags, sidBlock)
 }
 
 // resetReplicationCommands is part of the Flavor interface.
