@@ -82,7 +82,11 @@ func TestComBinlogDumpGTID(t *testing.T) {
 	}()
 
 	// Write ComBinlogDumpGTID packet, read it, compare.
-	if err := cConn.WriteComBinlogDumpGTID(0x01020304, "moofarm", 0x05060708090a0b0c, 0x0d0e, []byte{0xfa, 0xfb}); err != nil {
+	var flags uint16 = 0x0d0e
+	if flags != flags|BinlogThroughGTID {
+		t.Fatal("test flags must include BinlogThroughGTID")
+	}
+	if err := cConn.WriteComBinlogDumpGTID(0x01020304, "moofarm", 0x05060708090a0b0c, flags, []byte{0xfa, 0xfb}); err != nil {
 		t.Fatalf("WriteComBinlogDumpGTID failed: %v", err)
 	}
 

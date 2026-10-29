@@ -70,15 +70,14 @@ func (c *Conn) parseComBinlogDumpGTID(data []byte) (logFile string, logPos uint6
 		return logFile, logPos, position, readPacketErr
 	}
 
-	if flags&BinlogDumpNonBlock != 0 {
-		return logFile, logPos, position, io.EOF
+	// MySQL reads the GTID payload regardless of BINLOG_THROUGH_GTID.
+	// Clients such as Debezium send flags=0 with a valid binary SID block.
+	dataSize, pos, ok := readUint32(data, pos)
+	if !ok || uint64(dataSize) > uint64(len(data)-pos) {
+		return logFile, logPos, position, readPacketErr
 	}
-	if flags&BinlogThroughGTID != 0 {
-		dataSize, pos, ok := readUint32(data, pos)
-		if !ok {
-			return logFile, logPos, position, readPacketErr
-		}
 
+	if dataSize > 0 {
 		gtidBytes := data[pos : pos+int(dataSize)]
 
 		// NOTE: A MySQL 8.0 replica sends the GTID set as binary data, not as a human-readable string.
@@ -92,6 +91,9 @@ func (c *Conn) parseComBinlogDumpGTID(data []byte) (logFile string, logPos uint6
 		position = Position{
 			GTIDSet: gtidSet,
 		}
+	}
+	if flags&BinlogDumpNonBlock != 0 {
+		return logFile, logPos, position, io.EOF
 	}
 
 	return logFile, logPos, position, nil

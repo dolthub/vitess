@@ -599,3 +599,19 @@ func TestMysql56GTIDSetSIDBlock(t *testing.T) {
 		t.Errorf("NewMysql56GTIDSetFromSIDBlock(%#v) = %#v, want %#v", want, set, input)
 	}
 }
+
+func TestSIDs(t *testing.T) {
+	var set Mysql56GTIDSet // nil
+	sids := set.SIDs()
+	if sids == nil || len(sids) != 0 {
+		t.Fatalf("nil set SIDs = %v, want non-nil empty slice", sids)
+	}
+	gtidSet, err := ParseMysql56GTIDSet("8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1:4-24")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sids = gtidSet.(Mysql56GTIDSet).SIDs()
+	if len(sids) != 1 || sids[0].String() != "8bc65cca-3fe4-11ed-bbfb-091034d48b3e" {
+		t.Fatalf("unexpected SIDs: %v", sids)
+	}
+}
