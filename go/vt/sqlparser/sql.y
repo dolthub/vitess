@@ -3683,7 +3683,7 @@ column_type_options:
     }
     $$ = *ctp
   }
-| column_type_options AS openb value_expression closeb stored_opt
+| column_type_options AS openb expression closeb stored_opt
   {
     opt := ColumnType{GeneratedExpr: &ParenExpr{tryCastExpr($4)}, Stored: $6.(BoolVal)}
     ct := $1.(ColumnType)
@@ -3694,7 +3694,7 @@ column_type_options:
     }
     $$ = *ctp
   }
-| column_type_options GENERATED ALWAYS AS openb value_expression closeb stored_opt
+| column_type_options GENERATED ALWAYS AS openb expression closeb stored_opt
   {
     opt := ColumnType{GeneratedExpr: &ParenExpr{tryCastExpr($6)}, Stored: $8.(BoolVal)}
     ct := $1.(ColumnType)

@@ -5500,6 +5500,63 @@ func TestGeneratedColumns(t *testing.T) {
 	}
 }
 
+// Generated columns accept boolean expressions without requiring an extra tuple
+// wrapper. The AS parentheses must remain in the AST for DDL formatting.
+func TestGeneratedColumnExpressions(t *testing.T) {
+	for _, expression := range []string{
+		"i < 8",
+		"i is null",
+		"i between 3 and 8",
+		"i < 8 and i > 0 or not i = 3",
+		"i + 1",
+	} {
+		for _, syntax := range []string{"as", "generated always as"} {
+			for _, persistence := range []string{"", " virtual", " stored"} {
+				for _, extraParens := range []bool{false, true} {
+					expr := expression
+					if extraParens {
+						expr = "(" + expr + ")"
+					}
+					column := "j int " + syntax + " (" + expr + ")" + persistence
+					for _, query := range []string{
+						"create table t (i int, " + column + ")",
+						"alter table t add column " + column,
+						"alter table t modify column " + column,
+					} {
+						t.Run(query, func(t *testing.T) {
+							stmt, err := Parse(query)
+							require.NoError(t, err)
+							var ddl *DDL
+							switch node := stmt.(type) {
+							case *DDL:
+								ddl = node
+							case *AlterTable:
+								require.Len(t, node.Statements, 1)
+								ddl = node.Statements[0]
+							default:
+								t.Fatalf("unexpected statement %T", stmt)
+							}
+							require.NotNil(t, ddl.TableSpec)
+							columns := ddl.TableSpec.Columns
+							generated := columns[len(columns)-1].Type
+							require.IsType(t, &ParenExpr{}, generated.GeneratedExpr)
+							require.Equal(t, "("+expr+")", String(generated.GeneratedExpr))
+							require.Equal(t, BoolVal(persistence == " stored"), generated.Stored)
+							require.Contains(t, String(stmt), "generated always as ("+expr+")")
+							// ALTER MODIFY formatting is diagnostic rather than executable
+							// SQL. Round-trip the column definition in a CREATE statement.
+							formatted := "create table t (\n\t" + String(columns[len(columns)-1]) + "\n)"
+							reparsed, err := Parse(formatted)
+							require.NoError(t, err)
+							require.Equal(t, formatted, String(reparsed))
+						})
+					}
+				}
+			}
+		}
+	}
+}
+
 // TestParsingIdentifiersStartingWithNumbers tests that identifiers starting with
 // digits parse correctly in all name positions, including column definitions,
 // qualified two-part names (table.col), and qualified three-part names (db.table.col).
