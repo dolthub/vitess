@@ -384,7 +384,7 @@ func tryCastStatement(v interface{}) Statement {
 %type <val> event_name rename_event_name_opt
 %type <val> index_hint_list
 %type <val> where_expression_opt
-%type <val> condition
+%type <val> condition comparison_expression
 %type <val> boolean_value
 %type <val> all_opt enforced_opt
 %type <val> compare
@@ -8984,7 +8984,7 @@ expression:
   {
     $$ = &IsExpr{Operator: $3.(string), Expr: tryCastExpr($1)}
   }
-| value_expression
+| comparison_expression
   {
     $$ = tryCastExpr($1)
   }
@@ -9013,12 +9013,21 @@ boolean_value:
     $$ = BoolVal(false)
   }
 
-condition:
-  value_expression compare value_expression
+// A comparison's result can be the left operand of the next comparison.
+// Keep the right operand at the value tier so chains associate left and
+// lower-precedence logical expressions cannot become comparison operands.
+comparison_expression:
+  value_expression
+  {
+    $$ = tryCastExpr($1)
+  }
+| comparison_expression compare value_expression %prec '='
   {
     $$ = &ComparisonExpr{Left: tryCastExpr($1), Operator: $2.(string), Right: tryCastExpr($3)}
   }
-| value_expression IN col_tuple
+
+condition:
+  value_expression IN col_tuple
   {
     $$ = &ComparisonExpr{Left: tryCastExpr($1), Operator: InStr, Right: $3.(ColTuple)}
   }
