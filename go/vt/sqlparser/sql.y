@@ -9018,6 +9018,15 @@ condition:
   {
     $$ = &ComparisonExpr{Left: tryCastExpr($1), Operator: $2.(string), Right: tryCastExpr($3)}
   }
+/*
+  Since the comparison rule is left-recursive, the right operand is a value
+  expression, which enforces left-associativity by keeping a predicate off
+  the right side unless it is parenthesized.
+*/
+| condition compare value_expression
+  {
+    $$ = &ComparisonExpr{Left: tryCastExpr($1), Operator: $2.(string), Right: tryCastExpr($3)}
+  }
 | value_expression IN col_tuple
   {
     $$ = &ComparisonExpr{Left: tryCastExpr($1), Operator: InStr, Right: $3.(ColTuple)}
