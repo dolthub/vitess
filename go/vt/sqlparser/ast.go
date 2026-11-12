@@ -7243,10 +7243,40 @@ const (
 	RowsUnit
 )
 
+// FrameExclusion is a window frame's EXCLUDE clause, which removes rows around the current row from its frame.
+// MySQL has no frame exclusion syntax, but other dialects built on this AST (e.g. Postgres) do.
+type FrameExclusion int
+
+const (
+	// ExcludeNoOthers excludes no rows from the frame, and is the default.
+	ExcludeNoOthers FrameExclusion = iota
+	// ExcludeCurrentRow excludes the current row from the frame.
+	ExcludeCurrentRow
+	// ExcludeGroup excludes the current row and its ordering peers from the frame.
+	ExcludeGroup
+	// ExcludeTies excludes the current row's ordering peers, but not the current row itself, from the frame.
+	ExcludeTies
+)
+
+// String returns the SQL text of this exclusion clause.
+func (e FrameExclusion) String() string {
+	switch e {
+	case ExcludeCurrentRow:
+		return "EXCLUDE CURRENT ROW"
+	case ExcludeGroup:
+		return "EXCLUDE GROUP"
+	case ExcludeTies:
+		return "EXCLUDE TIES"
+	default:
+		return "EXCLUDE NO OTHERS"
+	}
+}
+
 // Frame represents a window Frame clause.
 type Frame struct {
-	Extent *FrameExtent
-	Unit   FrameUnit
+	Extent    *FrameExtent
+	Unit      FrameUnit
+	Exclusion FrameExclusion
 }
 
 // Format formats the node.
@@ -7259,6 +7289,9 @@ func (node *Frame) Format(buf *TrackedBuffer) {
 		buf.Myprintf("RANGE %v", node.Extent)
 	case RowsUnit:
 		buf.Myprintf("ROWS %v", node.Extent)
+	}
+	if node.Exclusion != ExcludeNoOthers {
+		buf.Myprintf(" %s", node.Exclusion.String())
 	}
 }
 
