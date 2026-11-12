@@ -1046,6 +1046,40 @@ func TestWindowErrors(t *testing.T) {
 	}
 }
 
+func TestFormatFrameExclusion(t *testing.T) {
+	extent := &FrameExtent{
+		Start: &FrameBound{Type: UnboundedPreceding},
+		End:   &FrameBound{Type: UnboundedFollowing},
+	}
+	testcases := []struct {
+		frame  *Frame
+		output string
+	}{
+		{
+			frame:  &Frame{Unit: RowsUnit, Extent: extent},
+			output: "ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING",
+		},
+		{
+			frame:  &Frame{Unit: RowsUnit, Extent: extent, Exclusion: ExcludeCurrentRow},
+			output: "ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING EXCLUDE CURRENT ROW",
+		},
+		{
+			frame:  &Frame{Unit: RangeUnit, Extent: extent, Exclusion: ExcludeGroup},
+			output: "RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING EXCLUDE GROUP",
+		},
+		{
+			frame:  &Frame{Unit: RangeUnit, Extent: extent, Exclusion: ExcludeTies},
+			output: "RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING EXCLUDE TIES",
+		},
+	}
+
+	for _, tt := range testcases {
+		t.Run(tt.output, func(t *testing.T) {
+			require.Equal(t, tt.output, String(tt.frame))
+		})
+	}
+}
+
 func TestTrimQuotes(t *testing.T) {
 	testcases := []struct {
 		input    string
