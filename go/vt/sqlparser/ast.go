@@ -6666,6 +6666,9 @@ type FuncExpr struct {
 	Qualifier TableIdent
 	Exprs     SelectExprs
 	Distinct  bool
+	// Filter is the condition of an aggregate's FILTER (WHERE ...) clause, which restricts the rows that the aggregate
+	// receives. It is not part of MySQL's grammar, but is set by other dialects that are converted into this AST.
+	Filter Expr
 }
 
 // Format formats the node.
@@ -6682,6 +6685,10 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 	// name as is.
 	buf.Myprintf("%s(%s%v)", node.Name.String(), distinct, node.Exprs)
 
+	if node.Filter != nil {
+		buf.Myprintf(" filter (where %v)", node.Filter)
+	}
+
 	if node.Over != nil {
 		buf.Myprintf(" %v", node.Over)
 	}
@@ -6696,6 +6703,7 @@ func (node *FuncExpr) walkSubtree(visit Visit) error {
 		node.Qualifier,
 		node.Name,
 		node.Exprs,
+		node.Filter,
 		node.Over,
 	)
 }
@@ -6710,7 +6718,7 @@ func (node *FuncExpr) replace(from, to Expr) bool {
 			return true
 		}
 	}
-	return false
+	return replaceExprs(from, to, &node.Filter)
 }
 
 // Aggregates is a map of all aggregate functions.
@@ -6746,6 +6754,9 @@ type GroupConcatExpr struct {
 	Exprs     SelectExprs
 	OrderBy   OrderBy
 	Separator Separator
+	// Filter is the condition of an aggregate's FILTER (WHERE ...) clause, which restricts the rows that the aggregate
+	// receives. It is not part of MySQL's grammar, but is set by other dialects that are converted into this AST.
+	Filter Expr
 }
 
 // Separator stores the separator string and a flag to indicate whether the default separator value should be used.
@@ -6763,6 +6774,10 @@ func (node *GroupConcatExpr) Format(buf *TrackedBuffer) {
 	}
 
 	buf.Myprintf("group_concat(%s%v%v%s)", node.Distinct, node.Exprs, node.OrderBy, sep)
+
+	if node.Filter != nil {
+		buf.Myprintf(" filter (where %v)", node.Filter)
+	}
 }
 
 func (node *GroupConcatExpr) walkSubtree(visit Visit) error {
@@ -6773,6 +6788,7 @@ func (node *GroupConcatExpr) walkSubtree(visit Visit) error {
 		visit,
 		node.Exprs,
 		node.OrderBy,
+		node.Filter,
 	)
 }
 
@@ -6791,7 +6807,7 @@ func (node *GroupConcatExpr) replace(from, to Expr) bool {
 			return true
 		}
 	}
-	return false
+	return replaceExprs(from, to, &node.Filter)
 }
 
 // ValuesFuncExpr represents a function call.
