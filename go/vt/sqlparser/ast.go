@@ -8460,6 +8460,16 @@ func (d InjectedExpr) walkSubtree(visit Visit) error {
 type OrderedInjectedExpr struct {
 	InjectedExpr
 	OrderBy OrderBy
+	// Filter is the condition of an aggregate's FILTER (WHERE ...) clause, which restricts the rows that the aggregate
+	// receives.
+	Filter Expr
+}
+
+func (d OrderedInjectedExpr) walkSubtree(visit Visit) error {
+	if err := d.InjectedExpr.walkSubtree(visit); err != nil {
+		return err
+	}
+	return Walk(visit, d.Filter)
 }
 
 // InjectedStatement allows bypassing AST analysis. This is used by projects that rely on Vitess, but may not implement
