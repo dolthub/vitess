@@ -492,6 +492,64 @@ func TestIsAggregate(t *testing.T) {
 	}
 }
 
+func TestAggregateFilter(t *testing.T) {
+	newFilter := func() Expr {
+		return &ComparisonExpr{
+			Operator: GreaterThanStr,
+			Left:     &ColName{Name: NewColIdent("b")},
+			Right:    newIntVal("1"),
+		}
+	}
+	funcExpr := &FuncExpr{
+		Name:   NewColIdent("count"),
+		Exprs:  SelectExprs{&AliasedExpr{Expr: &ColName{Name: NewColIdent("a")}}},
+		Filter: newFilter(),
+		Over:   &Over{},
+	}
+	groupConcat := &GroupConcatExpr{
+		Exprs:     SelectExprs{&AliasedExpr{Expr: &ColName{Name: NewColIdent("a")}}},
+		Separator: Separator{SeparatorString: ","},
+		Filter:    newFilter(),
+	}
+
+	require.Equal(t, "count(a) filter (where b > 1) over ()", String(funcExpr))
+	require.Equal(t, "group_concat(a separator ',') filter (where b > 1)", String(groupConcat))
+
+	for _, node := range []SQLNode{funcExpr, groupConcat} {
+		var columns []string
+		err := Walk(func(node SQLNode) (bool, error) {
+			if col, ok := node.(*ColName); ok {
+				columns = append(columns, col.Name.String())
+			}
+			return true, nil
+		}, node)
+		require.NoError(t, err)
+		require.Equal(t, []string{"a", "b"}, columns)
+	}
+
+	to := newIntVal("2")
+	filter := funcExpr.Filter.(*ComparisonExpr)
+	require.True(t, funcExpr.replace(filter.Right, to))
+	require.Equal(t, "count(a) filter (where b > 2) over ()", String(funcExpr))
+	filter = groupConcat.Filter.(*ComparisonExpr)
+	require.True(t, groupConcat.replace(filter.Right, to))
+	require.Equal(t, "group_concat(a separator ',') filter (where b > 2)", String(groupConcat))
+
+	ordered := &OrderedInjectedExpr{
+		InjectedExpr: InjectedExpr{Children: Exprs{&ColName{Name: NewColIdent("a")}}},
+		Filter:       newFilter(),
+	}
+	var columns []string
+	err := Walk(func(node SQLNode) (bool, error) {
+		if col, ok := node.(*ColName); ok {
+			columns = append(columns, col.Name.String())
+		}
+		return true, nil
+	}, ordered)
+	require.NoError(t, err)
+	require.Equal(t, []string{"a", "b"}, columns)
+}
+
 func TestIsImpossible(t *testing.T) {
 	f := ComparisonExpr{
 		Operator: NotEqualStr,
