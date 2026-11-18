@@ -134,6 +134,10 @@ func (th *testHandler) ComInitDB(c *Conn, schemaName string) error {
 }
 
 func (th *testHandler) ComMultiQuery(ctx context.Context, c *Conn, query string, callback ResultSpoolFn) (string, error) {
+	if first, rest, ok := strings.Cut(query, "; "); ok {
+		err := th.ComQuery(ctx, c, first, callback)
+		return rest, err
+	}
 	err := th.ComQuery(ctx, c, query, callback)
 	return "", err
 }
@@ -311,6 +315,11 @@ func (th *testHandler) ComStmtExecute(ctx context.Context, c *Conn, prepare *Pre
 			RowsAffected: uint64(n),
 		}
 		return callback(res)
+	case "error after send":
+		if err := callback(selectRowsResult); err != nil {
+			return err
+		}
+		return th.Err()
 	default:
 		return fmt.Errorf("unrecorgnized test command")
 	}
@@ -782,16 +791,15 @@ func TestServer(t *testing.T) {
 	}
 	th.SetWarnings(0)
 
-	// If there's an error after streaming has started,
-	// we should get a 2013
+	// An error after streaming rows sends an ERR_Packet and keeps the connection usable.
 	th.SetErr(NewSQLError(ERUnknownComError, SSUnknownComError, "forced error after send"))
 	output, ok = runMysql(t, params, "error after send")
 	if ok {
 		t.Fatalf("mysql should have failed: %v", output)
 	}
-	if !strings.Contains(output, "ERROR 2013 (HY000)") ||
-		!strings.Contains(output, "Lost connection to MySQL server during query") {
-		t.Errorf("Unexpected output for 'panic'")
+	if !strings.Contains(output, "ERROR 1047 (08S01)") ||
+		!strings.Contains(output, "forced error after send") {
+		t.Errorf("Unexpected output for 'error after send': %v", output)
 	}
 
 	// Run an 'insert' command, no rows, but rows affected.
@@ -1611,6 +1619,191 @@ func TestParseConnAttrs(t *testing.T) {
 			}
 		} else {
 			t.Fatalf("Error reading key %s from connection attributes: attrs: %-v", k, attrs)
+		}
+	}
+}
+
+func TestConn_ErrorAfterFieldsSent(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/12504
+	th := &testHandler{}
+	th.SetErr(NewSQLError(ERUnknownError, SSUnknownSQLState, "WITH RECURSIVE iteration limit exceeded"))
+
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{Password: "password1"}}
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+	go l.Accept()
+
+	host, port := getHostPort(t, l.Addr())
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+		Flags: CapabilityClientMultiStatements,
+	}
+
+	queryCases := []struct {
+		name  string
+		query string
+		flags uint64
+	}{
+		{
+			name:  "ComQuery WithoutDeprecateEOF",
+			query: "error after send",
+		},
+		{
+			name:  "ComQuery WithDeprecateEOF",
+			query: "error after send",
+			flags: CapabilityClientDeprecateEOF,
+		},
+		{
+			name:  "ComMultiQuery aborts remaining statements",
+			query: "error after send; select rows",
+			flags: CapabilityClientMultiStatements,
+		},
+	}
+
+	for _, tc := range queryCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			p := *params
+			p.Flags = tc.flags
+			conn, err := Connect(ctx, &p)
+			if err != nil {
+				t.Fatalf("Connect failed: %v", err)
+			}
+			defer conn.Close()
+
+			if tc.flags&CapabilityClientMultiStatements != 0 {
+				_, _, err = conn.ExecuteFetchMulti(ctx, tc.query, 100, true)
+			} else {
+				_, err = conn.ExecuteFetch(tc.query, 100, true)
+			}
+			sqlErr, ok := err.(*SQLError)
+			if !ok || sqlErr.Number() != ERUnknownError {
+				t.Fatalf("got err=%v (%T), want errno %d", err, err, ERUnknownError)
+			}
+
+			res, err := conn.ExecuteFetch("select rows", 100, true)
+			if err != nil {
+				t.Fatalf("follow-up query failed: %v", err)
+			}
+			if len(res.Rows) != 2 {
+				t.Fatalf("got %d rows, want 2", len(res.Rows))
+			}
+		})
+	}
+
+	t.Run("writeQueryResultEnd propagates socket write errors", func(t *testing.T) {
+		listener, sConn, cConn := createSocketPair(t)
+		defer func() {
+			listener.Close()
+			sConn.Close()
+			cConn.Close()
+		}()
+
+		writeErr := fmt.Errorf("write broken pipe")
+		aborted, err := sConn.writeQueryResultEnd(writeErr, writeErr, true, false, false, 0)
+		if aborted || err != writeErr {
+			t.Fatalf("got aborted=%v err=%v, want aborted=false err=%v", aborted, err, writeErr)
+		}
+	})
+
+	for _, caps := range []struct {
+		name string
+		flag uint32
+	}{
+		{name: "WithoutDeprecateEOF", flag: 0},
+		{name: "WithDeprecateEOF", flag: CapabilityClientDeprecateEOF},
+	} {
+		for _, useCursor := range []byte{0, 1} {
+			name := fmt.Sprintf("ComStmtExecute/%s/cursor=%d", caps.name, useCursor)
+			t.Run(name, func(t *testing.T) {
+				listener, sConn, cConn := createSocketPair(t)
+				defer func() {
+					listener.Close()
+					sConn.Close()
+					cConn.Close()
+				}()
+
+				sConn.Capabilities = caps.flag
+				cConn.Capabilities = caps.flag
+				sConn.PrepareData = map[uint32]*PrepareData{
+					0: {StatementID: 0, PrepareStmt: "error after send"},
+					1: {StatementID: 1, PrepareStmt: "select rows"},
+				}
+
+				errCh := make(chan error, 1)
+				go func() {
+					defer close(errCh)
+					if err := writeRawPacketToConn(cConn, []byte{ComStmtExecute, 0, 0, 0, 0, useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1}); err != nil {
+						errCh <- err
+						return
+					}
+					qr, status, _, err := cConn.ReadQueryResult(context.Background(), 100, true)
+					if useCursor == 0 {
+						errCh <- err
+						return
+					}
+					if err != nil {
+						errCh <- err
+						return
+					}
+					if !status.cursorExists() {
+						errCh <- fmt.Errorf("expected cursor to exist")
+						return
+					}
+					if err := writeRawPacketToConn(cConn, []byte{ComStmtFetch, 0, 0, 0, 0, useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1}); err != nil {
+						errCh <- err
+						return
+					}
+					_, _, _, err = cConn.FetchQueryResult(context.Background(), 100, qr.Fields)
+					errCh <- err
+				}()
+
+				if err := sConn.handleNextCommand(context.Background(), th); err != nil {
+					t.Fatalf("handleNextCommand(execute) failed: %v", err)
+				}
+				if useCursor != 0 {
+					if err := sConn.handleNextCommand(context.Background(), th); err != nil {
+						t.Fatalf("handleNextCommand(fetch) failed: %v", err)
+					}
+				}
+				gotErr := <-errCh
+				sqlErr, ok := gotErr.(*SQLError)
+				if !ok || sqlErr.Number() != ERUnknownError {
+					t.Fatalf("got err=%v (%T), want errno %d", gotErr, gotErr, ERUnknownError)
+				}
+
+				followCh := make(chan error, 1)
+				go func() {
+					defer close(followCh)
+					if err := writeRawPacketToConn(cConn, []byte{ComStmtExecute, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 128, 1}); err != nil {
+						followCh <- err
+						return
+					}
+					qr, _, _, err := cConn.ReadQueryResult(context.Background(), 100, true)
+					if err != nil {
+						followCh <- err
+						return
+					}
+					if len(qr.Rows) != 2 {
+						followCh <- fmt.Errorf("got %d rows, want 2", len(qr.Rows))
+						return
+					}
+					followCh <- nil
+				}()
+				if err := sConn.handleNextCommand(context.Background(), th); err != nil {
+					t.Fatalf("follow-up handleNextCommand failed: %v", err)
+				}
+				if err := <-followCh; err != nil {
+					t.Fatalf("follow-up prepared query failed: %v", err)
+				}
+			})
 		}
 	}
 }

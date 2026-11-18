@@ -1614,10 +1614,11 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 					err := <-c.cs.done
 					c.cs = nil
 					if err != nil {
-						// We can't send an error in the middle of a stream.
-						// All we can do is abort the send, which will cause a 2013.
-						log.Errorf("Error in the middle of a stream to %s: %v", c, err)
-						return err
+						if werr := c.writeErrorPacketFromError(err); werr != nil {
+							log.Errorf("Error writing query error to %s: %v", c, werr)
+							return werr
+						}
+						return c.flush(ctx)
 					}
 				}
 			}
@@ -1779,12 +1780,15 @@ func formatID(original string) string {
 	return sb.String()
 }
 
+// execQuery executes |query| through |handler| and writes resultset or error
+// packets to |c|.
 func (c *Conn) execQuery(ctx context.Context, query string, handler Handler, multiStatements bool) (string, error) {
 	defer trace.StartRegion(ctx, "query").End()
 
 	fieldSent := false
 	// sendFinished is set if the response should just be an OK packet.
 	sendFinished := false
+	var writeErr error
 
 	resultsCB := func(qr *sqltypes.Result, more bool) error {
 		flag := c.StatusFlags
@@ -1809,17 +1813,19 @@ func (c *Conn) execQuery(ctx context.Context, query string, handler Handler, mul
 				// to extract the affected rows and last insert id from the result
 				// struct here since clients expect it.
 				if qr.Info != "" {
-					return c.writeOKPacketWithInfo(qr.RowsAffected, qr.InsertID, flag, handler.WarningCount(c), qr.Info)
+					writeErr = c.writeOKPacketWithInfo(qr.RowsAffected, qr.InsertID, flag, handler.WarningCount(c), qr.Info)
 				} else {
-					return c.writeOKPacket(qr.RowsAffected, qr.InsertID, flag, handler.WarningCount(c))
+					writeErr = c.writeOKPacket(qr.RowsAffected, qr.InsertID, flag, handler.WarningCount(c))
 				}
+				return writeErr
 			}
-			if err := c.writeFields(qr); err != nil {
-				return err
+			if writeErr = c.writeFields(qr); writeErr != nil {
+				return writeErr
 			}
 		}
 
-		return c.writeRows(qr)
+		writeErr = c.writeRows(qr)
+		return writeErr
 	}
 
 	var err error
@@ -1831,48 +1837,25 @@ func (c *Conn) execQuery(ctx context.Context, query string, handler Handler, mul
 		err = handler.ComQuery(ctx, c, query, resultsCB)
 	}
 
-	// If no field was sent, we expect an error.
-	if !fieldSent {
-		// This is just a failsafe. Should never happen.
-		if err == nil || err == io.EOF {
-			err = NewSQLErrorFromError(errors.New("unexpected: query ended with no results and no error"))
-		}
-		if werr := c.writeErrorPacketFromError(err); werr != nil {
-			// If we can't even write the error, we're done.
-			log.Errorf("Error writing query error to %s: %v", c, werr)
-			return "", werr
-		}
-	} else {
-		if err != nil {
-			// We can't send an error in the middle of a stream.
-			// All we can do is abort the send, which will cause a 2013.
-			log.Errorf("Error in the middle of a stream to %s: %v", c, err)
-			return "", err
-		}
-
-		// Send the end packet only sendFinished is false (results were streamed).
-		// In this case the affectedRows and lastInsertID are always 0 since it
-		// was a read operation.
-		if !sendFinished {
-			more := remainder != ""
-			if err := c.writeEndResult(more, 0, 0, handler.WarningCount(c)); err != nil {
-				log.Errorf("Error writing result to %s: %v", c, err)
-				return "", err
-			}
-		}
+	aborted, endErr := c.writeQueryResultEnd(err, writeErr, fieldSent, sendFinished, remainder != "", handler.WarningCount(c))
+	if endErr != nil {
+		return "", endErr
+	}
+	if aborted {
+		return "", nil
 	}
 
 	return remainder, nil
 }
 
-// execPrepareStatement runs the query identified by the statement ID, and writes the expected packets to the connection
-// If the client requests that a cursor be opened, we should only write the fields, and wait for subsequent fetch
-// requests to write the rows from the result set.
+// execPrepareStatement executes |stmtID| through |handler| and writes the
+// result packets or opens a cursor when requested by |cursorType|.
 func (c *Conn) execPrepareStatement(ctx context.Context, stmtID uint32, cursorType byte, handler Handler) error {
 	prepare := c.PrepareData[stmtID]
 	if cursorType == NoCursor || cursorType == ParameterCountAvailable {
 		fieldSent := false
 		sendFinished := false // sendFinished is set if the response should just be an OK packet.
+		var writeErr error
 
 		err := handler.ComStmtExecute(ctx, c, prepare, func(qr *sqltypes.Result) error {
 			if sendFinished {
@@ -1885,46 +1868,19 @@ func (c *Conn) execPrepareStatement(ctx context.Context, stmtID uint32, cursorTy
 				if len(qr.Fields) == 0 {
 					sendFinished = true
 					// We should not send any more packets after this.
-					return c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
+					writeErr = c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
+					return writeErr
 				}
-				if err := c.writeFields(qr); err != nil {
-					return err
+				if writeErr = c.writeFields(qr); writeErr != nil {
+					return writeErr
 				}
 			}
-			return c.writeBinaryRows(qr)
+			writeErr = c.writeBinaryRows(qr)
+			return writeErr
 		})
 
-		// If no field was sent, we expect an error.
-		if !fieldSent {
-			// This is just a failsafe. Should never happen.
-			if err == nil || err == io.EOF {
-				err = NewSQLErrorFromError(errors.New("unexpected: query ended with no results and no error"))
-			}
-			if werr := c.writeErrorPacketFromError(err); werr != nil {
-				// If we can't even write the error, we're done.
-				log.Errorf("Error writing query error to %s: %v", c, werr)
-				return werr
-			}
-		} else {
-			// We can't send an error in the middle of a stream.
-			// All we can do is abort the send, which will cause a 2013.
-			if err != nil {
-				log.Errorf("Error in the middle of a stream to %s: %v", c, err)
-				return err
-			}
-
-			// Send the end packet only if sendFinished is false (results were streamed).
-			// In this case the affectedRows and lastInsertID are always 0 since it
-			// was a read operation.
-			if !sendFinished {
-				if werr := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); werr != nil {
-					log.Errorf("Error writing result to %s: %v", c, werr)
-					return werr
-				}
-			}
-		}
-
-		return nil
+		_, endErr := c.writeQueryResultEnd(err, writeErr, fieldSent, sendFinished, false, handler.WarningCount(c))
+		return endErr
 	}
 	next := make(chan *sqltypes.Result)
 	done, quit := make(chan error), make(chan error)
@@ -1991,6 +1947,47 @@ func (c *Conn) execPrepareStatement(ctx context.Context, stmtID uint32, cursorTy
 		pending: qr,
 	}
 	return nil
+}
+
+// writeQueryResultEnd writes an ERR_Packet or trailing resultset terminator.
+//
+// When |err| occurs after column metadata was sent (|fieldSent| is true) and
+// no OK packet completed the response (|sendFinished| is false), the
+// [Text Resultset] specification allows terminating the stream with an
+// ERR_Packet instead of an EOF_Packet so the connection stays usable. Any
+// socket failure in |writeErr| aborts the connection instead.
+//
+// It reports whether an error packet terminated the command and returns any
+// fatal connection error, passing |more| and |warnings| to writeEndResult.
+//
+// [Text Resultset]: https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_query_response_text_resultset.html
+func (c *Conn) writeQueryResultEnd(err, writeErr error, fieldSent, sendFinished, more bool, warnings uint16) (bool, error) {
+	if writeErr != nil {
+		if err != nil {
+			return false, err
+		}
+		return false, writeErr
+	}
+	if fieldSent && sendFinished && err != nil {
+		return false, err
+	}
+	if !fieldSent || err != nil {
+		if !fieldSent && (err == nil || err == io.EOF) {
+			err = NewSQLErrorFromError(errors.New("unexpected: query ended with no results and no error"))
+		}
+		if werr := c.writeErrorPacketFromError(err); werr != nil {
+			log.Errorf("Error writing query error to %s: %v", c, werr)
+			return false, werr
+		}
+		return true, nil
+	}
+	if !sendFinished {
+		if werr := c.writeEndResult(more, 0, 0, warnings); werr != nil {
+			log.Errorf("Error writing result to %s: %v", c, werr)
+			return false, werr
+		}
+	}
+	return false, nil
 }
 
 //
