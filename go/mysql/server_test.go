@@ -1516,7 +1516,7 @@ func TestParseConnAttrs(t *testing.T) {
 func TestServerMidStreamError(t *testing.T) {
 	// https://github.com/dolthub/dolt/issues/12504
 	th := &testHandler{}
-	th.SetErr(NewSQLError(ERCTEMaxRecursionDepth, SSUnknownSQLState, cteMaxRecursionDepthMsg))
+	th.SetErr(errCTEMaxRecursionDepth)
 	_, params := newTestServer(t, th)
 
 	queryCases := []struct {
@@ -1591,9 +1591,9 @@ func TestServerMidStreamError(t *testing.T) {
 		if !ok {
 			t.Fatalf("mysql failed: %s", out)
 		}
-		wantErrPrefix := fmt.Sprintf("ERROR %d (%s)", ERCTEMaxRecursionDepth, SSUnknownSQLState)
+		wantErrPrefix := fmt.Sprintf("ERROR %d (%s)", errCTEMaxRecursionDepth.Number(), errCTEMaxRecursionDepth.SQLState())
 		if !strings.Contains(out, wantErrPrefix) ||
-			!strings.Contains(out, cteMaxRecursionDepthMsg) {
+			!strings.Contains(out, errCTEMaxRecursionDepth.Message) {
 			t.Fatalf("expected error output, got: %s", out)
 		}
 		if strings.Contains(out, strings.Repeat("x", 128)) {
@@ -1612,9 +1612,9 @@ func TestServerMidStreamError(t *testing.T) {
 		if !strings.Contains(out, strings.Repeat("x", 128)) {
 			t.Fatalf("expected streamed rows before error in --quick output, got: %s", out)
 		}
-		wantErrPrefix := fmt.Sprintf("ERROR %d (%s)", ERCTEMaxRecursionDepth, SSUnknownSQLState)
+		wantErrPrefix := fmt.Sprintf("ERROR %d (%s)", errCTEMaxRecursionDepth.Number(), errCTEMaxRecursionDepth.SQLState())
 		if !strings.Contains(out, wantErrPrefix) ||
-			!strings.Contains(out, cteMaxRecursionDepthMsg) {
+			!strings.Contains(out, errCTEMaxRecursionDepth.Message) {
 			t.Fatalf("expected error output, got: %s", out)
 		}
 		if !strings.Contains(out, "nice name") || !strings.Contains(out, "nicer name") {
@@ -1750,6 +1750,10 @@ func sendStreamRows(callback func(*sqltypes.Result) error) error {
 	return nil
 }
 
-// cteMaxRecursionDepthMsg matches MySQL's error 3636 (ER_CTE_MAX_RECURSION_DEPTH)
-// text so mid-stream error tests share one protocol-accurate error fixture.
-const cteMaxRecursionDepthMsg = "Recursive query aborted after 1001 iterations. Try increasing @@cte_max_recursion_depth to a larger value."
+// errCTEMaxRecursionDepth models MySQL error 3636 (ER_CTE_MAX_RECURSION_DEPTH)
+// so mid-stream error tests share a single realistic SQL error instance.
+var errCTEMaxRecursionDepth = NewSQLError(
+	ERCTEMaxRecursionDepth,
+	SSUnknownSQLState,
+	"Recursive query aborted after 1001 iterations. Try increasing @@cte_max_recursion_depth to a larger value.",
+)

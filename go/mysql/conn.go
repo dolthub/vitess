@@ -1988,7 +1988,7 @@ func (c *Conn) writeQueryResultEnd(err, writeErr error, fieldSent, sendFinished,
 		return false, err
 	}
 	if !fieldSent || err != nil {
-		if !fieldSent && (err == nil || err == io.EOF) {
+		if !fieldSent && (err == nil || errors.Is(err, io.EOF)) {
 			err = NewSQLErrorFromError(errors.New("unexpected: query ended with no results and no error"))
 		}
 		if werr := c.writeErrorPacketFromError(err); werr != nil {

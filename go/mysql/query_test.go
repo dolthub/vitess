@@ -1186,7 +1186,7 @@ func TestComStmtPrepareMultiStmt (t *testing.T) {
 func TestExecuteMidStreamError(t *testing.T) {
 	// https://github.com/dolthub/dolt/issues/12504
 	th := &testHandler{}
-	th.SetErr(NewSQLError(ERCTEMaxRecursionDepth, SSUnknownSQLState, cteMaxRecursionDepthMsg))
+	th.SetErr(errCTEMaxRecursionDepth)
 
 	for _, caps := range []struct {
 		name string

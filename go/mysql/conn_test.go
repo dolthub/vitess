@@ -680,7 +680,7 @@ func TestLoadInfileWithActiveWatcher(t *testing.T) {
 func TestConnMidStreamError(t *testing.T) {
 	// https://github.com/dolthub/dolt/issues/12504
 	th := &testHandler{}
-	th.SetErr(NewSQLError(ERCTEMaxRecursionDepth, SSUnknownSQLState, cteMaxRecursionDepthMsg))
+	th.SetErr(errCTEMaxRecursionDepth)
 
 	t.Run("ExecuteStreamFetch closes active result on mid-stream ERR_Packet", func(t *testing.T) {
 		_, sConn, cConn := createSocketPair(t)
