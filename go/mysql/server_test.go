@@ -19,6 +19,7 @@ package mysql
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -133,6 +134,8 @@ func (th *testHandler) ComInitDB(c *Conn, schemaName string) error {
 	return nil
 }
 
+// ComMultiQuery implements [Handler] by splitting semicolon-delimited statements
+// in |query| on |c| and invoking |callback| for each result batch.
 func (th *testHandler) ComMultiQuery(ctx context.Context, c *Conn, query string, callback ResultSpoolFn) (string, error) {
 	if first, rest, ok := strings.Cut(query, "; "); ok {
 		err := th.ComQuery(ctx, c, first, callback)
@@ -157,6 +160,18 @@ func (th *testHandler) ComQuery(ctx context.Context, c *Conn, query string, call
 		callback(selectRowsResult, false)
 	case "error after send":
 		callback(selectRowsResult, false)
+		return th.Err()
+	case "error after stream":
+		if err := sendStreamRows(func(r *sqltypes.Result) error {
+			return callback(r, false)
+		}); err != nil {
+			return err
+		}
+		return th.Err()
+	case "error after ok":
+		if err := callback(&sqltypes.Result{RowsAffected: 1}, false); err != nil {
+			return err
+		}
 		return th.Err()
 	case "insert":
 		callback(&sqltypes.Result{
@@ -244,6 +259,8 @@ func (th *testHandler) ComPrepare(ctx context.Context, c *Conn, query string, pr
 	return nil, nil
 }
 
+// ComStmtExecute implements [Handler] for test prepared statement execution
+// on |c| using |prepare| and |callback|.
 func (th *testHandler) ComStmtExecute(ctx context.Context, c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
 	switch prepare.PrepareStmt {
 	case "empty result":
@@ -317,6 +334,11 @@ func (th *testHandler) ComStmtExecute(ctx context.Context, c *Conn, prepare *Pre
 		return callback(res)
 	case "error after send":
 		if err := callback(selectRowsResult); err != nil {
+			return err
+		}
+		return th.Err()
+	case "error after stream":
+		if err := sendStreamRows(callback); err != nil {
 			return err
 		}
 		return th.Err()
@@ -791,7 +813,8 @@ func TestServer(t *testing.T) {
 	}
 	th.SetWarnings(0)
 
-	// An error after streaming rows sends an ERR_Packet and keeps the connection usable.
+	// An error after streaming rows sends an ERR_Packet and keeps the
+	// connection usable.
 	th.SetErr(NewSQLError(ERUnknownComError, SSUnknownComError, "forced error after send"))
 	output, ok = runMysql(t, params, "error after send")
 	if ok {
@@ -1653,16 +1676,16 @@ func TestConn_ErrorAfterFieldsSent(t *testing.T) {
 	}{
 		{
 			name:  "ComQuery WithoutDeprecateEOF",
-			query: "error after send",
+			query: "error after stream",
 		},
 		{
 			name:  "ComQuery WithDeprecateEOF",
-			query: "error after send",
+			query: "error after stream",
 			flags: CapabilityClientDeprecateEOF,
 		},
 		{
 			name:  "ComMultiQuery aborts remaining statements",
-			query: "error after send; select rows",
+			query: "error after stream; select rows",
 			flags: CapabilityClientMultiStatements,
 		},
 	}
@@ -1679,9 +1702,9 @@ func TestConn_ErrorAfterFieldsSent(t *testing.T) {
 			defer conn.Close()
 
 			if tc.flags&CapabilityClientMultiStatements != 0 {
-				_, _, err = conn.ExecuteFetchMulti(ctx, tc.query, 100, true)
+				_, _, err = conn.ExecuteFetchMulti(ctx, tc.query, 1000, true)
 			} else {
-				_, err = conn.ExecuteFetch(tc.query, 100, true)
+				_, err = conn.ExecuteFetch(tc.query, 1000, true)
 			}
 			sqlErr, ok := err.(*SQLError)
 			if !ok || sqlErr.Number() != ERUnknownError {
@@ -1698,7 +1721,42 @@ func TestConn_ErrorAfterFieldsSent(t *testing.T) {
 		})
 	}
 
-	t.Run("writeQueryResultEnd propagates socket write errors", func(t *testing.T) {
+	t.Run("ComMultiQuery delivers prior result before mid-stream error", func(t *testing.T) {
+		ctx := context.Background()
+		p := *params
+		p.Flags = CapabilityClientMultiStatements
+		conn, err := Connect(ctx, &p)
+		if err != nil {
+			t.Fatalf("Connect failed: %v", err)
+		}
+		defer conn.Close()
+
+		if err := conn.WriteComQuery("select rows; error after stream; select rows"); err != nil {
+			t.Fatalf("WriteComQuery failed: %v", err)
+		}
+		qr1, status1, _, err := conn.ReadQueryResult(ctx, 100, true)
+		if err != nil {
+			t.Fatalf("first result failed: %v", err)
+		}
+		if len(qr1.Rows) != 2 || !status1.hasMore() {
+			t.Fatalf("got rows=%d hasMore=%v, want rows=2 hasMore=true", len(qr1.Rows), status1.hasMore())
+		}
+		_, _, _, err = conn.ReadQueryResult(ctx, 1000, true)
+		sqlErr, ok := err.(*SQLError)
+		if !ok || sqlErr.Number() != ERUnknownError {
+			t.Fatalf("got err=%v (%T), want errno %d", err, err, ERUnknownError)
+		}
+
+		res, err := conn.ExecuteFetch("select rows", 100, true)
+		if err != nil {
+			t.Fatalf("follow-up query failed: %v", err)
+		}
+		if len(res.Rows) != 2 {
+			t.Fatalf("got %d rows, want 2", len(res.Rows))
+		}
+	})
+
+	t.Run("socket write failure during stream aborts without error packet", func(t *testing.T) {
 		listener, sConn, cConn := createSocketPair(t)
 		defer func() {
 			listener.Close()
@@ -1706,10 +1764,78 @@ func TestConn_ErrorAfterFieldsSent(t *testing.T) {
 			cConn.Close()
 		}()
 
-		writeErr := fmt.Errorf("write broken pipe")
-		aborted, err := sConn.writeQueryResultEnd(writeErr, writeErr, true, false, false, 0)
-		if aborted || err != writeErr {
-			t.Fatalf("got aborted=%v err=%v, want aborted=false err=%v", aborted, err, writeErr)
+		writeErr := errors.New("write broken pipe")
+		sConn.Conn = &failingWriteConn{Conn: sConn.Conn, err: writeErr, failAfter: 1}
+		sConn.startWriterBuffering()
+
+		done := make(chan error, 1)
+		go func() {
+			defer sConn.Close()
+			_, err := sConn.execQuery(context.Background(), "error after stream", th, false)
+			done <- err
+		}()
+
+		_, _, _, clientErr := cConn.ReadQueryResult(context.Background(), 1000, true)
+		serverErr := <-done
+		if serverErr == nil || !strings.Contains(serverErr.Error(), writeErr.Error()) {
+			t.Fatalf("got serverErr=%v, want substring %q", serverErr, writeErr.Error())
+		}
+		if clientErr == nil {
+			t.Fatalf("expected client read failure after socket write abort")
+		}
+	})
+
+	t.Run("writeQueryResultEnd distinguishes write errors from query errors", func(t *testing.T) {
+		listener, sConn, cConn := createSocketPair(t)
+		defer func() {
+			listener.Close()
+			sConn.Close()
+			cConn.Close()
+		}()
+
+		writeErr := errors.New("socket write failed")
+		queryErr := errors.New("query failed")
+
+		aborted, err := sConn.writeQueryResultEnd(nil, writeErr, true, false, false, 0)
+		if aborted || !errors.Is(err, writeErr) {
+			t.Fatalf("nil queryErr: got aborted=%v err=%v, want aborted=false err=%v", aborted, err, writeErr)
+		}
+
+		aborted, err = sConn.writeQueryResultEnd(queryErr, writeErr, true, false, false, 0)
+		if aborted || !errors.Is(err, queryErr) {
+			t.Fatalf("distinct queryErr: got aborted=%v err=%v, want aborted=false err=%v", aborted, err, queryErr)
+		}
+	})
+
+	t.Run("error after completed OK response is fatal without trailing error packet", func(t *testing.T) {
+		listener, sConn, cConn := createSocketPair(t)
+		defer func() {
+			listener.Close()
+			sConn.Close()
+			cConn.Close()
+		}()
+
+		if err := cConn.WriteComQuery("error after ok"); err != nil {
+			t.Fatalf("WriteComQuery failed: %v", err)
+		}
+		err := sConn.handleNextCommand(context.Background(), th)
+		if !errors.Is(err, th.Err()) {
+			t.Fatalf("got server err=%v, want %v", err, th.Err())
+		}
+		if err := sConn.flush(context.Background()); err != nil {
+			t.Fatalf("flush failed: %v", err)
+		}
+		sConn.Close()
+
+		qr, _, _, err := cConn.ReadQueryResult(context.Background(), 100, true)
+		if err != nil {
+			t.Fatalf("ReadQueryResult failed: %v", err)
+		}
+		if qr.RowsAffected != 1 {
+			t.Fatalf("got RowsAffected=%d, want 1", qr.RowsAffected)
+		}
+		if _, err := cConn.ReadPacket(context.Background()); err == nil {
+			t.Fatalf("expected EOF after closed server connection, got extra packet")
 		}
 	})
 
@@ -1733,7 +1859,7 @@ func TestConn_ErrorAfterFieldsSent(t *testing.T) {
 				sConn.Capabilities = caps.flag
 				cConn.Capabilities = caps.flag
 				sConn.PrepareData = map[uint32]*PrepareData{
-					0: {StatementID: 0, PrepareStmt: "error after send"},
+					0: {StatementID: 0, PrepareStmt: "error after stream"},
 					1: {StatementID: 1, PrepareStmt: "select rows"},
 				}
 
@@ -1744,7 +1870,7 @@ func TestConn_ErrorAfterFieldsSent(t *testing.T) {
 						errCh <- err
 						return
 					}
-					qr, status, _, err := cConn.ReadQueryResult(context.Background(), 100, true)
+					qr, status, _, err := cConn.ReadQueryResult(context.Background(), 1000, true)
 					if useCursor == 0 {
 						errCh <- err
 						return
@@ -1757,20 +1883,27 @@ func TestConn_ErrorAfterFieldsSent(t *testing.T) {
 						errCh <- fmt.Errorf("expected cursor to exist")
 						return
 					}
-					if err := writeRawPacketToConn(cConn, []byte{ComStmtFetch, 0, 0, 0, 0, useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1}); err != nil {
-						errCh <- err
-						return
+					for {
+						if err := writeRawPacketToConn(cConn, []byte{ComStmtFetch, 0, 0, 0, 0, useCursor, 1, 0, 0}); err != nil {
+							errCh <- err
+							return
+						}
+						_, fetchStatus, _, err := cConn.FetchQueryResult(context.Background(), 1000, qr.Fields)
+						if err != nil || fetchStatus.cursorLastRowSent() {
+							errCh <- err
+							return
+						}
 					}
-					_, _, _, err = cConn.FetchQueryResult(context.Background(), 100, qr.Fields)
-					errCh <- err
 				}()
 
 				if err := sConn.handleNextCommand(context.Background(), th); err != nil {
 					t.Fatalf("handleNextCommand(execute) failed: %v", err)
 				}
 				if useCursor != 0 {
-					if err := sConn.handleNextCommand(context.Background(), th); err != nil {
-						t.Fatalf("handleNextCommand(fetch) failed: %v", err)
+					for i := 0; i < 2; i++ {
+						if err := sConn.handleNextCommand(context.Background(), th); err != nil {
+							t.Fatalf("handleNextCommand(fetch %d) failed: %v", i+1, err)
+						}
 					}
 				}
 				gotErr := <-errCh
@@ -1806,4 +1939,42 @@ func TestConn_ErrorAfterFieldsSent(t *testing.T) {
 			})
 		}
 	}
+}
+
+// failingWriteConn wraps a [net.Conn] to fail after a bounded number of writes.
+type failingWriteConn struct {
+	net.Conn
+	// err is returned once |failAfter| writes have completed.
+	err error
+	// failAfter counts remaining writes allowed before returning |err|.
+	failAfter int
+}
+
+// Write delegates to the underlying [net.Conn] until |failAfter| writes have
+// succeeded, then returns |err| to simulate a mid-stream socket failure.
+func (f *failingWriteConn) Write(p []byte) (int, error) {
+	if f.failAfter == 0 {
+		return 0, f.err
+	}
+	f.failAfter--
+	return f.Conn.Write(p)
+}
+
+// sendStreamRows streams enough rows across multiple batches to exceed
+// DefaultConnBufferSize via |callback| before returning any write error.
+func sendStreamRows(callback func(*sqltypes.Result) error) error {
+	payload := strings.Repeat("x", 128)
+	fields := []*querypb.Field{{Name: "val", Type: querypb.Type_VARCHAR}}
+	val := sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(payload))
+	for i := 0; i < 300; i++ {
+		res := &sqltypes.Result{
+			Fields:       fields,
+			Rows:         [][]sqltypes.Value{{val}},
+			RowsAffected: 1,
+		}
+		if err := callback(res); err != nil {
+			return err
+		}
+	}
+	return nil
 }
