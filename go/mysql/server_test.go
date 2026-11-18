@@ -145,6 +145,7 @@ func (th *testHandler) ComMultiQuery(ctx context.Context, c *Conn, query string,
 	return "", err
 }
 
+// ComQuery implements [Handler] for test query strings on |c| via |callback|.
 func (th *testHandler) ComQuery(ctx context.Context, c *Conn, query string, callback ResultSpoolFn) error {
 	if result := th.Result(); result != nil {
 		callback(th.result, false)
@@ -1943,6 +1944,7 @@ func TestConn_ErrorAfterFieldsSent(t *testing.T) {
 
 // failingWriteConn wraps a [net.Conn] to fail after a bounded number of writes.
 type failingWriteConn struct {
+	// Conn is the underlying network connection for delegated operations.
 	net.Conn
 	// err is returned once |failAfter| writes have completed.
 	err error
