@@ -1780,8 +1780,13 @@ func formatID(original string) string {
 	return sb.String()
 }
 
-// execQuery executes |query| through |handler| and writes resultset or error
-// packets to |c|.
+// execQuery dispatches a text |query| on |c| to |handler| and writes the
+// resulting columns, rows, OK_Packet, or ERR_Packet back to the client.
+//
+// |ctx| bounds query execution lifetime. When |multiStatements| is true, it
+// calls handler.ComMultiQuery and returns any unexecuted trailing SQL so the
+// command loop can run the next statement, or returns an empty remainder when a
+// streamed error aborts the batch.
 func (c *Conn) execQuery(ctx context.Context, query string, handler Handler, multiStatements bool) (string, error) {
 	defer trace.StartRegion(ctx, "query").End()
 
@@ -1848,8 +1853,15 @@ func (c *Conn) execQuery(ctx context.Context, query string, handler Handler, mul
 	return remainder, nil
 }
 
-// execPrepareStatement executes |stmtID| through |handler| and writes the
-// result packets or opens a cursor when requested by |cursorType|.
+// execPrepareStatement runs a previously prepared statement on |c| via |handler|
+// so clients receive either immediate binary results or a server-side cursor.
+//
+// |stmtID| identifies the prepared statement metadata stored in c.PrepareData
+// during COM_STMT_PREPARE. When |cursorType| is NoCursor or
+// ParameterCountAvailable, all binary rows stream in this response. For any
+// other cursor flag, execution runs in a background goroutine so this call
+// writes only column metadata now and stages batches for COM_STMT_FETCH.
+// |ctx| bounds query execution lifetime and cancellation.
 func (c *Conn) execPrepareStatement(ctx context.Context, stmtID uint32, cursorType byte, handler Handler) error {
 	prepare := c.PrepareData[stmtID]
 	if cursorType == NoCursor || cursorType == ParameterCountAvailable {
@@ -1949,16 +1961,29 @@ func (c *Conn) execPrepareStatement(ctx context.Context, stmtID uint32, cursorTy
 	return nil
 }
 
-// writeQueryResultEnd writes an ERR_Packet or trailing resultset terminator.
+// writeQueryResultEnd writes the closing packet for a query or prepared
+// statement response so the client receives a valid protocol terminator and the
+// connection remains synchronized.
 //
-// When |err| occurs after column metadata was sent (|fieldSent| is true) and
-// no OK packet completed the response (|sendFinished| is false), the
-// [Text Resultset] specification allows terminating the stream with an
-// ERR_Packet instead of an EOF_Packet so the connection stays usable. Any
-// socket failure in |writeErr| aborts the connection instead.
+// Transport and OK_Packet guards prevent writing corrupt follow-up packets.
+// If writing fields, rows, or an OK_Packet failed on the socket (|writeErr| is
+// non-nil), the stream may be truncated and cannot carry an ERR_Packet, so the
+// write error is returned to close the connection. Likewise, if an OK_Packet
+// already completed a rowless command (|fieldSent| and |sendFinished| are both
+// true), a later |err| cannot append an ERR_Packet and closes the connection.
 //
-// It reports whether an error packet terminated the command and returns any
-// fatal connection error, passing |more| and |warnings| to writeEndResult.
+// Execution errors before metadata (|fieldSent| is false) or during row
+// streaming (|err| is non-nil) terminate the response with an ERR_Packet. The
+// [Text Resultset] protocol allows replacing the trailing EOF_Packet or
+// OK_Packet with an ERR_Packet after Column Definition and row packets have
+// been sent, keeping the connection usable. When neither metadata nor an error
+// occurred (|fieldSent| is false and |err| is nil or io.EOF), a failsafe
+// ERR_Packet prevents the client from hanging. Returning aborted=true tells the
+// caller to discard any remaining statements in a multi-statement batch.
+//
+// Normal completion calls writeEndResult when |sendFinished| is false to emit
+// the trailing EOF_Packet or OK_Packet carrying |more| (setting
+// SERVER_MORE_RESULTS_EXISTS) and the accumulated |warnings| count.
 //
 // [Text Resultset]: https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_query_response_text_resultset.html
 func (c *Conn) writeQueryResultEnd(err, writeErr error, fieldSent, sendFinished, more bool, warnings uint16) (bool, error) {
