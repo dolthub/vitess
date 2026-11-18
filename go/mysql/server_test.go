@@ -1516,7 +1516,7 @@ func TestParseConnAttrs(t *testing.T) {
 func TestServerMidStreamError(t *testing.T) {
 	// https://github.com/dolthub/dolt/issues/12504
 	th := &testHandler{}
-	th.SetErr(NewSQLError(ERUnknownError, SSUnknownSQLState, "WITH RECURSIVE iteration limit exceeded"))
+	th.SetErr(NewSQLError(ERCTEMaxRecursionDepth, SSUnknownSQLState, cteMaxRecursionDepthMsg))
 	_, params := newTestServer(t, th)
 
 	queryCases := []struct {
@@ -1556,7 +1556,7 @@ func TestServerMidStreamError(t *testing.T) {
 			} else {
 				_, err = conn.ExecuteFetch(tc.query, 1000, true)
 			}
-			mustMatchSQLError(t, err, ERUnknownError)
+			mustMatchSQLError(t, err, ERCTEMaxRecursionDepth)
 			mustSelectTwoRows(t, conn)
 		})
 	}
@@ -1582,7 +1582,7 @@ func TestServerMidStreamError(t *testing.T) {
 			t.Fatalf("got rows=%d hasMore=%v, want rows=2 hasMore=true", len(qr1.Rows), status1.hasMore())
 		}
 		_, _, _, err = conn.ReadQueryResult(ctx, 1000, true)
-		mustMatchSQLError(t, err, ERUnknownError)
+		mustMatchSQLError(t, err, ERCTEMaxRecursionDepth)
 		mustSelectTwoRows(t, conn)
 	})
 
@@ -1591,8 +1591,9 @@ func TestServerMidStreamError(t *testing.T) {
 		if !ok {
 			t.Fatalf("mysql failed: %s", out)
 		}
-		if !strings.Contains(out, "ERROR 1105 (HY000)") ||
-			!strings.Contains(out, "WITH RECURSIVE iteration limit exceeded") {
+		wantErrPrefix := fmt.Sprintf("ERROR %d (%s)", ERCTEMaxRecursionDepth, SSUnknownSQLState)
+		if !strings.Contains(out, wantErrPrefix) ||
+			!strings.Contains(out, cteMaxRecursionDepthMsg) {
 			t.Fatalf("expected error output, got: %s", out)
 		}
 		if strings.Contains(out, strings.Repeat("x", 128)) {
@@ -1611,8 +1612,9 @@ func TestServerMidStreamError(t *testing.T) {
 		if !strings.Contains(out, strings.Repeat("x", 128)) {
 			t.Fatalf("expected streamed rows before error in --quick output, got: %s", out)
 		}
-		if !strings.Contains(out, "ERROR 1105 (HY000)") ||
-			!strings.Contains(out, "WITH RECURSIVE iteration limit exceeded") {
+		wantErrPrefix := fmt.Sprintf("ERROR %d (%s)", ERCTEMaxRecursionDepth, SSUnknownSQLState)
+		if !strings.Contains(out, wantErrPrefix) ||
+			!strings.Contains(out, cteMaxRecursionDepthMsg) {
 			t.Fatalf("expected error output, got: %s", out)
 		}
 		if !strings.Contains(out, "nice name") || !strings.Contains(out, "nicer name") {
@@ -1622,8 +1624,11 @@ func TestServerMidStreamError(t *testing.T) {
 }
 
 // runMysqlWithInput invokes the mysql CLI binary against |params| with optional
-// |stdin| and extra command-line |args|, returning combined output and whether
-// the command exited with status zero.
+// |stdin| and extra |args|, returning combined output and whether it exited 0.
+//
+// It exists alongside runMysql because runMysql passes -e for a single batch,
+// whereas session recovery tests need |stdin|, --force, and --quick to run
+// sequential commands over one CLI connection.
 func runMysqlWithInput(t *testing.T, params *ConnParams, stdin string, args ...string) (string, bool) {
 	t.Helper()
 	dir, err := vtenv.VtMysqlRoot()
@@ -1675,6 +1680,9 @@ func runMysqlWithInput(t *testing.T, params *ConnParams, stdin string, args ...s
 // newTestServer starts a TCP Listener backed by |handler| with static user1
 // credentials and registers cleanup on |t|, returning the listener and client
 // connection parameters.
+//
+// It centralizes the boilerplate static-auth listener setup duplicated across
+// server integration tests.
 func newTestServer(t *testing.T, handler Handler) (*Listener, *ConnParams) {
 	t.Helper()
 	authServer := NewAuthServerStatic("", "", 0)
@@ -1698,8 +1706,8 @@ func newTestServer(t *testing.T, handler Handler) (*Listener, *ConnParams) {
 	}
 }
 
-// mustMatchSQLError fails |t| unless |err| is a *SQLError whose error number
-// equals |wantCode|, and returns that *SQLError.
+// mustMatchSQLError fails |t| unless |err| is a *SQLError with code |wantCode|
+// and returns it, avoiding repeated type assertions across error tests.
 func mustMatchSQLError(t *testing.T, err error, wantCode int) *SQLError {
 	t.Helper()
 	sqlErr, ok := err.(*SQLError)
@@ -1722,8 +1730,9 @@ func mustSelectTwoRows(t *testing.T, conn *Conn) {
 	}
 }
 
-// sendStreamRows streams enough rows across multiple batches to exceed
-// DefaultConnBufferSize via |callback| before returning any write error.
+// sendStreamRows emits 300 128-byte rows in separate |callback| batches before
+// returning, exceeding the 16 KiB DefaultConnBufferSize so tests flush real
+// packets to the wire prior to failing.
 func sendStreamRows(callback func(*sqltypes.Result) error) error {
 	payload := strings.Repeat("x", 128)
 	fields := []*querypb.Field{{Name: "val", Type: querypb.Type_VARCHAR}}
@@ -1740,3 +1749,7 @@ func sendStreamRows(callback func(*sqltypes.Result) error) error {
 	}
 	return nil
 }
+
+// cteMaxRecursionDepthMsg matches MySQL's error 3636 (ER_CTE_MAX_RECURSION_DEPTH)
+// text so mid-stream error tests share one protocol-accurate error fixture.
+const cteMaxRecursionDepthMsg = "Recursive query aborted after 1001 iterations. Try increasing @@cte_max_recursion_depth to a larger value."

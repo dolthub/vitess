@@ -559,6 +559,7 @@ const (
 	ErrCantCreateGeometryObject      = 1416
 	ErrGISDataWrongEndianess         = 3055
 	ErrUnresolvedTableLock           = 3568
+	ERCTEMaxRecursionDepth           = 3636
 	ErrNotImplementedForCartesianSRS = 3704
 	ErrNotImplementedForProjectedSRS = 3705
 	ErrNonPositiveRadius             = 3706

@@ -1186,7 +1186,7 @@ func TestComStmtPrepareMultiStmt (t *testing.T) {
 func TestExecuteMidStreamError(t *testing.T) {
 	// https://github.com/dolthub/dolt/issues/12504
 	th := &testHandler{}
-	th.SetErr(NewSQLError(ERUnknownError, SSUnknownSQLState, "WITH RECURSIVE iteration limit exceeded"))
+	th.SetErr(NewSQLError(ERCTEMaxRecursionDepth, SSUnknownSQLState, cteMaxRecursionDepthMsg))
 
 	for _, caps := range []struct {
 		name string
@@ -1207,7 +1207,7 @@ func TestExecuteMidStreamError(t *testing.T) {
 				}
 
 				gotErr := mustRunStmtStreamError(t, sConn, cConn, th, useCursor)
-				mustMatchSQLError(t, gotErr, ERUnknownError)
+				mustMatchSQLError(t, gotErr, ERCTEMaxRecursionDepth)
 				mustRunFollowUpStmt(t, sConn, cConn, th)
 			})
 		}
@@ -1281,6 +1281,9 @@ func mustRunFollowUpStmt(t *testing.T, sConn, cConn *Conn, handler Handler) {
 
 // clientExecuteStmt sends a COM_STMT_EXECUTE packet for |stmtID| with
 // |useCursor| on |cConn| and reads up to |maxRows| of the result.
+//
+// It exists alongside clientExecute so callers testing error responses can
+// inspect the returned error rather than aborting inside the helper.
 func clientExecuteStmt(cConn *Conn, stmtID, useCursor byte, maxRows int) (*sqltypes.Result, serverStatus, error) {
 	packet := []byte{ComStmtExecute, stmtID, 0, 0, 0, useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1}
 	if err := writeRawPacketToConn(cConn, packet); err != nil {
@@ -1292,6 +1295,9 @@ func clientExecuteStmt(cConn *Conn, stmtID, useCursor byte, maxRows int) (*sqlty
 
 // clientFetchStmt sends a COM_STMT_FETCH packet for |stmtID| with |useCursor|
 // on |cConn| and reads up to |maxRows| rows using |fields|.
+//
+// It exists alongside clientFetch so cursor-error tests can capture mid-fetch
+// ERR_Packet errors instead of failing inside clientFetch.
 func clientFetchStmt(cConn *Conn, stmtID, useCursor byte, maxRows int, fields []*querypb.Field) (*sqltypes.Result, serverStatus, error) {
 	packet := []byte{ComStmtFetch, stmtID, 0, 0, 0, useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1}
 	if err := writeRawPacketToConn(cConn, packet); err != nil {

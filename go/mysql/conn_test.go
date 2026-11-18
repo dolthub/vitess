@@ -680,58 +680,9 @@ func TestLoadInfileWithActiveWatcher(t *testing.T) {
 func TestConnMidStreamError(t *testing.T) {
 	// https://github.com/dolthub/dolt/issues/12504
 	th := &testHandler{}
-	th.SetErr(NewSQLError(ERUnknownError, SSUnknownSQLState, "WITH RECURSIVE iteration limit exceeded"))
+	th.SetErr(NewSQLError(ERCTEMaxRecursionDepth, SSUnknownSQLState, cteMaxRecursionDepthMsg))
 
-	t.Run("socket write failure during stream aborts without error packet", func(t *testing.T) {
-		_, sConn, cConn := createSocketPair(t)
-		writeErr := errors.New("write broken pipe")
-		sConn.Conn = &failingWriteConn{Conn: sConn.Conn, err: writeErr, failAfter: 1}
-		sConn.startWriterBuffering()
-
-		done := make(chan error, 1)
-		go func() {
-			defer sConn.Close()
-			_, err := sConn.execQuery(context.Background(), "error after stream", th, false)
-			done <- err
-		}()
-
-		_, _, _, clientErr := cConn.ReadQueryResult(context.Background(), 1000, true)
-		serverErr := <-done
-		if serverErr == nil || !strings.Contains(serverErr.Error(), writeErr.Error()) {
-			t.Fatalf("got serverErr=%v, want substring %q", serverErr, writeErr.Error())
-		}
-		if clientErr == nil {
-			t.Fatalf("expected client read failure after socket write abort")
-		}
-	})
-
-	t.Run("error after completed OK response is fatal without trailing error packet", func(t *testing.T) {
-		_, sConn, cConn := createSocketPair(t)
-		if err := cConn.WriteComQuery("error after ok"); err != nil {
-			t.Fatalf("WriteComQuery failed: %v", err)
-		}
-		err := sConn.handleNextCommand(context.Background(), th)
-		if !errors.Is(err, th.Err()) {
-			t.Fatalf("got server err=%v, want %v", err, th.Err())
-		}
-		if err := sConn.flush(context.Background()); err != nil {
-			t.Fatalf("flush failed: %v", err)
-		}
-		sConn.Close()
-
-		qr, _, _, err := cConn.ReadQueryResult(context.Background(), 100, true)
-		if err != nil {
-			t.Fatalf("ReadQueryResult failed: %v", err)
-		}
-		if qr.RowsAffected != 1 {
-			t.Fatalf("got RowsAffected=%d, want 1", qr.RowsAffected)
-		}
-		if _, err := cConn.ReadPacket(context.Background()); err == nil {
-			t.Fatalf("expected EOF after closed server connection, got extra packet")
-		}
-	})
-
-	t.Run("ExecuteStreamFetch clears stream state on mid-stream error", func(t *testing.T) {
+	t.Run("ExecuteStreamFetch closes active result on mid-stream ERR_Packet", func(t *testing.T) {
 		_, sConn, cConn := createSocketPair(t)
 		srvErr := make(chan error, 1)
 		go func() {
@@ -765,7 +716,7 @@ func TestConnMidStreamError(t *testing.T) {
 		if rows != 300 {
 			t.Fatalf("got %d streamed rows, want 300", rows)
 		}
-		mustMatchSQLError(t, streamErr, ERUnknownError)
+		mustMatchSQLError(t, streamErr, ERCTEMaxRecursionDepth)
 
 		// CloseResult and subsequent queries must not hang or fail with
 		// CRCommandsOutOfSync.
@@ -779,6 +730,55 @@ func TestConnMidStreamError(t *testing.T) {
 		}
 		if err := <-srvErr; err != nil {
 			t.Fatalf("server loop failed: %v", err)
+		}
+	})
+
+	t.Run("socket write error during stream aborts without ERR_Packet", func(t *testing.T) {
+		_, sConn, cConn := createSocketPair(t)
+		writeErr := errors.New("write broken pipe")
+		sConn.Conn = &failingWriteConn{Conn: sConn.Conn, err: writeErr, failAfter: 1}
+		sConn.startWriterBuffering()
+
+		done := make(chan error, 1)
+		go func() {
+			defer sConn.Close()
+			_, err := sConn.execQuery(context.Background(), "error after stream", th, false)
+			done <- err
+		}()
+
+		_, _, _, clientErr := cConn.ReadQueryResult(context.Background(), 1000, true)
+		serverErr := <-done
+		if serverErr == nil || !strings.Contains(serverErr.Error(), writeErr.Error()) {
+			t.Fatalf("got serverErr=%v, want substring %q", serverErr, writeErr.Error())
+		}
+		if clientErr == nil {
+			t.Fatalf("expected client read failure after socket write abort")
+		}
+	})
+
+	t.Run("post-OK_Packet handler error aborts without trailing ERR_Packet", func(t *testing.T) {
+		_, sConn, cConn := createSocketPair(t)
+		if err := cConn.WriteComQuery("error after ok"); err != nil {
+			t.Fatalf("WriteComQuery failed: %v", err)
+		}
+		err := sConn.handleNextCommand(context.Background(), th)
+		if !errors.Is(err, th.Err()) {
+			t.Fatalf("got server err=%v, want %v", err, th.Err())
+		}
+		if err := sConn.flush(context.Background()); err != nil {
+			t.Fatalf("flush failed: %v", err)
+		}
+		sConn.Close()
+
+		qr, _, _, err := cConn.ReadQueryResult(context.Background(), 100, true)
+		if err != nil {
+			t.Fatalf("ReadQueryResult failed: %v", err)
+		}
+		if qr.RowsAffected != 1 {
+			t.Fatalf("got RowsAffected=%d, want 1", qr.RowsAffected)
+		}
+		if _, err := cConn.ReadPacket(context.Background()); err == nil {
+			t.Fatalf("expected EOF after closed server connection, got extra packet")
 		}
 	})
 }
