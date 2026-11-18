@@ -1962,28 +1962,17 @@ func (c *Conn) execPrepareStatement(ctx context.Context, stmtID uint32, cursorTy
 }
 
 // writeQueryResultEnd writes the closing packet for a query or prepared
-// statement response so the client receives a valid protocol terminator and the
-// connection remains synchronized.
+// statement response and reports whether a query error aborted multi-statement
+// processing.
 //
-// Transport and OK_Packet guards prevent writing corrupt follow-up packets.
-// If writing fields, rows, or an OK_Packet failed on the socket (|writeErr| is
-// non-nil), the stream may be truncated and cannot carry an ERR_Packet, so the
-// write error is returned to close the connection. Likewise, if an OK_Packet
-// already completed a rowless command (|fieldSent| and |sendFinished| are both
-// true), a later |err| cannot append an ERR_Packet and closes the connection.
+// Transport failures (|writeErr| non-nil) and errors after an OK_Packet
+// (|fieldSent| and |sendFinished| with |err| non-nil) return the error to
+// close the connection. Otherwise, missing metadata or a non-nil |err|
+// delegates to writeErrorPacketFromError per [Text Resultset] (synthesizing an
+// error if needed) so the session stays usable.
 //
-// Execution errors before metadata (|fieldSent| is false) or during row
-// streaming (|err| is non-nil) terminate the response with an ERR_Packet. The
-// [Text Resultset] protocol allows replacing the trailing EOF_Packet or
-// OK_Packet with an ERR_Packet after Column Definition and row packets have
-// been sent, keeping the connection usable. When neither metadata nor an error
-// occurred (|fieldSent| is false and |err| is nil or io.EOF), a failsafe
-// ERR_Packet prevents the client from hanging. Returning aborted=true tells the
-// caller to discard any remaining statements in a multi-statement batch.
-//
-// Normal completion calls writeEndResult when |sendFinished| is false to emit
-// the trailing EOF_Packet or OK_Packet carrying |more| (setting
-// SERVER_MORE_RESULTS_EXISTS) and the accumulated |warnings| count.
+// When streaming succeeded and |sendFinished| is false, writeEndResult emits
+// the trailing packet with |more| and |warnings|.
 //
 // [Text Resultset]: https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_query_response_text_resultset.html
 func (c *Conn) writeQueryResultEnd(err, writeErr error, fieldSent, sendFinished, more bool, warnings uint16) (bool, error) {

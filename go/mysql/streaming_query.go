@@ -133,7 +133,8 @@ func (c *Conn) FetchNext() ([]sqltypes.Value, error) {
 		c.fields = nil
 		return nil, nil
 	} else if isErrorPacket(data) {
-		// Error packet.
+		// Error packet ends the stream, so clear fields for reuse.
+		c.fields = nil
 		return nil, ParseErrorPacket(data)
 	}
 

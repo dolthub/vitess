@@ -954,14 +954,7 @@ func clientExecute(t *testing.T, cConn *Conn, useCursor byte, maxRows int) (*sql
 		cConn.StatusFlags &= ^uint16(ServerCursorExists)
 	}
 
-	// Write a COM_STMT_EXECUTE packet
-	mockPacket := []byte{ComStmtExecute, 0, 0, 0, 0, useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1}
-
-	if err := writeRawPacketToConn(cConn, mockPacket); err != nil {
-		t.Fatalf("WriteMockExecuteToConn failed with error: %v", err)
-	}
-
-	qr, status, _, err := cConn.ReadQueryResult(context.Background(), maxRows, true)
+	qr, status, err := clientExecuteStmt(cConn, 0, useCursor, maxRows)
 	if err != nil {
 		t.Fatalf("ReadQueryResult failed with error: %v", err)
 	}
@@ -970,14 +963,7 @@ func clientExecute(t *testing.T, cConn *Conn, useCursor byte, maxRows int) (*sql
 }
 
 func clientFetch(t *testing.T, cConn *Conn, useCursor byte, maxRows int, fields []*querypb.Field) (*sqltypes.Result, serverStatus) {
-	// Write a COM_STMT_FETCH packet
-	mockPacket := []byte{ComStmtFetch, 0, 0, 0, 0, useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1}
-
-	if err := writeRawPacketToConn(cConn, mockPacket); err != nil {
-		t.Fatalf("WriteMockDataToConn failed with error: %v", err)
-	}
-
-	qr, status, _, err := cConn.FetchQueryResult(context.Background(), maxRows, fields)
+	qr, status, err := clientFetchStmt(cConn, 0, useCursor, maxRows, fields)
 	if err != nil && err != io.EOF {
 		t.Fatalf("FetchQueryResult failed with error: %v", err)
 	}
@@ -1195,4 +1181,122 @@ func TestComStmtPrepareMultiStmt (t *testing.T) {
 		t.Fatalf("expected error, but received nil")
 		return
 	}
+}
+
+func TestExecuteMidStreamError(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/12504
+	th := &testHandler{}
+	th.SetErr(NewSQLError(ERUnknownError, SSUnknownSQLState, "WITH RECURSIVE iteration limit exceeded"))
+
+	for _, caps := range []struct {
+		name string
+		flag uint32
+	}{
+		{name: "WithoutDeprecateEOF", flag: 0},
+		{name: "WithDeprecateEOF", flag: CapabilityClientDeprecateEOF},
+	} {
+		for _, useCursor := range []byte{0, 1} {
+			name := fmt.Sprintf("ComStmtExecute/%s/cursor=%d", caps.name, useCursor)
+			t.Run(name, func(t *testing.T) {
+				_, sConn, cConn := createSocketPair(t)
+				sConn.Capabilities = caps.flag
+				cConn.Capabilities = caps.flag
+				sConn.PrepareData = map[uint32]*PrepareData{
+					0: {StatementID: 0, PrepareStmt: "error after stream"},
+					1: {StatementID: 1, PrepareStmt: "select rows"},
+				}
+
+				gotErr := mustRunStmtStreamError(t, sConn, cConn, th, useCursor)
+				mustMatchSQLError(t, gotErr, ERUnknownError)
+				mustRunFollowUpStmt(t, sConn, cConn, th)
+			})
+		}
+	}
+}
+
+// mustRunStmtStreamError executes prepared statement 0 via |sConn| and |cConn|
+// using |handler| and |useCursor|, draining COM_STMT_FETCH pages when a cursor
+// is open so callers can inspect the final streamed error.
+func mustRunStmtStreamError(t *testing.T, sConn, cConn *Conn, handler Handler, useCursor byte) error {
+	t.Helper()
+	errCh := make(chan error, 1)
+	go func() {
+		defer close(errCh)
+		qr, status, err := clientExecuteStmt(cConn, 0, useCursor, 1000)
+		if useCursor == 0 || err != nil {
+			errCh <- err
+			return
+		}
+		if !status.cursorExists() {
+			errCh <- fmt.Errorf("expected cursor to exist")
+			return
+		}
+		for {
+			_, fetchStatus, err := clientFetchStmt(cConn, 0, useCursor, 1000, qr.Fields)
+			if err != nil || fetchStatus.cursorLastRowSent() {
+				errCh <- err
+				return
+			}
+		}
+	}()
+
+	if err := sConn.handleNextCommand(context.Background(), handler); err != nil {
+		t.Fatalf("handleNextCommand(execute) failed: %v", err)
+	}
+	if useCursor != 0 {
+		for i := 0; i < 2; i++ {
+			if err := sConn.handleNextCommand(context.Background(), handler); err != nil {
+				t.Fatalf("handleNextCommand(fetch %d) failed: %v", i+1, err)
+			}
+		}
+	}
+	return <-errCh
+}
+
+// mustRunFollowUpStmt executes prepared statement 1 on |sConn| and |cConn|
+// through |handler| to verify a prepared session stays usable after an error.
+func mustRunFollowUpStmt(t *testing.T, sConn, cConn *Conn, handler Handler) {
+	t.Helper()
+	followCh := make(chan error, 1)
+	go func() {
+		defer close(followCh)
+		qr, _, err := clientExecuteStmt(cConn, 1, 0, 100)
+		if err != nil {
+			followCh <- err
+			return
+		}
+		if len(qr.Rows) != 2 {
+			followCh <- fmt.Errorf("got %d rows, want 2", len(qr.Rows))
+			return
+		}
+		followCh <- nil
+	}()
+	if err := sConn.handleNextCommand(context.Background(), handler); err != nil {
+		t.Fatalf("follow-up handleNextCommand failed: %v", err)
+	}
+	if err := <-followCh; err != nil {
+		t.Fatalf("follow-up prepared query failed: %v", err)
+	}
+}
+
+// clientExecuteStmt sends a COM_STMT_EXECUTE packet for |stmtID| with
+// |useCursor| on |cConn| and reads up to |maxRows| of the result.
+func clientExecuteStmt(cConn *Conn, stmtID, useCursor byte, maxRows int) (*sqltypes.Result, serverStatus, error) {
+	packet := []byte{ComStmtExecute, stmtID, 0, 0, 0, useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1}
+	if err := writeRawPacketToConn(cConn, packet); err != nil {
+		return nil, 0, err
+	}
+	qr, status, _, err := cConn.ReadQueryResult(context.Background(), maxRows, true)
+	return qr, status, err
+}
+
+// clientFetchStmt sends a COM_STMT_FETCH packet for |stmtID| with |useCursor|
+// on |cConn| and reads up to |maxRows| rows using |fields|.
+func clientFetchStmt(cConn *Conn, stmtID, useCursor byte, maxRows int, fields []*querypb.Field) (*sqltypes.Result, serverStatus, error) {
+	packet := []byte{ComStmtFetch, stmtID, 0, 0, 0, useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1}
+	if err := writeRawPacketToConn(cConn, packet); err != nil {
+		return nil, 0, err
+	}
+	qr, status, _, err := cConn.FetchQueryResult(context.Background(), maxRows, fields)
+	return qr, status, err
 }

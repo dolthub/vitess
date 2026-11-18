@@ -19,7 +19,6 @@ package mysql
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -134,7 +133,7 @@ func (th *testHandler) ComInitDB(c *Conn, schemaName string) error {
 	return nil
 }
 
-// ComMultiQuery implements [Handler] by splitting semicolon-delimited statements
+// ComMultiQuery implements Handler by splitting semicolon-delimited statements
 // in |query| on |c| and invoking |callback| for each result batch.
 func (th *testHandler) ComMultiQuery(ctx context.Context, c *Conn, query string, callback ResultSpoolFn) (string, error) {
 	if first, rest, ok := strings.Cut(query, "; "); ok {
@@ -145,7 +144,7 @@ func (th *testHandler) ComMultiQuery(ctx context.Context, c *Conn, query string,
 	return "", err
 }
 
-// ComQuery implements [Handler] for test query strings on |c| via |callback|.
+// ComQuery implements Handler for test query strings on |c| via |callback|.
 func (th *testHandler) ComQuery(ctx context.Context, c *Conn, query string, callback ResultSpoolFn) error {
 	if result := th.Result(); result != nil {
 		callback(th.result, false)
@@ -260,7 +259,7 @@ func (th *testHandler) ComPrepare(ctx context.Context, c *Conn, query string, pr
 	return nil, nil
 }
 
-// ComStmtExecute implements [Handler] for test prepared statement execution
+// ComStmtExecute implements Handler for test prepared statement execution
 // on |c| using |prepare| and |callback|.
 func (th *testHandler) ComStmtExecute(ctx context.Context, c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
 	switch prepare.PrepareStmt {
@@ -420,28 +419,7 @@ func TestConnectionFromListener(t *testing.T) {
 
 func TestConnectionWithoutSourceHost(t *testing.T) {
 	th := &testHandler{}
-
-	authServer := NewAuthServerStatic("", "", 0)
-	authServer.entries["user1"] = []*AuthServerStaticEntry{{
-		Password: "password1",
-		UserData: "userData1",
-	}}
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
-	defer l.Close()
-	go l.Accept()
-
-	host, port := getHostPort(t, l.Addr())
-
-	// Setup the right parameters.
-	params := &ConnParams{
-		Host:  host,
-		Port:  port,
-		Uname: "user1",
-		Pass:  "password1",
-	}
+	_, params := newTestServer(t, th)
 
 	c, err := Connect(context.Background(), params)
 	if err != nil {
@@ -700,28 +678,7 @@ func checkCountsForUser(t *testing.T, user string, expected int64) {
 
 func TestServer(t *testing.T) {
 	th := &testHandler{}
-
-	authServer := NewAuthServerStatic("", "", 0)
-	authServer.entries["user1"] = []*AuthServerStaticEntry{{
-		Password: "password1",
-		UserData: "userData1",
-	}}
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
-	defer l.Close()
-	go l.Accept()
-
-	host, port := getHostPort(t, l.Addr())
-
-	// Setup the right parameters.
-	params := &ConnParams{
-		Host:  host,
-		Port:  port,
-		Uname: "user1",
-		Pass:  "password1",
-	}
+	l, params := newTestServer(t, th)
 
 	initialTimingCounts := timings.Counts()
 	initialConnAccept := connAccept.Get()
@@ -1364,28 +1321,7 @@ func checkCountForTLSVer(t *testing.T, version string, expected int64) {
 
 func TestErrorCodes(t *testing.T) {
 	th := &testHandler{}
-
-	authServer := NewAuthServerStatic("", "", 0)
-	authServer.entries["user1"] = []*AuthServerStaticEntry{{
-		Password: "password1",
-		UserData: "userData1",
-	}}
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
-	defer l.Close()
-	go l.Accept()
-
-	host, port := getHostPort(t, l.Addr())
-
-	// Setup the right parameters.
-	params := &ConnParams{
-		Host:  host,
-		Port:  port,
-		Uname: "user1",
-		Pass:  "password1",
-	}
+	_, params := newTestServer(t, th)
 
 	ctx := context.Background()
 	client, err := Connect(ctx, params)
@@ -1470,14 +1406,6 @@ const enableCleartextPluginPrefix = "enable-cleartext-plugin: "
 
 // runMysql forks a mysql command line process connecting to the provided server.
 func runMysql(t *testing.T, params *ConnParams, command string) (string, bool) {
-	dir, err := vtenv.VtMysqlRoot()
-	if err != nil {
-		t.Fatalf("vtenv.VtMysqlRoot failed: %v", err)
-	}
-	name, err := binaryPath(dir, "mysql")
-	if err != nil {
-		t.Fatalf("binaryPath failed: %v", err)
-	}
 	// The args contain '-v' 3 times, to switch to very verbose output.
 	// In particular, it has the message:
 	// Query OK, 1 row affected (0.00 sec)
@@ -1489,44 +1417,7 @@ func runMysql(t *testing.T, params *ConnParams, command string) (string, bool) {
 		args = append(args, "--enable-cleartext-plugin")
 	}
 	args = append(args, "-e", command)
-	if params.UnixSocket != "" {
-		args = append(args, "-S", params.UnixSocket)
-	} else {
-		args = append(args,
-			"-h", params.Host,
-			"-P", fmt.Sprintf("%v", params.Port))
-	}
-	if params.Uname != "" {
-		args = append(args, "-u", params.Uname)
-	}
-	if params.Pass != "" {
-		args = append(args, "-p"+params.Pass)
-	}
-	if params.DbName != "" {
-		args = append(args, "-D", params.DbName)
-	}
-	if params.Flags&CapabilityClientSSL > 0 {
-		args = append(args,
-			"--ssl",
-			"--ssl-ca", params.SslCa,
-			"--ssl-cert", params.SslCert,
-			"--ssl-key", params.SslKey,
-			"--ssl-verify-server-cert")
-	}
-	env := []string{
-		"LD_LIBRARY_PATH=" + path.Join(dir, "lib/mysql"),
-	}
-
-	t.Logf("Running mysql command: %v %v", name, args)
-	cmd := exec.Command(name, args...)
-	cmd.Env = env
-	cmd.Dir = dir
-	out, err := cmd.CombinedOutput()
-	output := string(out)
-	if err != nil {
-		return output, false
-	}
-	return output, true
+	return runMysqlWithInput(t, params, "", args...)
 }
 
 // binaryPath locates a binary name for integration tests.
@@ -1557,27 +1448,7 @@ func binaryPath(root, binary string) (string, error) {
 
 func TestListenerShutdown(t *testing.T) {
 	th := &testHandler{}
-	authServer := NewAuthServerStatic("", "", 0)
-	authServer.entries["user1"] = []*AuthServerStaticEntry{{
-		Password: "password1",
-		UserData: "userData1",
-	}}
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
-	defer l.Close()
-	go l.Accept()
-
-	host, port := getHostPort(t, l.Addr())
-
-	// Setup the right parameters.
-	params := &ConnParams{
-		Host:  host,
-		Port:  port,
-		Uname: "user1",
-		Pass:  "password1",
-	}
+	l, params := newTestServer(t, th)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1594,13 +1465,7 @@ func TestListenerShutdown(t *testing.T) {
 	l.Shutdown()
 
 	if err := conn.Ping(); err != nil {
-		sqlErr, ok := err.(*SQLError)
-		if !ok {
-			t.Fatalf("Wrong error type: %T", err)
-		}
-		if sqlErr.Number() != ERServerShutdown {
-			t.Fatalf("Unexpected sql error code: %d", sqlErr.Number())
-		}
+		sqlErr := mustMatchSQLError(t, err, ERServerShutdown)
 		if sqlErr.SQLState() != SSServerShutdown {
 			t.Fatalf("Unexpected error sql state: %s", sqlErr.SQLState())
 		}
@@ -1648,11 +1513,11 @@ func TestParseConnAttrs(t *testing.T) {
 	}
 }
 
-func TestConn_ErrorAfterFieldsSent(t *testing.T) {
+func TestServerMidStreamError(t *testing.T) {
 	// https://github.com/dolthub/dolt/issues/12504
 	th := &testHandler{}
 	th.SetErr(NewSQLError(ERUnknownError, SSUnknownSQLState, "WITH RECURSIVE iteration limit exceeded"))
-	params := setupErrorTestServer(t, th)
+	_, params := newTestServer(t, th)
 
 	queryCases := []struct {
 		name  string
@@ -1669,8 +1534,8 @@ func TestConn_ErrorAfterFieldsSent(t *testing.T) {
 			flags: CapabilityClientDeprecateEOF,
 		},
 		{
-			name:  "ComMultiQuery aborts remaining statements",
-			query: "error after stream; select rows",
+			name:  "ComMultiQuery aborts after pre-field error",
+			query: "error; select rows",
 			flags: CapabilityClientMultiStatements,
 		},
 	}
@@ -1721,104 +1586,102 @@ func TestConn_ErrorAfterFieldsSent(t *testing.T) {
 		mustSelectTwoRows(t, conn)
 	})
 
-	t.Run("socket write failure during stream aborts without error packet", func(t *testing.T) {
-		sConn, cConn := newTestSocketPair(t)
-		writeErr := errors.New("write broken pipe")
-		sConn.Conn = &failingWriteConn{Conn: sConn.Conn, err: writeErr, failAfter: 1}
-		sConn.startWriterBuffering()
-
-		done := make(chan error, 1)
-		go func() {
-			defer sConn.Close()
-			_, err := sConn.execQuery(context.Background(), "error after stream", th, false)
-			done <- err
-		}()
-
-		_, _, _, clientErr := cConn.ReadQueryResult(context.Background(), 1000, true)
-		serverErr := <-done
-		if serverErr == nil || !strings.Contains(serverErr.Error(), writeErr.Error()) {
-			t.Fatalf("got serverErr=%v, want substring %q", serverErr, writeErr.Error())
+	t.Run("mysql client buffered session stays usable after mid-stream error", func(t *testing.T) {
+		out, ok := runMysqlWithInput(t, params, "error after stream;\nselect rows;\n", "--force")
+		if !ok {
+			t.Fatalf("mysql failed: %s", out)
 		}
-		if clientErr == nil {
-			t.Fatalf("expected client read failure after socket write abort")
+		if !strings.Contains(out, "ERROR 1105 (HY000)") ||
+			!strings.Contains(out, "WITH RECURSIVE iteration limit exceeded") {
+			t.Fatalf("expected error output, got: %s", out)
+		}
+		if strings.Contains(out, strings.Repeat("x", 128)) {
+			t.Fatalf("buffered mysql client should discard partial stream rows, got: %s", out)
+		}
+		if !strings.Contains(out, "nice name") || !strings.Contains(out, "nicer name") {
+			t.Fatalf("expected follow-up query output, got: %s", out)
 		}
 	})
 
-	t.Run("writeQueryResultEnd distinguishes write errors from query errors", func(t *testing.T) {
-		sConn, _ := newTestSocketPair(t)
-		writeErr := errors.New("socket write failed")
-		queryErr := errors.New("query failed")
-
-		aborted, err := sConn.writeQueryResultEnd(nil, writeErr, true, false, false, 0)
-		if aborted || !errors.Is(err, writeErr) {
-			t.Fatalf("nil queryErr: got aborted=%v err=%v, want aborted=false err=%v", aborted, err, writeErr)
+	t.Run("mysql client quick session prints partial rows and recovers", func(t *testing.T) {
+		out, ok := runMysqlWithInput(t, params, "error after stream;\nselect rows;\n", "--force", "--quick")
+		if !ok {
+			t.Fatalf("mysql --quick failed: %s", out)
 		}
-
-		aborted, err = sConn.writeQueryResultEnd(queryErr, writeErr, true, false, false, 0)
-		if aborted || !errors.Is(err, queryErr) {
-			t.Fatalf("distinct queryErr: got aborted=%v err=%v, want aborted=false err=%v", aborted, err, queryErr)
+		if !strings.Contains(out, strings.Repeat("x", 128)) {
+			t.Fatalf("expected streamed rows before error in --quick output, got: %s", out)
 		}
-	})
-
-	t.Run("error after completed OK response is fatal without trailing error packet", func(t *testing.T) {
-		sConn, cConn := newTestSocketPair(t)
-		if err := cConn.WriteComQuery("error after ok"); err != nil {
-			t.Fatalf("WriteComQuery failed: %v", err)
+		if !strings.Contains(out, "ERROR 1105 (HY000)") ||
+			!strings.Contains(out, "WITH RECURSIVE iteration limit exceeded") {
+			t.Fatalf("expected error output, got: %s", out)
 		}
-		err := sConn.handleNextCommand(context.Background(), th)
-		if !errors.Is(err, th.Err()) {
-			t.Fatalf("got server err=%v, want %v", err, th.Err())
-		}
-		if err := sConn.flush(context.Background()); err != nil {
-			t.Fatalf("flush failed: %v", err)
-		}
-		sConn.Close()
-
-		qr, _, _, err := cConn.ReadQueryResult(context.Background(), 100, true)
-		if err != nil {
-			t.Fatalf("ReadQueryResult failed: %v", err)
-		}
-		if qr.RowsAffected != 1 {
-			t.Fatalf("got RowsAffected=%d, want 1", qr.RowsAffected)
-		}
-		if _, err := cConn.ReadPacket(context.Background()); err == nil {
-			t.Fatalf("expected EOF after closed server connection, got extra packet")
+		if !strings.Contains(out, "nice name") || !strings.Contains(out, "nicer name") {
+			t.Fatalf("expected follow-up query output, got: %s", out)
 		}
 	})
-
-	for _, caps := range []struct {
-		name string
-		flag uint32
-	}{
-		{name: "WithoutDeprecateEOF", flag: 0},
-		{name: "WithDeprecateEOF", flag: CapabilityClientDeprecateEOF},
-	} {
-		for _, useCursor := range []byte{0, 1} {
-			name := fmt.Sprintf("ComStmtExecute/%s/cursor=%d", caps.name, useCursor)
-			t.Run(name, func(t *testing.T) {
-				sConn, cConn := newTestSocketPair(t)
-				sConn.Capabilities = caps.flag
-				cConn.Capabilities = caps.flag
-				sConn.PrepareData = map[uint32]*PrepareData{
-					0: {StatementID: 0, PrepareStmt: "error after stream"},
-					1: {StatementID: 1, PrepareStmt: "select rows"},
-				}
-
-				gotErr := mustRunStmtStreamError(t, sConn, cConn, th, useCursor)
-				mustMatchSQLError(t, gotErr, ERUnknownError)
-				mustRunFollowUpStmt(t, sConn, cConn, th)
-			})
-		}
-	}
 }
 
-// setupErrorTestServer starts a TCP listener backed by |handler| with
-// static credentials and registers cleanup on |t| so subtests can open real
-// client connections.
-func setupErrorTestServer(t *testing.T, handler Handler) *ConnParams {
+// runMysqlWithInput invokes the mysql CLI binary against |params| with optional
+// |stdin| and extra command-line |args|, returning combined output and whether
+// the command exited with status zero.
+func runMysqlWithInput(t *testing.T, params *ConnParams, stdin string, args ...string) (string, bool) {
+	t.Helper()
+	dir, err := vtenv.VtMysqlRoot()
+	if err != nil {
+		t.Fatalf("vtenv.VtMysqlRoot failed: %v", err)
+	}
+	name, err := binaryPath(dir, "mysql")
+	if err != nil {
+		t.Fatalf("binaryPath failed: %v", err)
+	}
+	if params.UnixSocket != "" {
+		args = append(args, "-S", params.UnixSocket)
+	} else {
+		args = append(args,
+			"-h", params.Host,
+			"-P", fmt.Sprintf("%v", params.Port))
+	}
+	if params.Uname != "" {
+		args = append(args, "-u", params.Uname)
+	}
+	if params.Pass != "" {
+		args = append(args, "-p"+params.Pass)
+	}
+	if params.DbName != "" {
+		args = append(args, "-D", params.DbName)
+	}
+	if params.Flags&CapabilityClientSSL > 0 {
+		args = append(args,
+			"--ssl",
+			"--ssl-ca", params.SslCa,
+			"--ssl-cert", params.SslCert,
+			"--ssl-key", params.SslKey,
+			"--ssl-verify-server-cert")
+	}
+
+	t.Logf("Running mysql command: %v %v", name, args)
+	cmd := exec.Command(name, args...)
+	cmd.Env = []string{
+		"LD_LIBRARY_PATH=" + path.Join(dir, "lib/mysql"),
+	}
+	cmd.Dir = dir
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
+	}
+	out, err := cmd.CombinedOutput()
+	return string(out), err == nil
+}
+
+// newTestServer starts a TCP Listener backed by |handler| with static user1
+// credentials and registers cleanup on |t|, returning the listener and client
+// connection parameters.
+func newTestServer(t *testing.T, handler Handler) (*Listener, *ConnParams) {
 	t.Helper()
 	authServer := NewAuthServerStatic("", "", 0)
-	authServer.entries["user1"] = []*AuthServerStaticEntry{{Password: "password1"}}
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+		UserData: "userData1",
+	}}
 	l, err := NewListener("tcp", ":0", authServer, handler, 0, 0)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
@@ -1827,7 +1690,7 @@ func setupErrorTestServer(t *testing.T, handler Handler) *ConnParams {
 	go l.Accept()
 
 	host, port := getHostPort(t, l.Addr())
-	return &ConnParams{
+	return l, &ConnParams{
 		Host:  host,
 		Port:  port,
 		Uname: "user1",
@@ -1835,27 +1698,15 @@ func setupErrorTestServer(t *testing.T, handler Handler) *ConnParams {
 	}
 }
 
-// newTestSocketPair creates a connected server and client [Conn] pair and
-// registers cleanup on |t| so protocol unit tests avoid boilerplate teardown.
-func newTestSocketPair(t *testing.T) (*Conn, *Conn) {
-	t.Helper()
-	listener, sConn, cConn := createSocketPair(t)
-	t.Cleanup(func() {
-		listener.Close()
-		sConn.Close()
-		cConn.Close()
-	})
-	return sConn, cConn
-}
-
-// mustMatchSQLError fails |t| unless |err| is a [*SQLError] whose error number
-// equals |wantCode|.
-func mustMatchSQLError(t *testing.T, err error, wantCode int) {
+// mustMatchSQLError fails |t| unless |err| is a *SQLError whose error number
+// equals |wantCode|, and returns that *SQLError.
+func mustMatchSQLError(t *testing.T, err error, wantCode int) *SQLError {
 	t.Helper()
 	sqlErr, ok := err.(*SQLError)
 	if !ok || sqlErr.Number() != wantCode {
 		t.Fatalf("got err=%v (%T), want errno %d", err, err, wantCode)
 	}
+	return sqlErr
 }
 
 // mustSelectTwoRows executes a follow-up query on |conn| and asserts two rows
@@ -1869,103 +1720,6 @@ func mustSelectTwoRows(t *testing.T, conn *Conn) {
 	if len(res.Rows) != 2 {
 		t.Fatalf("got %d rows, want 2", len(res.Rows))
 	}
-}
-
-// mustRunStmtStreamError executes prepared statement 0 via |sConn| and |cConn|
-// using |handler| and |useCursor|, draining COM_STMT_FETCH pages when a cursor
-// is open so tests can inspect the final streamed error.
-func mustRunStmtStreamError(t *testing.T, sConn, cConn *Conn, handler Handler, useCursor byte) error {
-	t.Helper()
-	errCh := make(chan error, 1)
-	go func() {
-		defer close(errCh)
-		if err := writeRawPacketToConn(cConn, []byte{ComStmtExecute, 0, 0, 0, 0, useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1}); err != nil {
-			errCh <- err
-			return
-		}
-		qr, status, _, err := cConn.ReadQueryResult(context.Background(), 1000, true)
-		if useCursor == 0 || err != nil {
-			errCh <- err
-			return
-		}
-		if !status.cursorExists() {
-			errCh <- fmt.Errorf("expected cursor to exist")
-			return
-		}
-		for {
-			if err := writeRawPacketToConn(cConn, []byte{ComStmtFetch, 0, 0, 0, 0, useCursor, 1, 0, 0}); err != nil {
-				errCh <- err
-				return
-			}
-			_, fetchStatus, _, err := cConn.FetchQueryResult(context.Background(), 1000, qr.Fields)
-			if err != nil || fetchStatus.cursorLastRowSent() {
-				errCh <- err
-				return
-			}
-		}
-	}()
-
-	if err := sConn.handleNextCommand(context.Background(), handler); err != nil {
-		t.Fatalf("handleNextCommand(execute) failed: %v", err)
-	}
-	if useCursor != 0 {
-		for i := 0; i < 2; i++ {
-			if err := sConn.handleNextCommand(context.Background(), handler); err != nil {
-				t.Fatalf("handleNextCommand(fetch %d) failed: %v", i+1, err)
-			}
-		}
-	}
-	return <-errCh
-}
-
-// mustRunFollowUpStmt executes prepared statement 1 on |sConn| and |cConn|
-// through |handler| to verify a prepared session stays usable after an error.
-func mustRunFollowUpStmt(t *testing.T, sConn, cConn *Conn, handler Handler) {
-	t.Helper()
-	followCh := make(chan error, 1)
-	go func() {
-		defer close(followCh)
-		if err := writeRawPacketToConn(cConn, []byte{ComStmtExecute, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 128, 1}); err != nil {
-			followCh <- err
-			return
-		}
-		qr, _, _, err := cConn.ReadQueryResult(context.Background(), 100, true)
-		if err != nil {
-			followCh <- err
-			return
-		}
-		if len(qr.Rows) != 2 {
-			followCh <- fmt.Errorf("got %d rows, want 2", len(qr.Rows))
-			return
-		}
-		followCh <- nil
-	}()
-	if err := sConn.handleNextCommand(context.Background(), handler); err != nil {
-		t.Fatalf("follow-up handleNextCommand failed: %v", err)
-	}
-	if err := <-followCh; err != nil {
-		t.Fatalf("follow-up prepared query failed: %v", err)
-	}
-}
-
-// failingWriteConn wraps a [net.Conn] to fail after a bounded number of writes.
-type failingWriteConn struct {
-	// Conn is the underlying network connection for delegated operations.
-	net.Conn
-	// err is returned once |failAfter| writes have completed.
-	err error
-	// failAfter counts remaining writes allowed before returning |err|.
-	failAfter int
-}
-
-// Write delegates to the underlying [net.Conn] until |failAfter| writes have
-// succeeded, then returns |err| to simulate a mid-stream socket failure.
-func (f *failingWriteConn) Write(p []byte) (int, error) {
-	if f.failAfter == 0 {
-		return 0, f.err
-	}
-	f.failAfter--
-	return f.Conn.Write(p)
 }
 
 // sendStreamRows streams enough rows across multiple batches to exceed
