@@ -625,6 +625,11 @@ func (l *Lock) RowLockItems() []RowLockItem {
 		return l.Items
 	}
 
+	if l.Type == "" {
+		// A SELECT without a locking clause.
+		return nil
+	}
+
 	item := RowLockItem{
 		Strength: RowLockForUpdate,
 		Tables:   l.Tables,
