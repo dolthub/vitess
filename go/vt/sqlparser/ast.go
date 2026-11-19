@@ -574,6 +574,72 @@ func (q *QueryOpts) Format(buf *TrackedBuffer) {
 type Lock struct {
 	Type   string     // The lock type string (e.g., " for update", " for update of t1, t2 skip locked")
 	Tables TableNames // Table names for FOR UPDATE OF clause (empty for regular FOR UPDATE)
+	// Items is the row locks the clause asks for, for a Lock built by something other than this package's parser,
+	// which can then express strengths and combinations that the MySQL grammar here has no syntax for. The parser
+	// leaves it empty. Use RowLockItems to get the row locks of a Lock however it was built.
+	Items []RowLockItem
+}
+
+// RowLockStrength is how strongly a locking clause locks the rows a SELECT returns.
+type RowLockStrength int8
+
+const (
+	// RowLockForKeyShare stops other transactions from deleting the row or changing its key.
+	RowLockForKeyShare RowLockStrength = iota + 1
+	// RowLockForShare stops other transactions from changing the row at all.
+	RowLockForShare
+	// RowLockForNoKeyUpdate locks the row as an UPDATE that leaves its key alone would.
+	RowLockForNoKeyUpdate
+	// RowLockForUpdate locks the row as a DELETE would.
+	RowLockForUpdate
+)
+
+// RowLockWaitPolicy is what a locking clause does about a row that another transaction has locked.
+type RowLockWaitPolicy int8
+
+const (
+	// RowLockWait waits for the row.
+	RowLockWait RowLockWaitPolicy = iota
+	// RowLockSkipLocked leaves the row out of the result.
+	RowLockSkipLocked
+	// RowLockNoWait fails the statement.
+	RowLockNoWait
+)
+
+// RowLockItem is one request to lock the rows a SELECT returns.
+type RowLockItem struct {
+	Strength   RowLockStrength
+	WaitPolicy RowLockWaitPolicy
+	// Tables is the tables whose rows to lock, by the names they have in the FROM clause. Empty means every table.
+	Tables TableNames
+}
+
+// RowLockItems returns the row locks this clause asks for: Items if set, and otherwise what the clause the parser
+// read means.
+func (l *Lock) RowLockItems() []RowLockItem {
+	if l == nil {
+		return nil
+	}
+
+	if len(l.Items) > 0 {
+		return l.Items
+	}
+
+	item := RowLockItem{
+		Strength: RowLockForUpdate,
+		Tables:   l.Tables,
+	}
+	if strings.HasPrefix(l.Type, ShareModeStr) {
+		item.Strength = RowLockForShare
+	}
+
+	if strings.HasSuffix(l.Type, " skip locked") {
+		item.WaitPolicy = RowLockSkipLocked
+	} else if strings.HasSuffix(l.Type, " nowait") {
+		item.WaitPolicy = RowLockNoWait
+	}
+
+	return []RowLockItem{item}
 }
 
 func newLock(lock interface{}) *Lock {
