@@ -142,6 +142,20 @@ func TestInsertOnDupWhereFormatAndWalk(t *testing.T) {
 	require.True(t, visitedPredicate)
 }
 
+func TestInsertTableAliasFormat(t *testing.T) {
+	insert := &Insert{
+		Action:     InsertStr,
+		Table:      TableName{Name: NewTableIdent("t")},
+		TableAlias: NewTableIdent("x"),
+		Columns:    Columns{NewColIdent("id")},
+		Rows: &AliasedValues{Values: Values{
+			ValTuple{NewIntVal([]byte("1"))},
+		}},
+	}
+
+	require.Equal(t, "insert into t as x(id) values (1)", String(insert))
+}
+
 func TestInputExpressionInExplain(t *testing.T) {
 	stmt, err := Parse("explain select (select 1)")
 	require.NoError(t, err)

@@ -1744,6 +1744,7 @@ type Insert struct {
 	Rows                           InsertRows
 	With                           *With
 	Table                          TableName
+	TableAlias                     TableIdent // Supports PostgreSQL INSERT INTO table AS alias
 	Action                         string
 	Ignore                         string
 	Comments                       Comments
@@ -1770,6 +1771,9 @@ func (node *Insert) Format(buf *TrackedBuffer) {
 		node.Action,
 		node.Comments, node.Ignore,
 		node.Table)
+	if !node.TableAlias.IsEmpty() {
+		buf.Myprintf(" as %v", node.TableAlias)
+	}
 	if len(node.Partitions) > 0 {
 		buf.Myprintf(" partition (%v)", node.Partitions)
 	}
@@ -1820,6 +1824,7 @@ func (node *Insert) walkSubtree(visit Visit) error {
 		visit,
 		node.Comments,
 		node.Table,
+		node.TableAlias,
 		node.Columns,
 		node.ConflictTarget,
 		node.Rows,
