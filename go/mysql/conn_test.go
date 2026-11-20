@@ -25,6 +25,7 @@ import (
 	"math/rand"
 	"net"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -70,6 +71,12 @@ func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
 	// Create a Conn on both sides.
 	cConn := newConn(clientConn)
 	sConn := newConn(serverConn)
+
+	t.Cleanup(func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	})
 
 	return listener, sConn, cConn
 }
@@ -668,4 +675,130 @@ func TestLoadInfileWithActiveWatcher(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("watcher did not return after cancel")
 	}
+}
+
+func TestConnMidStreamError(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/12504
+	th := &testHandler{}
+	th.SetErr(errCTEMaxRecursionDepth)
+
+	t.Run("ExecuteStreamFetch closes active result on mid-stream ERR_Packet", func(t *testing.T) {
+		_, sConn, cConn := createSocketPair(t)
+		srvErr := make(chan error, 1)
+		go func() {
+			defer close(srvErr)
+			for i := 0; i < 2; i++ {
+				if err := sConn.handleNextCommand(context.Background(), th); err != nil {
+					sConn.Close()
+					srvErr <- err
+					return
+				}
+			}
+			srvErr <- nil
+		}()
+
+		if err := cConn.ExecuteStreamFetch("error after stream"); err != nil {
+			t.Fatalf("ExecuteStreamFetch failed: %v", err)
+		}
+		var rows int
+		var streamErr error
+		for {
+			row, err := cConn.FetchNext()
+			if err != nil {
+				streamErr = err
+				break
+			}
+			if row == nil {
+				t.Fatalf("expected mid-stream error before EOF")
+			}
+			rows++
+		}
+		if rows != 300 {
+			t.Fatalf("got %d streamed rows, want 300", rows)
+		}
+		mustMatchSQLError(t, streamErr, ERCTEMaxRecursionDepth)
+
+		// CloseResult and subsequent queries must not hang or fail with
+		// CRCommandsOutOfSync.
+		cConn.CloseResult()
+		res, err := cConn.ExecuteFetch("select rows", 100, true)
+		if err != nil {
+			t.Fatalf("follow-up ExecuteFetch failed: %v", err)
+		}
+		if len(res.Rows) != 2 {
+			t.Fatalf("got %d rows, want 2", len(res.Rows))
+		}
+		if err := <-srvErr; err != nil {
+			t.Fatalf("server loop failed: %v", err)
+		}
+	})
+
+	t.Run("socket write error during stream aborts without ERR_Packet", func(t *testing.T) {
+		_, sConn, cConn := createSocketPair(t)
+		writeErr := errors.New("write broken pipe")
+		sConn.Conn = &failingWriteConn{Conn: sConn.Conn, err: writeErr, failAfter: 1}
+		sConn.startWriterBuffering()
+
+		done := make(chan error, 1)
+		go func() {
+			defer sConn.Close()
+			_, err := sConn.execQuery(context.Background(), "error after stream", th, false)
+			done <- err
+		}()
+
+		_, _, _, clientErr := cConn.ReadQueryResult(context.Background(), 1000, true)
+		serverErr := <-done
+		if serverErr == nil || !strings.Contains(serverErr.Error(), writeErr.Error()) {
+			t.Fatalf("got serverErr=%v, want substring %q", serverErr, writeErr.Error())
+		}
+		if clientErr == nil {
+			t.Fatalf("expected client read failure after socket write abort")
+		}
+	})
+
+	t.Run("post-OK_Packet handler error aborts without trailing ERR_Packet", func(t *testing.T) {
+		_, sConn, cConn := createSocketPair(t)
+		if err := cConn.WriteComQuery("error after ok"); err != nil {
+			t.Fatalf("WriteComQuery failed: %v", err)
+		}
+		err := sConn.handleNextCommand(context.Background(), th)
+		if !errors.Is(err, th.Err()) {
+			t.Fatalf("got server err=%v, want %v", err, th.Err())
+		}
+		if err := sConn.flush(context.Background()); err != nil {
+			t.Fatalf("flush failed: %v", err)
+		}
+		sConn.Close()
+
+		qr, _, _, err := cConn.ReadQueryResult(context.Background(), 100, true)
+		if err != nil {
+			t.Fatalf("ReadQueryResult failed: %v", err)
+		}
+		if qr.RowsAffected != 1 {
+			t.Fatalf("got RowsAffected=%d, want 1", qr.RowsAffected)
+		}
+		if _, err := cConn.ReadPacket(context.Background()); err == nil {
+			t.Fatalf("expected EOF after closed server connection, got extra packet")
+		}
+	})
+}
+
+// failingWriteConn wraps a [net.Conn] to fail after a bounded number of writes.
+type failingWriteConn struct {
+	// Conn is the underlying network connection for delegated operations.
+	net.Conn
+	// err is returned once |failAfter| writes have completed.
+	err error
+	// failAfter counts remaining writes allowed before returning |err|.
+	failAfter int
+}
+
+// Write delegates to the underlying [net.Conn] until |failAfter| writes have
+// succeeded, then returns |err| to simulate a mid-stream socket failure.
+func (f *failingWriteConn) Write(p []byte) (int, error) {
+	if f.failAfter == 0 {
+		return 0, f.err
+	}
+	f.failAfter--
+	return f.Conn.Write(p)
 }

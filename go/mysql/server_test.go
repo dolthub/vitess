@@ -133,11 +133,18 @@ func (th *testHandler) ComInitDB(c *Conn, schemaName string) error {
 	return nil
 }
 
+// ComMultiQuery implements Handler by splitting semicolon-delimited statements
+// in |query| on |c| and invoking |callback| for each result batch.
 func (th *testHandler) ComMultiQuery(ctx context.Context, c *Conn, query string, callback ResultSpoolFn) (string, error) {
+	if first, rest, ok := strings.Cut(query, "; "); ok {
+		err := th.ComQuery(ctx, c, first, callback)
+		return rest, err
+	}
 	err := th.ComQuery(ctx, c, query, callback)
 	return "", err
 }
 
+// ComQuery implements Handler for test query strings on |c| via |callback|.
 func (th *testHandler) ComQuery(ctx context.Context, c *Conn, query string, callback ResultSpoolFn) error {
 	if result := th.Result(); result != nil {
 		callback(th.result, false)
@@ -153,6 +160,18 @@ func (th *testHandler) ComQuery(ctx context.Context, c *Conn, query string, call
 		callback(selectRowsResult, false)
 	case "error after send":
 		callback(selectRowsResult, false)
+		return th.Err()
+	case "error after stream":
+		if err := sendStreamRows(func(r *sqltypes.Result) error {
+			return callback(r, false)
+		}); err != nil {
+			return err
+		}
+		return th.Err()
+	case "error after ok":
+		if err := callback(&sqltypes.Result{RowsAffected: 1}, false); err != nil {
+			return err
+		}
 		return th.Err()
 	case "insert":
 		callback(&sqltypes.Result{
@@ -240,6 +259,8 @@ func (th *testHandler) ComPrepare(ctx context.Context, c *Conn, query string, pr
 	return nil, nil
 }
 
+// ComStmtExecute implements Handler for test prepared statement execution
+// on |c| using |prepare| and |callback|.
 func (th *testHandler) ComStmtExecute(ctx context.Context, c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
 	switch prepare.PrepareStmt {
 	case "empty result":
@@ -311,6 +332,16 @@ func (th *testHandler) ComStmtExecute(ctx context.Context, c *Conn, prepare *Pre
 			RowsAffected: uint64(n),
 		}
 		return callback(res)
+	case "error after send":
+		if err := callback(selectRowsResult); err != nil {
+			return err
+		}
+		return th.Err()
+	case "error after stream":
+		if err := sendStreamRows(callback); err != nil {
+			return err
+		}
+		return th.Err()
 	default:
 		return fmt.Errorf("unrecorgnized test command")
 	}
@@ -388,28 +419,7 @@ func TestConnectionFromListener(t *testing.T) {
 
 func TestConnectionWithoutSourceHost(t *testing.T) {
 	th := &testHandler{}
-
-	authServer := NewAuthServerStatic("", "", 0)
-	authServer.entries["user1"] = []*AuthServerStaticEntry{{
-		Password: "password1",
-		UserData: "userData1",
-	}}
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
-	defer l.Close()
-	go l.Accept()
-
-	host, port := getHostPort(t, l.Addr())
-
-	// Setup the right parameters.
-	params := &ConnParams{
-		Host:  host,
-		Port:  port,
-		Uname: "user1",
-		Pass:  "password1",
-	}
+	_, params := newTestServer(t, th)
 
 	c, err := Connect(context.Background(), params)
 	if err != nil {
@@ -668,28 +678,7 @@ func checkCountsForUser(t *testing.T, user string, expected int64) {
 
 func TestServer(t *testing.T) {
 	th := &testHandler{}
-
-	authServer := NewAuthServerStatic("", "", 0)
-	authServer.entries["user1"] = []*AuthServerStaticEntry{{
-		Password: "password1",
-		UserData: "userData1",
-	}}
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
-	defer l.Close()
-	go l.Accept()
-
-	host, port := getHostPort(t, l.Addr())
-
-	// Setup the right parameters.
-	params := &ConnParams{
-		Host:  host,
-		Port:  port,
-		Uname: "user1",
-		Pass:  "password1",
-	}
+	l, params := newTestServer(t, th)
 
 	initialTimingCounts := timings.Counts()
 	initialConnAccept := connAccept.Get()
@@ -782,16 +771,17 @@ func TestServer(t *testing.T) {
 	}
 	th.SetWarnings(0)
 
-	// If there's an error after streaming has started,
-	// we should get a 2013
+	// An error after streaming rows sends an ERR_Packet and keeps the
+	// connection usable.
 	th.SetErr(NewSQLError(ERUnknownComError, SSUnknownComError, "forced error after send"))
 	output, ok = runMysql(t, params, "error after send")
 	if ok {
 		t.Fatalf("mysql should have failed: %v", output)
 	}
-	if !strings.Contains(output, "ERROR 2013 (HY000)") ||
-		!strings.Contains(output, "Lost connection to MySQL server during query") {
-		t.Errorf("Unexpected output for 'panic'")
+	wantErrPrefix := fmt.Sprintf("ERROR %d (%s)", ERUnknownComError, SSUnknownComError)
+	if !strings.Contains(output, wantErrPrefix) ||
+		!strings.Contains(output, "forced error after send") {
+		t.Errorf("Unexpected output for 'error after send': %v", output)
 	}
 
 	// Run an 'insert' command, no rows, but rows affected.
@@ -1331,28 +1321,7 @@ func checkCountForTLSVer(t *testing.T, version string, expected int64) {
 
 func TestErrorCodes(t *testing.T) {
 	th := &testHandler{}
-
-	authServer := NewAuthServerStatic("", "", 0)
-	authServer.entries["user1"] = []*AuthServerStaticEntry{{
-		Password: "password1",
-		UserData: "userData1",
-	}}
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
-	defer l.Close()
-	go l.Accept()
-
-	host, port := getHostPort(t, l.Addr())
-
-	// Setup the right parameters.
-	params := &ConnParams{
-		Host:  host,
-		Port:  port,
-		Uname: "user1",
-		Pass:  "password1",
-	}
+	_, params := newTestServer(t, th)
 
 	ctx := context.Background()
 	client, err := Connect(ctx, params)
@@ -1437,14 +1406,6 @@ const enableCleartextPluginPrefix = "enable-cleartext-plugin: "
 
 // runMysql forks a mysql command line process connecting to the provided server.
 func runMysql(t *testing.T, params *ConnParams, command string) (string, bool) {
-	dir, err := vtenv.VtMysqlRoot()
-	if err != nil {
-		t.Fatalf("vtenv.VtMysqlRoot failed: %v", err)
-	}
-	name, err := binaryPath(dir, "mysql")
-	if err != nil {
-		t.Fatalf("binaryPath failed: %v", err)
-	}
 	// The args contain '-v' 3 times, to switch to very verbose output.
 	// In particular, it has the message:
 	// Query OK, 1 row affected (0.00 sec)
@@ -1456,44 +1417,7 @@ func runMysql(t *testing.T, params *ConnParams, command string) (string, bool) {
 		args = append(args, "--enable-cleartext-plugin")
 	}
 	args = append(args, "-e", command)
-	if params.UnixSocket != "" {
-		args = append(args, "-S", params.UnixSocket)
-	} else {
-		args = append(args,
-			"-h", params.Host,
-			"-P", fmt.Sprintf("%v", params.Port))
-	}
-	if params.Uname != "" {
-		args = append(args, "-u", params.Uname)
-	}
-	if params.Pass != "" {
-		args = append(args, "-p"+params.Pass)
-	}
-	if params.DbName != "" {
-		args = append(args, "-D", params.DbName)
-	}
-	if params.Flags&CapabilityClientSSL > 0 {
-		args = append(args,
-			"--ssl",
-			"--ssl-ca", params.SslCa,
-			"--ssl-cert", params.SslCert,
-			"--ssl-key", params.SslKey,
-			"--ssl-verify-server-cert")
-	}
-	env := []string{
-		"LD_LIBRARY_PATH=" + path.Join(dir, "lib/mysql"),
-	}
-
-	t.Logf("Running mysql command: %v %v", name, args)
-	cmd := exec.Command(name, args...)
-	cmd.Env = env
-	cmd.Dir = dir
-	out, err := cmd.CombinedOutput()
-	output := string(out)
-	if err != nil {
-		return output, false
-	}
-	return output, true
+	return runMysqlWithInput(t, params, "", args...)
 }
 
 // binaryPath locates a binary name for integration tests.
@@ -1524,27 +1448,7 @@ func binaryPath(root, binary string) (string, error) {
 
 func TestListenerShutdown(t *testing.T) {
 	th := &testHandler{}
-	authServer := NewAuthServerStatic("", "", 0)
-	authServer.entries["user1"] = []*AuthServerStaticEntry{{
-		Password: "password1",
-		UserData: "userData1",
-	}}
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
-	defer l.Close()
-	go l.Accept()
-
-	host, port := getHostPort(t, l.Addr())
-
-	// Setup the right parameters.
-	params := &ConnParams{
-		Host:  host,
-		Port:  port,
-		Uname: "user1",
-		Pass:  "password1",
-	}
+	l, params := newTestServer(t, th)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1561,13 +1465,7 @@ func TestListenerShutdown(t *testing.T) {
 	l.Shutdown()
 
 	if err := conn.Ping(); err != nil {
-		sqlErr, ok := err.(*SQLError)
-		if !ok {
-			t.Fatalf("Wrong error type: %T", err)
-		}
-		if sqlErr.Number() != ERServerShutdown {
-			t.Fatalf("Unexpected sql error code: %d", sqlErr.Number())
-		}
+		sqlErr := mustMatchSQLError(t, err, ERServerShutdown)
 		if sqlErr.SQLState() != SSServerShutdown {
 			t.Fatalf("Unexpected error sql state: %s", sqlErr.SQLState())
 		}
@@ -1614,3 +1512,248 @@ func TestParseConnAttrs(t *testing.T) {
 		}
 	}
 }
+
+func TestServerMidStreamError(t *testing.T) {
+	// https://github.com/dolthub/dolt/issues/12504
+	th := &testHandler{}
+	th.SetErr(errCTEMaxRecursionDepth)
+	_, params := newTestServer(t, th)
+
+	queryCases := []struct {
+		name  string
+		query string
+		flags uint64
+	}{
+		{
+			name:  "ComQuery WithoutDeprecateEOF",
+			query: "error after stream",
+		},
+		{
+			name:  "ComQuery WithDeprecateEOF",
+			query: "error after stream",
+			flags: CapabilityClientDeprecateEOF,
+		},
+		{
+			name:  "ComMultiQuery aborts after pre-field error",
+			query: "error; select rows",
+			flags: CapabilityClientMultiStatements,
+		},
+	}
+
+	for _, tc := range queryCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			p := *params
+			p.Flags = tc.flags
+			conn, err := Connect(ctx, &p)
+			if err != nil {
+				t.Fatalf("Connect failed: %v", err)
+			}
+			defer conn.Close()
+
+			if tc.flags&CapabilityClientMultiStatements != 0 {
+				_, _, err = conn.ExecuteFetchMulti(ctx, tc.query, 1000, true)
+			} else {
+				_, err = conn.ExecuteFetch(tc.query, 1000, true)
+			}
+			mustMatchSQLError(t, err, ERCTEMaxRecursionDepth)
+			mustSelectTwoRows(t, conn)
+		})
+	}
+
+	t.Run("ComMultiQuery delivers prior result before mid-stream error", func(t *testing.T) {
+		ctx := context.Background()
+		p := *params
+		p.Flags = CapabilityClientMultiStatements
+		conn, err := Connect(ctx, &p)
+		if err != nil {
+			t.Fatalf("Connect failed: %v", err)
+		}
+		defer conn.Close()
+
+		if err := conn.WriteComQuery("select rows; error after stream; select rows"); err != nil {
+			t.Fatalf("WriteComQuery failed: %v", err)
+		}
+		qr1, status1, _, err := conn.ReadQueryResult(ctx, 100, true)
+		if err != nil {
+			t.Fatalf("first result failed: %v", err)
+		}
+		if len(qr1.Rows) != 2 || !status1.hasMore() {
+			t.Fatalf("got rows=%d hasMore=%v, want rows=2 hasMore=true", len(qr1.Rows), status1.hasMore())
+		}
+		_, _, _, err = conn.ReadQueryResult(ctx, 1000, true)
+		mustMatchSQLError(t, err, ERCTEMaxRecursionDepth)
+		mustSelectTwoRows(t, conn)
+	})
+
+	t.Run("mysql client buffered session stays usable after mid-stream error", func(t *testing.T) {
+		out, ok := runMysqlWithInput(t, params, "error after stream;\nselect rows;\n", "--force")
+		if !ok {
+			t.Fatalf("mysql failed: %s", out)
+		}
+		wantErrPrefix := fmt.Sprintf("ERROR %d (%s)", errCTEMaxRecursionDepth.Number(), errCTEMaxRecursionDepth.SQLState())
+		if !strings.Contains(out, wantErrPrefix) ||
+			!strings.Contains(out, errCTEMaxRecursionDepth.Message) {
+			t.Fatalf("expected error output, got: %s", out)
+		}
+		if strings.Contains(out, strings.Repeat("x", 128)) {
+			t.Fatalf("buffered mysql client should discard partial stream rows, got: %s", out)
+		}
+		if !strings.Contains(out, "nice name") || !strings.Contains(out, "nicer name") {
+			t.Fatalf("expected follow-up query output, got: %s", out)
+		}
+	})
+
+	t.Run("mysql client quick session prints partial rows and recovers", func(t *testing.T) {
+		out, ok := runMysqlWithInput(t, params, "error after stream;\nselect rows;\n", "--force", "--quick")
+		if !ok {
+			t.Fatalf("mysql --quick failed: %s", out)
+		}
+		if !strings.Contains(out, strings.Repeat("x", 128)) {
+			t.Fatalf("expected streamed rows before error in --quick output, got: %s", out)
+		}
+		wantErrPrefix := fmt.Sprintf("ERROR %d (%s)", errCTEMaxRecursionDepth.Number(), errCTEMaxRecursionDepth.SQLState())
+		if !strings.Contains(out, wantErrPrefix) ||
+			!strings.Contains(out, errCTEMaxRecursionDepth.Message) {
+			t.Fatalf("expected error output, got: %s", out)
+		}
+		if !strings.Contains(out, "nice name") || !strings.Contains(out, "nicer name") {
+			t.Fatalf("expected follow-up query output, got: %s", out)
+		}
+	})
+}
+
+// runMysqlWithInput invokes the mysql CLI binary against |params| with optional
+// |stdin| and extra |args|, returning combined output and whether it exited 0.
+//
+// It exists alongside runMysql because runMysql passes -e for a single batch,
+// whereas session recovery tests need |stdin|, --force, and --quick to run
+// sequential commands over one CLI connection.
+func runMysqlWithInput(t *testing.T, params *ConnParams, stdin string, args ...string) (string, bool) {
+	t.Helper()
+	dir, err := vtenv.VtMysqlRoot()
+	if err != nil {
+		t.Fatalf("vtenv.VtMysqlRoot failed: %v", err)
+	}
+	name, err := binaryPath(dir, "mysql")
+	if err != nil {
+		t.Fatalf("binaryPath failed: %v", err)
+	}
+	if params.UnixSocket != "" {
+		args = append(args, "-S", params.UnixSocket)
+	} else {
+		args = append(args,
+			"-h", params.Host,
+			"-P", fmt.Sprintf("%v", params.Port))
+	}
+	if params.Uname != "" {
+		args = append(args, "-u", params.Uname)
+	}
+	if params.Pass != "" {
+		args = append(args, "-p"+params.Pass)
+	}
+	if params.DbName != "" {
+		args = append(args, "-D", params.DbName)
+	}
+	if params.Flags&CapabilityClientSSL > 0 {
+		args = append(args,
+			"--ssl",
+			"--ssl-ca", params.SslCa,
+			"--ssl-cert", params.SslCert,
+			"--ssl-key", params.SslKey,
+			"--ssl-verify-server-cert")
+	}
+
+	t.Logf("Running mysql command: %v %v", name, args)
+	cmd := exec.Command(name, args...)
+	cmd.Env = []string{
+		"LD_LIBRARY_PATH=" + path.Join(dir, "lib/mysql"),
+	}
+	cmd.Dir = dir
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
+	}
+	out, err := cmd.CombinedOutput()
+	return string(out), err == nil
+}
+
+// newTestServer starts a TCP Listener backed by |handler| with static user1
+// credentials and registers cleanup on |t|, returning the listener and client
+// connection parameters.
+//
+// It centralizes the boilerplate static-auth listener setup duplicated across
+// server integration tests.
+func newTestServer(t *testing.T, handler Handler) (*Listener, *ConnParams) {
+	t.Helper()
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+		UserData: "userData1",
+	}}
+	l, err := NewListener("tcp", ":0", authServer, handler, 0, 0)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	t.Cleanup(l.Close)
+	go l.Accept()
+
+	host, port := getHostPort(t, l.Addr())
+	return l, &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+}
+
+// mustMatchSQLError fails |t| unless |err| is a *SQLError with code |wantCode|
+// and returns it, avoiding repeated type assertions across error tests.
+func mustMatchSQLError(t *testing.T, err error, wantCode int) *SQLError {
+	t.Helper()
+	sqlErr, ok := err.(*SQLError)
+	if !ok || sqlErr.Number() != wantCode {
+		t.Fatalf("got err=%v (%T), want errno %d", err, err, wantCode)
+	}
+	return sqlErr
+}
+
+// mustSelectTwoRows executes a follow-up query on |conn| and asserts two rows
+// are returned, verifying the session survived a prior streamed error.
+func mustSelectTwoRows(t *testing.T, conn *Conn) {
+	t.Helper()
+	res, err := conn.ExecuteFetch("select rows", 100, true)
+	if err != nil {
+		t.Fatalf("follow-up query failed: %v", err)
+	}
+	if len(res.Rows) != 2 {
+		t.Fatalf("got %d rows, want 2", len(res.Rows))
+	}
+}
+
+// sendStreamRows emits 300 128-byte rows in separate |callback| batches before
+// returning, exceeding the 16 KiB DefaultConnBufferSize so tests flush real
+// packets to the wire prior to failing.
+func sendStreamRows(callback func(*sqltypes.Result) error) error {
+	payload := strings.Repeat("x", 128)
+	fields := []*querypb.Field{{Name: "val", Type: querypb.Type_VARCHAR}}
+	val := sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(payload))
+	for i := 0; i < 300; i++ {
+		res := &sqltypes.Result{
+			Fields:       fields,
+			Rows:         [][]sqltypes.Value{{val}},
+			RowsAffected: 1,
+		}
+		if err := callback(res); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// errCTEMaxRecursionDepth models MySQL error 3636 (ER_CTE_MAX_RECURSION_DEPTH)
+// so mid-stream error tests share a single realistic SQL error instance.
+var errCTEMaxRecursionDepth = NewSQLError(
+	ERCTEMaxRecursionDepth,
+	SSUnknownSQLState,
+	"Recursive query aborted after 1001 iterations. Try increasing @@cte_max_recursion_depth to a larger value.",
+)
