@@ -541,9 +541,14 @@ const (
 	ErrWrongValueForType                            = 1411
 	ERForbidSchemaChange                            = 1450
 	ERWrongValue                                    = 1525
+	ERNoPartitionForGivenValue                      = 1526
+	EREventIntervalNotPositiveOrTooBig              = 1542
+	EREventEndsBeforeStarts                         = 1543
+	ERDropIndexFK                                   = 1553
 	ERBase64DecodeError                             = 1575
 	ERNoFormatDescriptionEventBeforeBinlogStatement = 1609
 	ERDataOutOfRange                                = 1690
+	ERCantExecuteInReadOnlyTransaction              = 1792
 	EROnlyFDAndRBREventsAllowedInBinlogStatement    = 1730
 	ERInvalidJSONText                               = 3140
 	ERInvalidJSONTextInParams                       = 3141
@@ -552,6 +557,7 @@ const (
 	ERInvalidCastToJSON                             = 3147
 	ERJSONValueTooBig                               = 3150
 	ERJSONDocumentTooDeep                           = 3157
+	ERWarnDeprecatedSuperfluousDelimiter            = 4096
 
 	// max execution time exceeded
 	ERQueryTimeout = 3024
