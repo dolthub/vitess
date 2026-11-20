@@ -2736,7 +2736,7 @@ event_schedule:
   {
     $$ = &EventScheduleSpec{At: &EventScheduleTimeSpec{EventTimestamp: tryCastExpr($2), EventIntervals: $3.([]IntervalExpr)}}
   }
-| EVERY value non_microsecond_time_unit event_starts_opt event_ends_opt
+| EVERY expression non_microsecond_time_unit event_starts_opt event_ends_opt
   {
     $$ = &EventScheduleSpec{EveryInterval: IntervalExpr{Expr: tryCastExpr($2), Unit: string($3)}, Starts: $4.(*EventScheduleTimeSpec), Ends: $5.(*EventScheduleTimeSpec)}
   }
