@@ -4217,6 +4217,18 @@ var (
 			output: "create event event1 on schedule every 1 MINUTE starts CURRENT_TIMESTAMP(0) + interval 2 HOUR ends CURRENT_TIMESTAMP(0) + interval 3 HOUR enable do insert into mytable values (1)",
 		},
 		{
+			input:  "CREATE EVENT event1 ON SCHEDULE EVERY -1 MINUTE ENDS CURRENT_TIMESTAMP + INTERVAL 3 HOUR ON COMPLETION PRESERVE disable COMMENT 'new event' DO INSERT INTO mytable VALUES (1)",
+			output: "create event event1 on schedule every -1 MINUTE ends CURRENT_TIMESTAMP(0) + interval 3 HOUR on completion preserve disable comment 'new event' do insert into mytable values (1)",
+		},
+		{
+			input:  "CREATE EVENT event1 ON SCHEDULE EVERY 1 + 2 + 3 MINUTE ENDS CURRENT_TIMESTAMP + INTERVAL 3 HOUR ON COMPLETION PRESERVE disable COMMENT 'new event' DO INSERT INTO mytable VALUES (1)",
+			output: "create event event1 on schedule every 1 + 2 + 3 MINUTE ends CURRENT_TIMESTAMP(0) + interval 3 HOUR on completion preserve disable comment 'new event' do insert into mytable values (1)",
+		},
+		{
+			input:  "CREATE EVENT event1 ON SCHEDULE EVERY concat('1', '2', '3') MINUTE ENDS CURRENT_TIMESTAMP + INTERVAL 3 HOUR ON COMPLETION PRESERVE disable COMMENT 'new event' DO INSERT INTO mytable VALUES (1)",
+			output: "create event event1 on schedule every concat('1', '2', '3') MINUTE ends CURRENT_TIMESTAMP(0) + interval 3 HOUR on completion preserve disable comment 'new event' do insert into mytable values (1)",
+		},
+		{
 			input:  "CREATE EVENT e_call_myproc ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 DAY disable on slave DO CALL myproc(5, 27)",
 			output: "create event e_call_myproc on schedule at CURRENT_TIMESTAMP(0) + interval 1 DAY disable on slave do call myproc(5, 27)",
 		},
