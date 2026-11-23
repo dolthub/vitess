@@ -7527,6 +7527,25 @@ func TestSubStr(t *testing.T) {
 		output:                     "select substr(a, 1, 6) from t",
 		useSelectExpressionLiteral: true,
 	}, {
+		input:  "select substring(a from 2) from t",
+		output: "select substr(a, 2) from t",
+	}, {
+		input:  "select substr(a from 2) from t",
+		output: "select substr(a, 2) from t",
+	}, {
+		input:                      "select substring(a from 2) from t",
+		output:                     "select substr(a, 2) from t",
+		useSelectExpressionLiteral: true,
+	}, {
+		input:  `select substring("foo" from 2) from t`,
+		output: `select substr('foo', 2) from t`,
+	}, {
+		input:  `select substr('foo' from 2) from t`,
+		output: `select substr('foo', 2) from t`,
+	}, {
+		input:  `select substr(substr("foo" from 2), 1) from t`,
+		output: `select substr(substr('foo', 2), 1) from t`,
+	}, {
 		input:  `select substr("foo" from 1 for 2) from t`,
 		output: `select substr('foo', 1, 2) from t`,
 	}, {
