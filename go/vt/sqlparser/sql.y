@@ -9542,6 +9542,22 @@ function_call_keyword:
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3.(SelectExprs)}
   }
+| SUBSTR openb column_name FROM value_expression closeb
+  {
+    $$ = &SubstrExpr{Name: $3.(*ColName), From: tryCastExpr($5)}
+  }
+| SUBSTRING openb column_name FROM value_expression closeb
+  {
+    $$ = &SubstrExpr{Name: $3.(*ColName), From: tryCastExpr($5)}
+  }
+| SUBSTR openb STRING FROM value_expression closeb
+  {
+    $$ = &SubstrExpr{StrVal: NewStrVal($3), From: tryCastExpr($5)}
+  }
+| SUBSTRING openb STRING FROM value_expression closeb
+  {
+    $$ = &SubstrExpr{StrVal: NewStrVal($3), From: tryCastExpr($5)}
+  }
 | SUBSTR openb column_name FROM value_expression FOR value_expression closeb
   {
     $$ = &SubstrExpr{Name: $3.(*ColName), From: tryCastExpr($5), To: tryCastExpr($7)}
