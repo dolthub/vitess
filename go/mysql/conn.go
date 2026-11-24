@@ -200,6 +200,11 @@ type Conn struct {
 	cs *cursorState
 }
 
+type cursorBatch struct {
+	result      *sqltypes.Result
+	statusFlags uint16
+}
+
 type cursorState struct {
 	stmtID uint32
 
@@ -212,8 +217,13 @@ type cursorState struct {
 	// This allows us to detect EOF and correctly return CursorExhausted.
 	pending *sqltypes.Result
 
+	// statusFlags is the handler's c.StatusFlags as of the last batch received.
+	// The handler goroutine may write c.StatusFlags while the cursor is open, so
+	// the command loop reads this snapshot instead.
+	statusFlags uint16
+
 	// The channel on which the running query is sending batched results.
-	next chan *sqltypes.Result
+	next chan cursorBatch
 
 	// The channel on which the running query will return its final error
 	// status, either `nil` or an error.
@@ -1649,8 +1659,8 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 			c.cs.pending.Rows = nextRows
 			numRows -= toSend
 			if len(c.cs.pending.Rows) == 0 {
-				var ok bool
-				c.cs.pending, ok = <-c.cs.next
+				batch, ok := <-c.cs.next
+				c.cs.pending, c.cs.statusFlags = batch.result, batch.statusFlags
 				if !ok {
 					// Query has terminated. Check for an error.
 					err := <-c.cs.done
@@ -1667,16 +1677,16 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 
 		// Matches MySQL's Materialized_cursor::fetch; clients decide whether to keep
 		// fetching from these two bits.
-		if c.cs == nil {
-			c.StatusFlags |= uint16(ServerCursorLastRowSent)
+		var status uint16
+		if c.cs != nil {
+			status = c.cs.statusFlags | uint16(ServerCursorExists)
 		} else {
-			c.StatusFlags |= uint16(ServerCursorExists)
+			status = c.StatusFlags | uint16(ServerCursorLastRowSent)
 		}
-		if err := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
+		if err := c.writeEndResultWithStatus(false, status, 0, 0, handler.WarningCount(c)); err != nil {
 			log.Errorf("Error writing result to %s: %v", c, err)
 			return err
 		}
-		c.StatusFlags &= ^uint16(ServerCursorLastRowSent | ServerCursorExists)
 		if err := c.flush(ctx); err != nil {
 			log.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
 			return err
@@ -1975,7 +1985,7 @@ func (c *Conn) execPrepareStatement(ctx context.Context, stmtID uint32, cursorTy
 
 		return nil
 	}
-	next := make(chan *sqltypes.Result)
+	next := make(chan cursorBatch)
 	done, quit := make(chan error), make(chan error)
 
 	// Taken before the handler starts so its client-activity watcher never Peeks
@@ -2002,7 +2012,7 @@ func (c *Conn) execPrepareStatement(ctx context.Context, stmtID uint32, cursorTy
 			// block until query results are sent or receive signal to quit
 			var qerr error
 			select {
-			case next <- qr:
+			case next <- cursorBatch{result: qr, statusFlags: c.StatusFlags}:
 			case qerr = <-quit:
 			}
 			return qerr
@@ -2010,7 +2020,8 @@ func (c *Conn) execPrepareStatement(ctx context.Context, stmtID uint32, cursorTy
 	}()
 
 	// Immediately receive the very first query result to write the fields
-	qr, ok := <-next
+	batch, ok := <-next
+	qr := batch.result
 	if !ok {
 		<-done
 		if werr := c.writeErrorPacket(ERUnknownError, SSUnknownSQLState, "unknown error: %v", "missing result set"); werr != nil {
@@ -2026,7 +2037,6 @@ func (c *Conn) execPrepareStatement(ctx context.Context, stmtID uint32, cursorTy
 		return c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
 	}
 	// Open the cursor and write the fields.
-	c.StatusFlags |= uint16(ServerCursorExists)
 	if err := c.writeFieldsWithoutEOF(qr); err != nil {
 		log.Errorf("Error writing fields to %s: %v", c, err)
 		return err
@@ -2034,19 +2044,17 @@ func (c *Conn) execPrepareStatement(ctx context.Context, stmtID uint32, cursorTy
 	// TODO: Look into whether accessing WarningCount
 	// here after passing `c` to ComStmtExecute in the
 	// goroutine above races.
-	if werr := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); werr != nil {
+	if werr := c.writeEndResultWithStatus(false, batch.statusFlags|uint16(ServerCursorExists), 0, 0, handler.WarningCount(c)); werr != nil {
 		log.Errorf("Error writing result to %s: %v", c, werr)
 		return werr
 	}
-	// After writing the EOF_Packet/OK_Packet above, we
-	// have told the client the cursor is open.
-	c.StatusFlags &= ^uint16(ServerCursorExists)
 	c.cs = &cursorState{
-		stmtID:  stmtID,
-		next:    next,
-		done:    done,
-		quit:    quit,
-		pending: qr,
+		stmtID:      stmtID,
+		statusFlags: batch.statusFlags,
+		next:        next,
+		done:        done,
+		quit:        quit,
+		pending:     qr,
 	}
 	return nil
 }

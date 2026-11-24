@@ -1112,9 +1112,15 @@ func (c *Conn) writeRows(result *sqltypes.Result) error {
 // writeEndResult concludes the sending of a Result.
 // if more is set to true, then it means there are more results afterwords
 func (c *Conn) writeEndResult(more bool, affectedRows, lastInsertID uint64, warnings uint16) error {
+	return c.writeEndResultWithStatus(more, c.StatusFlags, affectedRows, lastInsertID, warnings)
+}
+
+// writeEndResultWithStatus sends |status| in place of c.StatusFlags, which a
+// server-side cursor's handler goroutine may be writing concurrently.
+func (c *Conn) writeEndResultWithStatus(more bool, status uint16, affectedRows, lastInsertID uint64, warnings uint16) error {
 	// Send either an EOF, or an OK packet.
 	// See doc.go.
-	flags := c.StatusFlags
+	flags := status
 	if more {
 		flags |= ServerMoreResultsExists
 	}

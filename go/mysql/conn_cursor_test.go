@@ -123,6 +123,11 @@ func (h *cursorTestHandler) ComStmtExecute(ctx context.Context, c *Conn, prepare
 				sqltypes.MakeTrusted(querypb.Type_INT32, []byte(strconv.Itoa(id))),
 			})
 		}
+		if start+h.batch > h.rows {
+			// go-mysql-server updates the session flags here, between the last row
+			// and the final callback, while the cursor is still open.
+			c.StatusFlags |= uint16(ServerStatusAutocommit)
+		}
 		if err := callback(res); err != nil {
 			return err
 		}
@@ -245,6 +250,12 @@ func TestServerSideCursorFetch(t *testing.T) {
 	}
 	if cursorOpen() {
 		t.Fatal("the read lease must mark the cursor closed once the last row was sent")
+	}
+	if sConn.StatusFlags&uint16(ServerStatusAutocommit) == 0 {
+		t.Fatal("the handler's status flag update was lost")
+	}
+	if got := sConn.StatusFlags & uint16(ServerCursorExists|ServerCursorLastRowSent); got != 0 {
+		t.Fatalf("cursor status flags leaked into the connection's flags: %#x", got)
 	}
 
 	// The handler's watcher returned because the query finished, not because
