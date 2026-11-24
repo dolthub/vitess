@@ -200,6 +200,11 @@ type Conn struct {
 	cs *cursorState
 }
 
+type cursorBatch struct {
+	result      *sqltypes.Result
+	statusFlags uint16
+}
+
 type cursorState struct {
 	stmtID uint32
 
@@ -212,8 +217,13 @@ type cursorState struct {
 	// This allows us to detect EOF and correctly return CursorExhausted.
 	pending *sqltypes.Result
 
+	// statusFlags is the handler's c.StatusFlags as of the last batch received.
+	// The handler goroutine may write c.StatusFlags while the cursor is open, so
+	// the command loop reads this snapshot instead.
+	statusFlags uint16
+
 	// The channel on which the running query is sending batched results.
-	next chan *sqltypes.Result
+	next chan cursorBatch
 
 	// The channel on which the running query will return its final error
 	// status, either `nil` or an error.
@@ -385,6 +395,36 @@ type readLease struct {
 	// before the watcher's deadline reset, which the watcher performs only after
 	// re-acquiring mu (see WaitForClientActivity).
 	interrupt func()
+	// cursorOpen is true while a server-side cursor is open. The cursor's query
+	// is still executing while the command loop reads the client's fetches, so
+	// the command loop owns the read side and the watcher must not Peek. Unlike
+	// held, it does not block acquire().
+	cursorOpen bool
+}
+
+// markCursorOpen keeps the client-activity watcher out of the read side until
+// markCursorClosed. A watcher already parked in Peek is preempted as acquire()
+// does it, and returns once its query ends.
+func (l *readLease) markCursorOpen() {
+	l.mu.Lock()
+	l.cursorOpen = true
+	var ack chan struct{}
+	if l.preempt != nil {
+		ack = l.yielded
+		l.interrupt()
+		close(l.preempt)
+		l.preempt = nil
+	}
+	l.mu.Unlock()
+	if ack != nil {
+		<-ack
+	}
+}
+
+func (l *readLease) markCursorClosed() {
+	l.mu.Lock()
+	l.cursorOpen = false
+	l.mu.Unlock()
 }
 
 // acquire takes exclusive ownership of the read side for a handler-initiated
@@ -455,6 +495,10 @@ func (l *readLease) release() {
 // the watch for the duration of the handler read rather than racing it or
 // mistaking the file bytes for a disconnect.
 //
+// A server-side cursor is the other exception: its query keeps executing while
+// the command loop reads the client's COM_STMT_FETCH packets. While a cursor is
+// open this function does not watch, and returns nil once ctx is cancelled.
+//
 // WaitForClientActivity does not consume any bytes: if the client did send
 // data, it remains buffered for the next command read. It must only be called
 // when no other goroutine is reading from the connection (apart from a
@@ -489,6 +533,14 @@ func (c *Conn) WaitForClientActivity(ctx context.Context) error {
 				return nil
 			}
 			continue
+		}
+		if c.readLease.cursorOpen {
+			// Resuming the watch when the cursor closes is never needed: the cursor's
+			// own query has ended by then, and any other watcher still alive belongs
+			// to a query that overlapped the cursor and must not touch the reader.
+			c.readLease.mu.Unlock()
+			<-ctx.Done()
+			return nil
 		}
 		c.readLease.preempt = preempt
 		c.readLease.yielded = yielded
@@ -1607,12 +1659,12 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 			c.cs.pending.Rows = nextRows
 			numRows -= toSend
 			if len(c.cs.pending.Rows) == 0 {
-				var ok bool
-				c.cs.pending, ok = <-c.cs.next
+				batch, ok := <-c.cs.next
+				c.cs.pending, c.cs.statusFlags = batch.result, batch.statusFlags
 				if !ok {
 					// Query has terminated. Check for an error.
 					err := <-c.cs.done
-					c.cs = nil
+					c.closeCursor()
 					if err != nil {
 						// We can't send an error in the middle of a stream.
 						// All we can do is abort the send, which will cause a 2013.
@@ -1623,15 +1675,17 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 			}
 		}
 
-		if c.cs == nil {
-			c.StatusFlags |= uint16(ServerCursorLastRowSent)
+		// Matches MySQL's Materialized_cursor::fetch; clients decide whether to keep
+		// fetching from these two bits.
+		var status uint16
+		if c.cs != nil {
+			status = c.cs.statusFlags | uint16(ServerCursorExists)
+		} else {
+			status = c.StatusFlags | uint16(ServerCursorLastRowSent)
 		}
-		if err := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
+		if err := c.writeEndResultWithStatus(false, status, 0, 0, handler.WarningCount(c)); err != nil {
 			log.Errorf("Error writing result to %s: %v", c, err)
 			return err
-		}
-		if c.cs == nil {
-			c.StatusFlags &= ^uint16(ServerCursorLastRowSent)
 		}
 		if err := c.flush(ctx); err != nil {
 			log.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
@@ -1760,7 +1814,12 @@ func (c *Conn) discardCursor() {
 		case <-c.cs.done:
 		}
 	}
+	c.closeCursor()
+}
+
+func (c *Conn) closeCursor() {
 	c.cs = nil
+	c.readLease.markCursorClosed()
 }
 
 // formatID returns a quoted identifier from the one given. Adapted from ast.go
@@ -1926,8 +1985,17 @@ func (c *Conn) execPrepareStatement(ctx context.Context, stmtID uint32, cursorTy
 
 		return nil
 	}
-	next := make(chan *sqltypes.Result)
+	next := make(chan cursorBatch)
 	done, quit := make(chan error), make(chan error)
+
+	// Taken before the handler starts so its client-activity watcher never Peeks
+	// while the command loop reads this cursor's fetches.
+	c.readLease.markCursorOpen()
+	defer func() {
+		if c.cs == nil {
+			c.readLease.markCursorClosed()
+		}
+	}()
 
 	go func() {
 		var err error
@@ -1944,7 +2012,7 @@ func (c *Conn) execPrepareStatement(ctx context.Context, stmtID uint32, cursorTy
 			// block until query results are sent or receive signal to quit
 			var qerr error
 			select {
-			case next <- qr:
+			case next <- cursorBatch{result: qr, statusFlags: c.StatusFlags}:
 			case qerr = <-quit:
 			}
 			return qerr
@@ -1952,7 +2020,8 @@ func (c *Conn) execPrepareStatement(ctx context.Context, stmtID uint32, cursorTy
 	}()
 
 	// Immediately receive the very first query result to write the fields
-	qr, ok := <-next
+	batch, ok := <-next
+	qr := batch.result
 	if !ok {
 		<-done
 		if werr := c.writeErrorPacket(ERUnknownError, SSUnknownSQLState, "unknown error: %v", "missing result set"); werr != nil {
@@ -1968,7 +2037,6 @@ func (c *Conn) execPrepareStatement(ctx context.Context, stmtID uint32, cursorTy
 		return c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
 	}
 	// Open the cursor and write the fields.
-	c.StatusFlags |= uint16(ServerCursorExists)
 	if err := c.writeFieldsWithoutEOF(qr); err != nil {
 		log.Errorf("Error writing fields to %s: %v", c, err)
 		return err
@@ -1976,19 +2044,17 @@ func (c *Conn) execPrepareStatement(ctx context.Context, stmtID uint32, cursorTy
 	// TODO: Look into whether accessing WarningCount
 	// here after passing `c` to ComStmtExecute in the
 	// goroutine above races.
-	if werr := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); werr != nil {
+	if werr := c.writeEndResultWithStatus(false, batch.statusFlags|uint16(ServerCursorExists), 0, 0, handler.WarningCount(c)); werr != nil {
 		log.Errorf("Error writing result to %s: %v", c, werr)
 		return werr
 	}
-	// After writing the EOF_Packet/OK_Packet above, we
-	// have told the client the cursor is open.
-	c.StatusFlags &= ^uint16(ServerCursorExists)
 	c.cs = &cursorState{
-		stmtID:  stmtID,
-		next:    next,
-		done:    done,
-		quit:    quit,
-		pending: qr,
+		stmtID:      stmtID,
+		statusFlags: batch.statusFlags,
+		next:        next,
+		done:        done,
+		quit:        quit,
+		pending:     qr,
 	}
 	return nil
 }
