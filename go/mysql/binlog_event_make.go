@@ -281,7 +281,7 @@ func NewXIDEvent(f BinlogFormat, m BinlogEventMetadata) BinlogEvent {
 	return NewXIDEventWithXID(f, m, 0)
 }
 
-// NewXIDEventWithXID returns an XID event for the specified transaction ID |xid|.
+// NewXIDEventWithXID returns an XID event for transaction ID |xid|.
 func NewXIDEventWithXID(f BinlogFormat, m BinlogEventMetadata, xid uint64) BinlogEvent {
 	length := 8
 	data := make([]byte, length)
