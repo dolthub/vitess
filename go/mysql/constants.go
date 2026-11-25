@@ -569,6 +569,9 @@ const (
 	ErrNotImplementedForProjectedSRS = 3705
 	ErrNonPositiveRadius             = 3706
 
+	// max recursive CTE iterations exceeded
+	ERCTEMaxRecursionDepth = 3636
+
 	// server not available
 	ERServerIsntAvailable = 3168
 )

@@ -1666,10 +1666,11 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 					err := <-c.cs.done
 					c.closeCursor()
 					if err != nil {
-						// We can't send an error in the middle of a stream.
-						// All we can do is abort the send, which will cause a 2013.
-						log.Errorf("Error in the middle of a stream to %s: %v", c, err)
-						return err
+						if werr := c.writeErrorPacketFromError(err); werr != nil {
+							log.Errorf("Error writing query error to %s: %v", c, werr)
+							return werr
+						}
+						return c.flush(ctx)
 					}
 				}
 			}
@@ -1838,23 +1839,28 @@ func formatID(original string) string {
 	return sb.String()
 }
 
+// execQuery dispatches a text |query| on |c| to |handler| and writes the
+// resulting columns, rows, OK_Packet, or ERR_Packet back to the client.
+//
+// |ctx| bounds query execution lifetime. When |multiStatements| is true, it
+// calls handler.ComMultiQuery and returns any unexecuted trailing SQL so the
+// command loop can run the next statement, or returns an empty remainder when a
+// streamed error aborts the batch.
 func (c *Conn) execQuery(ctx context.Context, query string, handler Handler, multiStatements bool) (string, error) {
 	defer trace.StartRegion(ctx, "query").End()
 
 	fieldSent := false
 	// sendFinished is set if the response should just be an OK packet.
 	sendFinished := false
+	// Track socket write failures separately because handler may wrap or replace
+	// callback errors before returning to execQuery.
+	var writeErr error
 
-	resultsCB := func(qr *sqltypes.Result, more bool) error {
+	writeResult := func(qr *sqltypes.Result, more bool) error {
 		flag := c.StatusFlags
 		if more {
 			flag |= ServerMoreResultsExists
 		}
-		if sendFinished {
-			// Failsafe: Unreachable if server is well-behaved.
-			return io.EOF
-		}
-
 		if !fieldSent {
 			fieldSent = true
 
@@ -1869,9 +1875,8 @@ func (c *Conn) execQuery(ctx context.Context, query string, handler Handler, mul
 				// struct here since clients expect it.
 				if qr.Info != "" {
 					return c.writeOKPacketWithInfo(qr.RowsAffected, qr.InsertID, flag, handler.WarningCount(c), qr.Info)
-				} else {
-					return c.writeOKPacket(qr.RowsAffected, qr.InsertID, flag, handler.WarningCount(c))
 				}
+				return c.writeOKPacket(qr.RowsAffected, qr.InsertID, flag, handler.WarningCount(c))
 			}
 			if err := c.writeFields(qr); err != nil {
 				return err
@@ -1879,6 +1884,14 @@ func (c *Conn) execQuery(ctx context.Context, query string, handler Handler, mul
 		}
 
 		return c.writeRows(qr)
+	}
+	resultsCB := func(qr *sqltypes.Result, more bool) error {
+		if sendFinished {
+			// Failsafe: Unreachable if server is well-behaved.
+			return io.EOF
+		}
+		writeErr = writeResult(qr, more)
+		return writeErr
 	}
 
 	var err error
@@ -1890,55 +1903,36 @@ func (c *Conn) execQuery(ctx context.Context, query string, handler Handler, mul
 		err = handler.ComQuery(ctx, c, query, resultsCB)
 	}
 
-	// If no field was sent, we expect an error.
-	if !fieldSent {
-		// This is just a failsafe. Should never happen.
-		if err == nil || err == io.EOF {
-			err = NewSQLErrorFromError(errors.New("unexpected: query ended with no results and no error"))
-		}
-		if werr := c.writeErrorPacketFromError(err); werr != nil {
-			// If we can't even write the error, we're done.
-			log.Errorf("Error writing query error to %s: %v", c, werr)
-			return "", werr
-		}
-	} else {
-		if err != nil {
-			// We can't send an error in the middle of a stream.
-			// All we can do is abort the send, which will cause a 2013.
-			log.Errorf("Error in the middle of a stream to %s: %v", c, err)
-			return "", err
-		}
-
-		// Send the end packet only sendFinished is false (results were streamed).
-		// In this case the affectedRows and lastInsertID are always 0 since it
-		// was a read operation.
-		if !sendFinished {
-			more := remainder != ""
-			if err := c.writeEndResult(more, 0, 0, handler.WarningCount(c)); err != nil {
-				log.Errorf("Error writing result to %s: %v", c, err)
-				return "", err
-			}
-		}
+	aborted, endErr := c.writeQueryResultEnd(err, writeErr, fieldSent, sendFinished, remainder != "", handler.WarningCount(c))
+	if endErr != nil {
+		return "", endErr
+	}
+	if aborted {
+		return "", nil
 	}
 
 	return remainder, nil
 }
 
-// execPrepareStatement runs the query identified by the statement ID, and writes the expected packets to the connection
-// If the client requests that a cursor be opened, we should only write the fields, and wait for subsequent fetch
-// requests to write the rows from the result set.
+// execPrepareStatement runs a previously prepared statement on |c| via |handler|
+// so clients receive either immediate binary results or a server-side cursor.
+//
+// |stmtID| identifies the prepared statement metadata stored in PrepareData
+// during COM_STMT_PREPARE. When |cursorType| is NoCursor or
+// ParameterCountAvailable, all binary rows stream in this response. For any
+// other cursor flag, execution runs in a background goroutine so this call
+// writes only column metadata now and stages batches for COM_STMT_FETCH.
+// |ctx| bounds query execution lifetime and cancellation.
 func (c *Conn) execPrepareStatement(ctx context.Context, stmtID uint32, cursorType byte, handler Handler) error {
 	prepare := c.PrepareData[stmtID]
 	if cursorType == NoCursor || cursorType == ParameterCountAvailable {
 		fieldSent := false
 		sendFinished := false // sendFinished is set if the response should just be an OK packet.
+		// Track socket write failures separately because handler may wrap or
+		// replace callback errors before returning.
+		var writeErr error
 
-		err := handler.ComStmtExecute(ctx, c, prepare, func(qr *sqltypes.Result) error {
-			if sendFinished {
-				// Failsafe: Unreachable if server is well-behaved.
-				return io.EOF
-			}
-
+		writeResult := func(qr *sqltypes.Result) error {
 			if !fieldSent {
 				fieldSent = true
 				if len(qr.Fields) == 0 {
@@ -1951,39 +1945,18 @@ func (c *Conn) execPrepareStatement(ctx context.Context, stmtID uint32, cursorTy
 				}
 			}
 			return c.writeBinaryRows(qr)
+		}
+		err := handler.ComStmtExecute(ctx, c, prepare, func(qr *sqltypes.Result) error {
+			if sendFinished {
+				// Failsafe: Unreachable if server is well-behaved.
+				return io.EOF
+			}
+			writeErr = writeResult(qr)
+			return writeErr
 		})
 
-		// If no field was sent, we expect an error.
-		if !fieldSent {
-			// This is just a failsafe. Should never happen.
-			if err == nil || err == io.EOF {
-				err = NewSQLErrorFromError(errors.New("unexpected: query ended with no results and no error"))
-			}
-			if werr := c.writeErrorPacketFromError(err); werr != nil {
-				// If we can't even write the error, we're done.
-				log.Errorf("Error writing query error to %s: %v", c, werr)
-				return werr
-			}
-		} else {
-			// We can't send an error in the middle of a stream.
-			// All we can do is abort the send, which will cause a 2013.
-			if err != nil {
-				log.Errorf("Error in the middle of a stream to %s: %v", c, err)
-				return err
-			}
-
-			// Send the end packet only if sendFinished is false (results were streamed).
-			// In this case the affectedRows and lastInsertID are always 0 since it
-			// was a read operation.
-			if !sendFinished {
-				if werr := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); werr != nil {
-					log.Errorf("Error writing result to %s: %v", c, werr)
-					return werr
-				}
-			}
-		}
-
-		return nil
+		_, endErr := c.writeQueryResultEnd(err, writeErr, fieldSent, sendFinished, false, handler.WarningCount(c))
+		return endErr
 	}
 	next := make(chan cursorBatch)
 	done, quit := make(chan error), make(chan error)
@@ -2057,6 +2030,46 @@ func (c *Conn) execPrepareStatement(ctx context.Context, stmtID uint32, cursorTy
 		pending:     qr,
 	}
 	return nil
+}
+
+// writeQueryResultEnd writes the closing packet for a query or prepared
+// statement response and reports whether a query error aborted multi-statement
+// processing.
+//
+// Transport failures (|writeErr| non-nil) and errors after an OK_Packet
+// (|sendFinished| and |err| non-nil) return the error to close the connection.
+// Otherwise, missing metadata (|fieldSent| false) or a non-nil |err| delegates
+// to writeErrorPacketFromError per [Text Resultset] (synthesizing an error if
+// needed) so the session stays usable.
+//
+// When streaming succeeded and |sendFinished| is false, writeEndResult emits
+// the trailing packet with |more| and |warnings|.
+//
+// [Text Resultset]: https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_query_response_text_resultset.html
+func (c *Conn) writeQueryResultEnd(err, writeErr error, fieldSent, sendFinished, more bool, warnings uint16) (bool, error) {
+	if writeErr != nil {
+		return false, writeErr
+	}
+	if sendFinished && err != nil {
+		return false, err
+	}
+	if !fieldSent || err != nil {
+		if !fieldSent && (err == nil || errors.Is(err, io.EOF)) {
+			err = NewSQLErrorFromError(errors.New("unexpected: query ended with no results and no error"))
+		}
+		if werr := c.writeErrorPacketFromError(err); werr != nil {
+			log.Errorf("Error writing query error to %s: %v", c, werr)
+			return false, werr
+		}
+		return true, nil
+	}
+	if !sendFinished {
+		if werr := c.writeEndResult(more, 0, 0, warnings); werr != nil {
+			log.Errorf("Error writing result to %s: %v", c, werr)
+			return false, werr
+		}
+	}
+	return false, nil
 }
 
 //
