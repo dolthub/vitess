@@ -355,6 +355,21 @@ func (ev binlogEvent) Rand(f BinlogFormat) (seed1 uint64, seed2 uint64, err erro
 	return seed1, seed2, nil
 }
 
+// XID implements BinlogEvent.XID().
+//
+// Expected format (L = total length of event data):
+//   # bytes   field
+//   8         xid
+func (ev binlogEvent) XID(f BinlogFormat) (uint64, error) {
+	const xidLen = 8
+	raw := ev.Bytes()
+	headerLen := int(f.HeaderLength)
+	if len(raw) < headerLen+xidLen {
+		return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "XID event buffer too short: %d < %d", len(raw), headerLen+xidLen)
+	}
+	return binary.LittleEndian.Uint64(raw[headerLen : headerLen+xidLen]), nil
+}
+
 func (ev binlogEvent) TableID(f BinlogFormat) uint64 {
 	typ := ev.Type()
 	pos := f.HeaderLength

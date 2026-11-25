@@ -103,6 +103,9 @@ type BinlogEvent interface {
 	// PreviousGTIDs returns the Position from the event.
 	// This is only valid if IsPreviousGTIDs() returns true.
 	PreviousGTIDs(BinlogFormat) (Position, error)
+	// XID returns the transaction ID for an XID_EVENT.
+	// This is only valid if IsXID() returns true.
+	XID(BinlogFormat) (uint64, error)
 
 	// TableID returns the table ID for a TableMap, UpdateRows,
 	// WriteRows or DeleteRows event.

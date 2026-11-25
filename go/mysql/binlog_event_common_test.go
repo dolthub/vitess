@@ -351,3 +351,51 @@ func TestBinlogEventIntVarBadID(t *testing.T) {
 		t.Errorf("wrong error, got %#v, want %#v", got, want)
 	}
 }
+
+func TestBinlogEventXID(t *testing.T) {
+	// https://github.com/dolthub/vitess/pull/499
+	f := NewMySQL56BinlogFormat()
+	m := NewTestBinlogMetadata()
+
+	t.Run("valid payload", func(t *testing.T) {
+		expectedXID := uint64(0x123456789abcdef0)
+		ev := NewXIDEventWithXID(f, m, expectedXID)
+		got, err := ev.XID(f)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != expectedXID {
+			t.Fatalf("XID() = %#x, want %#x", got, expectedXID)
+		}
+	})
+
+	shortCases := []struct {
+		name  string
+		input binlogEvent
+	}{
+		{
+			name:  "empty buffer",
+			input: binlogEvent(nil),
+		},
+		{
+			name:  "shorter than header length",
+			input: binlogEvent(make([]byte, int(f.HeaderLength)-1)),
+		},
+		{
+			name:  "header only without payload",
+			input: binlogEvent(make([]byte, int(f.HeaderLength))),
+		},
+		{
+			name:  "truncated payload",
+			input: binlogEvent(make([]byte, int(f.HeaderLength)+7)),
+		},
+	}
+
+	for _, tc := range shortCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := tc.input.XID(f); err == nil {
+				t.Errorf("expected error for buffer len %d, got nil", len(tc.input))
+			}
+		})
+	}
+}
